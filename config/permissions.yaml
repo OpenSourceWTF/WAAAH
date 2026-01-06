@@ -1,0 +1,11 @@
+roles:
+  orchestrator:
+    canAssignTo: ["*"]
+  developer:
+    canAssignTo: ["full-stack-engineer", "test-engineer"]
+  viewer:
+    canAssignTo: []
+
+users:
+  "123456789":
+    canAssignTo: ["*"]

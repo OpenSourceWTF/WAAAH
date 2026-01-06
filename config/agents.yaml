@@ -1,0 +1,29 @@
+agents:
+  project-manager:
+    displayName: "@PM"
+    aliases: ["pm", "manager", "projectmanager"]
+    canDelegateTo: ["full-stack-engineer", "test-engineer", "ops-engineer", "designer"]
+    
+  full-stack-engineer:
+    displayName: "@FullStack"
+    aliases: ["fullstack", "dev", "developer", "fs"]
+    canDelegateTo: ["test-engineer"]
+    reportsTo: ["project-manager"]
+
+  test-engineer:
+    displayName: "@TestEng"
+    aliases: ["test", "tester", "qa"]
+    canDelegateTo: []
+    reportsTo: ["project-manager"]
+
+  ops-engineer:
+    displayName: "@Ops"
+    aliases: ["ops", "devops", "infra"]
+    canDelegateTo: []
+    reportsTo: ["project-manager"]
+
+  designer:
+    displayName: "@Designer"
+    aliases: ["design", "ui", "ux"]
+    canDelegateTo: []
+    reportsTo: ["project-manager"]

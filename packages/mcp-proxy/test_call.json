@@ -1,0 +1,12 @@
+{
+  "jsonrpc": "2.0",
+  "method": "tools/call",
+  "params": {
+    "name": "register_agent",
+    "arguments": {
+      "agentId": "proxy-test-1",
+      "role": "developer"
+    }
+  },
+  "id": 2
+}

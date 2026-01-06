@@ -1,0 +1,69 @@
+{
+  "name": "waaah-agent-bridge",
+  "displayName": "WAAAH Agent Bridge",
+  "description": "CLI bridge for sending commands to Antigravity agents",
+  "version": "0.0.1",
+  "publisher": "waaah",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "waaah.startBridge",
+        "title": "WAAAH: Start Agent Bridge Server"
+      },
+      {
+        "command": "waaah.stopBridge",
+        "title": "WAAAH: Stop Agent Bridge Server"
+      },
+      {
+        "command": "waaah.showStatus",
+        "title": "WAAAH: Show Bridge Status"
+      }
+    ],
+    "configuration": {
+      "title": "WAAAH Agent Bridge",
+      "properties": {
+        "waaah.agentId": {
+          "type": "string",
+          "default": "",
+          "description": "Unique identifier for this agent instance"
+        },
+        "waaah.agentRole": {
+          "type": "string",
+          "default": "developer",
+          "description": "Role of this agent (e.g., developer, pm, ops)"
+        },
+        "waaah.bridgePort": {
+          "type": "number",
+          "default": 9876,
+          "description": "Port for the HTTP bridge server"
+        },
+        "waaah.autoStart": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically start the bridge server on activation"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src --ext ts"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.3.0"
+  }
+}
