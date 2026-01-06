@@ -52,6 +52,45 @@ This is a monorepo managed with `pnpm workspaces`.
     pnpm cli list-agents
     ```
 
+## ⚙️ Configuration
+
+1.  Copy the example environment file:
+    ```bash
+    cp .env.example .env
+    ```
+2.  Generate an API key:
+    ```bash
+    openssl rand -hex 32
+    ```
+3.  Edit `.env` to set your tokens:
+    - **`WAAAH_API_KEY`**: Shared secret for server authentication (required for production).
+    - **`DISCORD_TOKEN`**: Required for the Discord bot.
+    - **`APPROVED_USERS`**: Restrict bot access to specific Discord user IDs.
+    - **`DOMAIN_NAME`**: Required for Docker/SSL production setup.
+
+---
+
+## 🚀 Production Deployment (Docker + SSL)
+
+To deploy WAAAH with a persistent database, Nginx reverse proxy, and Let's Encrypt SSL:
+
+1.  **Configure Environment**:
+    Make sure `.env` is set up with your `DOMAIN_NAME` and `DISCORD_TOKEN`.
+
+2.  **Initialize SSL Certificates**:
+    Run the helper script to generate Let's Encrypt certificates (requires Docker).
+    ```bash
+    chmod +x init-letsencrypt.sh
+    ./init-letsencrypt.sh
+    ```
+
+3.  **Start Services**:
+    ```bash
+    docker compose up -d --build
+    ```
+    - Server: `https://yourdomain.com`
+    - Database: Persisted in `./data`
+
 ---
 
 ## 🤖 Antigravity Integration
@@ -67,9 +106,10 @@ Add to `~/.gemini/settings.json`:
       "command": "node",
       "args": ["/path/to/WAAAH/packages/mcp-proxy/dist/index.js"],
       "env": {
-        "WAAAH_SERVER_URL": "http://localhost:3000",
+        "WAAAH_SERVER_URL": "https://yourdomain.com",
         "AGENT_ID": "fullstack-1",
-        "AGENT_ROLE": "full-stack-engineer"
+        "AGENT_ROLE": "full-stack-engineer",
+        "WAAAH_API_KEY": "your_api_key"
       }
     }
   }
@@ -103,9 +143,11 @@ The agent will receive the task via `wait_for_prompt` and execute autonomously.
 
 | Script | Description |
 |--------|-------------|
-| `pnpm server` | Start MCP orchestration server |
+| `pnpm server` | Start MCP orchestration server (Local) |
 | `pnpm cli <command>` | CLI for local testing |
 | `pnpm bot` | Start Discord bot |
+| `docker compose up` | Start full stack (Server + Nginx + DB) |
+| `./init-letsencrypt.sh` | Initialize SSL certificates for Docker |
 | `pnpm proxy` | Start MCP proxy instance |
 | `pnpm build` | Build all packages |
 

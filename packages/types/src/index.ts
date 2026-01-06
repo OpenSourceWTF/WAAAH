@@ -13,6 +13,7 @@ export interface AgentIdentity {
   role: AgentRole;     // Role of the agent
   displayName: string; // Display name (e.g., "@FullStack")
   capabilities: string[]; // List of skills/tools
+  color?: string;      // Hex color for UI/Embeds
 }
 
 // Task & Queue Types
@@ -48,6 +49,8 @@ export interface Task {
   context?: Record<string, unknown>; // Meta-data (channel ID, etc.)
   createdAt: number;
   timeoutAt?: number;
+  completedAt?: number;
+  failedAt?: number;
 }
 
 export interface TaskResponse {

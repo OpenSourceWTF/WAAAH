@@ -34,6 +34,8 @@ register_agent({
 })
 ```
 
+> **NOTE:** Registration returns your `canDelegateTo` permissions. You can only delegate to roles listed there.
+
 // turbo
 **Step 2: Enter the task loop - wait for your first task:**
 ```
@@ -45,10 +47,12 @@ wait_for_prompt({agentId: "fullstack-1", timeout: 300000})
 send_response({
   taskId: "<the task id you received>",
   status: "COMPLETED",
-  message: "<summary of what you did>",
+  message: "<DETAILED summary: what was done, key decisions made, any issues encountered - NOT a one-liner>",
   artifacts: ["<list of files changed>"]
 })
 ```
+
+> **IMPORTANT:** Your message MUST be a detailed summary (3-5 sentences minimum), NOT a brief acknowledgement.
 
 **Step 4: Return to Step 2 (call wait_for_prompt again)**
 
@@ -56,16 +60,19 @@ send_response({
 
 ## DELEGATION (use when needed)
 
-Find test engineers: `list_agents({role: "test-engineer"})`
+Find connected agents you can delegate to: `list_agents()`
 
-Delegate to them:
+Delegate (use displayName or agentId, include YOUR sourceAgentId):
 ```
 assign_task({
-  targetAgentId: "test-1",
+  targetAgentId: "@TestEng",
   prompt: "Write unit tests for...",
-  priority: "high"
+  priority: "high",
+  sourceAgentId: "fullstack-1"
 })
 ```
+
+> You can only delegate to roles returned in your registration `canDelegateTo` field.
 
 ---
 

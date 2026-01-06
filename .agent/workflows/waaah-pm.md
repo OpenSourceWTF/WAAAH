@@ -40,6 +40,8 @@ register_agent({
 })
 ```
 
+> **NOTE:** Registration returns your `canDelegateTo` permissions (all roles for PM).
+
 // turbo
 **Step 2: Enter the task loop - wait for your first task:**
 ```
@@ -48,9 +50,9 @@ wait_for_prompt({agentId: "pm-1", timeout: 300000})
 
 **Step 3: When you receive a task:**
 1. Break it into subtasks
-2. Delegate using `assign_task()` to appropriate agents
+2. Delegate using `assign_task()` to appropriate agents (include your `sourceAgentId: "pm-1"`)
 3. Track completion
-4. Call `send_response` with summary
+4. Call `send_response` with a **DETAILED summary** (3-5 sentences minimum, NOT a one-liner)
 
 **Step 4: Return to Step 2 (call wait_for_prompt again)**
 
@@ -58,13 +60,14 @@ wait_for_prompt({agentId: "pm-1", timeout: 300000})
 
 ## DELEGATION COMMANDS
 
-Find agents: `list_agents()` or `list_agents({role: "full-stack-engineer"})`
+Find connected agents: `list_agents()`
 
-Delegate:
+Delegate (use displayName like `@FullStack` or agentId):
 ```
 assign_task({
-  targetAgentId: "fullstack-1",
+  targetAgentId: "@FullStack",
   prompt: "Implement user authentication with JWT",
-  priority: "high"
+  priority: "high",
+  sourceAgentId: "pm-1"
 })
 ```

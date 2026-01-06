@@ -11,6 +11,12 @@ import { z } from 'zod';
 const SERVER_URL = process.env.WAAAH_SERVER_URL || 'http://localhost:3000';
 const AGENT_ID = process.env.AGENT_ID || 'unknown-agent';
 const AGENT_ROLE = process.env.AGENT_ROLE || 'developer';
+const WAAAH_API_KEY = process.env.WAAAH_API_KEY;
+
+// Configure axios to send API key with all requests
+if (WAAAH_API_KEY) {
+  axios.defaults.headers.common['X-API-Key'] = WAAAH_API_KEY;
+}
 
 console.error(`[WAAAH Proxy] Starting for agent ${AGENT_ID} (${AGENT_ROLE}) -> ${SERVER_URL}`);
 
@@ -66,7 +72,8 @@ const PROXY_TOOLS = [
         targetAgentId: { type: 'string' },
         prompt: { type: 'string' },
         priority: { type: 'string', enum: ['normal', 'high', 'critical'] },
-        context: { type: 'object' }
+        context: { type: 'object' },
+        sourceAgentId: { type: 'string', description: 'Your agent ID (the delegating agent)' }
       },
       required: ['targetAgentId', 'prompt']
     }

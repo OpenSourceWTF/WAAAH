@@ -50,9 +50,11 @@ wait_for_prompt({agentId: "test-1", timeout: 300000})
 send_response({
   taskId: "<the task id you received>",
   status: "COMPLETED",
-  message: "<summary + coverage metrics>",
+  message: "<DETAILED summary: tests written, coverage metrics, any failures found - NOT a one-liner>",
   artifacts: ["<list of test files created/modified>"]
 })
 ```
+
+> **IMPORTANT:** Your message MUST be a detailed summary (3-5 sentences minimum), NOT a brief acknowledgement.
 
 **Step 4: Return to Step 2 (call wait_for_prompt again)**

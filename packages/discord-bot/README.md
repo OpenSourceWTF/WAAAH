@@ -1,26 +1,45 @@
 # @waaah/discord-bot
 
-The user interface for WAAAH. Listens to Discord messages and enqueues them as tasks in the `mcp-server`.
+Discord interface for WAAAH. Listens to messages and enqueues tasks to the MCP server.
 
 ## Features
 
-- **Mention Parsing**: Parses messages like `@FullStack create a login page` to extract:
-    - Target Role/Agent (`@FullStack` -> `full-stack-engineer`)
-    - Prompt (`create a login page`)
-- **Permission System**: Checks if the Discord user is authorized to assign tasks.
-- **Task Enqueuing**: POSTs valid tasks to the MCP Server's `/admin/enqueue` endpoint.
+- **Role Parsing**: `@FullStack create a login page` → routes to `full-stack-engineer`
+- **User Authorization**: `APPROVED_USERS` whitelist for task creation
+- **Delegation Notifications**: Posts colored embeds when agents delegate tasks
+- **Admin Commands**: `!waaah update`, `!waaah clear`, `!waaah enqueue`
 
-## Setup
+## Environment Variables
 
-Requires a Discord Bot Token.
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DISCORD_TOKEN` | Yes | Discord bot token |
+| `MCP_SERVER_URL` | No | Server URL (default: `http://localhost:3000`) |
+| `WAAAH_API_KEY` | No | API key for server authentication |
+| `APPROVED_USERS` | No | Comma-separated Discord user IDs |
+| `DELEGATION_CHANNEL_ID` | No | Channel for delegation notifications |
+| `AGENTS_CONFIG` | No | Path to agents.yaml |
+
+## Local Development
 
 ```bash
-export DISCORD_TOKEN="your_bot_token"
-export MCP_SERVER_URL="http://localhost:3000"
+export DISCORD_TOKEN="your_token"
+export WAAAH_API_KEY="your_api_key"
+pnpm build && node dist/index.js
 ```
 
-## Usage
+## Docker
+
+The bot runs as a Docker service in production:
 
 ```bash
-node dist/index.js
+docker compose up discord-bot
 ```
+
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `!waaah @Role <prompt>` | Enqueue task to role |
+| `!waaah update <agent> [name=X] [color=#HEX]` | Update agent |
+| `!waaah clear` | Clear task queue |

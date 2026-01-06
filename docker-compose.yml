@@ -1,0 +1,65 @@
+version: '3.8'
+
+services:
+  waaah-server:
+    build:
+      context: .
+      dockerfile: packages/mcp-server/Dockerfile
+    container_name: waaah-server
+    volumes:
+      - ./data:/app/data
+      - ./config:/app/config
+    environment:
+      - PORT=3000
+      - WAAAH_API_KEY=${WAAAH_API_KEY}
+      - AGENTS_CONFIG=/app/config/agents.yaml
+      - DB_PATH=/app/data/waaah.db
+    restart: unless-stopped
+    networks:
+      - waaah-network
+
+  discord-bot:
+    build:
+      context: .
+      dockerfile: packages/discord-bot/Dockerfile
+    container_name: waaah-discord-bot
+    environment:
+      - MCP_SERVER_URL=http://waaah-server:3000
+      - DISCORD_TOKEN=${DISCORD_TOKEN}
+      - WAAAH_API_KEY=${WAAAH_API_KEY}
+      - APPROVED_USERS=${APPROVED_USERS}
+      - DELEGATION_CHANNEL_ID=${DELEGATION_CHANNEL_ID}
+      - AGENTS_CONFIG=/app/config/agents.yaml
+    volumes:
+      - ./config:/app/config
+    restart: unless-stopped
+    depends_on:
+      - waaah-server
+    networks:
+      - waaah-network
+
+  nginx:
+    image: nginx:1.15-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+    entrypoint: "/bin/sh -c 'while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g \"daemon off;\"'"
+    networks:
+      - waaah-network
+
+  certbot:
+    image: certbot/certbot
+    restart: unless-stopped
+    volumes:
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+
+networks:
+  waaah-network:
+    driver: bridge

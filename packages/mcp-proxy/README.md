@@ -1,40 +1,47 @@
 # @waaah/mcp-proxy
 
-A bridge application that connects a local autonomous agent (via `stdio`) to the remote `mcp-server` (via HTTP).
+A bridge that connects a local autonomous agent (via `stdio`) to the remote MCP server (via HTTP).
 
 ## How it Works
 
-1.  **Starts** as a local MCP server using Stdio transport.
-2.  **Connects** to your LLM client (e.g., Antigravity, Claude Desktop).
-3.  **Proxies** specific tool calls (`register_agent`, `wait_for_prompt`, etc.) to the central `mcp-server` over HTTP.
-4.  **Injects** identity information (`AGENT_ID`, `AGENT_ROLE`) into requests if not provided by the LLM.
+1.  Starts as a local MCP server using Stdio transport.
+2.  Connects to your LLM client (e.g., Antigravity, Claude Desktop).
+3.  Proxies tool calls (`register_agent`, `wait_for_prompt`, etc.) to the central server.
+4.  Injects identity information (`AGENT_ID`, `AGENT_ROLE`) into requests.
 
-## Configuration
+## Environment Variables
 
-Set environment variables before running:
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `WAAAH_SERVER_URL` | `http://localhost:3000` | Server URL |
+| `AGENT_ID` | `unknown-agent` | This agent's unique ID |
+| `AGENT_ROLE` | `developer` | This agent's role |
+| `WAAAH_API_KEY` | (none) | API key for authentication |
 
-```bash
-export WAAAH_SERVER_URL="http://localhost:3000"
-export AGENT_ID="my-agent-1"
-export AGENT_ROLE="full-stack-engineer"
-```
+## MCP Client Configuration
 
-## Usage
-
-Can be used in any MCP-compatible client configuration:
+Add to your MCP client settings (e.g., `~/.gemini/settings.json`):
 
 ```json
 {
   "mcpServers": {
     "waaah": {
       "command": "node",
-      "args": ["/path/to/waaah/packages/mcp-proxy/dist/index.js"],
+      "args": ["/path/to/WAAAH/packages/mcp-proxy/dist/index.js"],
       "env": {
-        "WAAAH_SERVER_URL": "http://localhost:3000",
-        "AGENT_ID": "dev-1",
-        "AGENT_ROLE": "developer"
+        "WAAAH_SERVER_URL": "https://yourdomain.com",
+        "AGENT_ID": "fullstack-1",
+        "AGENT_ROLE": "full-stack-engineer",
+        "WAAAH_API_KEY": "your_api_key"
       }
     }
   }
 }
+```
+
+## Local Development
+
+```bash
+pnpm build
+node dist/index.js
 ```

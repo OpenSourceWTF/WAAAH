@@ -1,37 +1,38 @@
 # @waaah/cli
 
-Command-line interface for local testing and interaction with the WAAAH orchestration system.
+Command-line interface for local testing and interaction with the WAAAH system.
 
-## Installation
+## Environment Variables
 
-```bash
-cd packages/cli
-pnpm install && pnpm build
-```
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `WAAAH_SERVER_URL` | `http://localhost:3000` | Server URL |
+| `WAAAH_API_KEY` | (none) | API key for authentication |
 
 ## Usage
 
 ```bash
-# Set server URL (defaults to localhost:3000)
+# Set environment
 export WAAAH_SERVER_URL=http://localhost:3000
+export WAAAH_API_KEY=your_key
 
-# Send a task to a specific agent
-node dist/index.js send fullstack-1 "Implement the login page"
+# Interactive mode (async, background listener)
+pnpm cli
+
+# Send a task
+pnpm cli send fullstack-1 "Implement the login page"
 
 # Send with priority
-node dist/index.js send fullstack-1 "Fix critical bug" --priority high
+pnpm cli send fullstack-1 "Fix critical bug" --priority high
 
-# List all registered agents
-node dist/index.js list-agents
-
-# Filter agents by role
-node dist/index.js list-agents --role full-stack-engineer
+# List agents
+pnpm cli list-agents
 
 # Check agent status
-node dist/index.js status fullstack-1
+pnpm cli status fullstack-1
 
 # Debug server state
-node dist/index.js debug
+pnpm cli debug
 ```
 
 ## Commands

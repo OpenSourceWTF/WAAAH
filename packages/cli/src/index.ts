@@ -4,6 +4,12 @@ import axios from 'axios';
 import * as readline from 'readline';
 
 const SERVER_URL = process.env.WAAAH_SERVER_URL || 'http://localhost:3000';
+const WAAAH_API_KEY = process.env.WAAAH_API_KEY;
+
+// Configure axios to send API key with all requests
+if (WAAAH_API_KEY) {
+  axios.defaults.headers.common['X-API-Key'] = WAAAH_API_KEY;
+}
 
 const program = new Command();
 

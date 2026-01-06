@@ -27,7 +27,8 @@ export const assignTaskSchema = z.object({
   targetAgentId: z.string(),
   prompt: z.string(),
   priority: z.custom<TaskPriority>().optional(),
-  context: z.record(z.string(), z.unknown()).optional()
+  context: z.record(z.string(), z.unknown()).optional(),
+  sourceAgentId: z.string().optional() // Who is delegating
 });
 
 export const listAgentsSchema = z.object({
@@ -41,6 +42,12 @@ export const getAgentStatusSchema = z.object({
 export const ackTaskSchema = z.object({
   taskId: z.string(),
   agentId: z.string()
+});
+
+export const adminUpdateAgentSchema = z.object({
+  agentId: z.string(),
+  displayName: z.string().optional(),
+  color: z.string().optional() // Hex color
 });
 
 export class ToolHandler {
@@ -66,8 +73,21 @@ export class ToolHandler {
         displayName: params.displayName,
         capabilities: params.capabilities
       });
+
+      // Return permissions for this role
+      const canDelegateTo = this.registry.getAllowedDelegates(params.role);
+
       return {
-        content: [{ type: 'text', text: `Registered agent ${params.agentId} as ${params.role}` }]
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            registered: true,
+            agentId: params.agentId,
+            displayName: params.displayName,
+            role: params.role,
+            canDelegateTo
+          })
+        }]
       };
     } catch (e) { return this.handleError(e); }
   }
@@ -75,14 +95,12 @@ export class ToolHandler {
   async wait_for_prompt(args: unknown) {
     try {
       const params = waitForPromptSchema.parse(args);
-      // This blocks!
       console.log(`[Tool] Agent ${params.agentId} waiting for prompt...`);
 
-      // Look up agent's role for role-based dispatching
       const agent = this.registry.get(params.agentId);
       const role = agent?.role || 'developer';
 
-      const task = await this.queue.waitForTask(params.agentId, role, params.timeout);
+      const task = await this.queue.waitForTask(params.agentId, role);
 
       if (!task) {
         return {
@@ -122,26 +140,54 @@ export class ToolHandler {
   async assign_task(args: unknown) {
     try {
       const params = assignTaskSchema.parse(args);
+      const sourceAgent = params.sourceAgentId || 'unknown';
+
+      // Resolve target by displayName or agentId
+      let targetAgent = this.registry.get(params.targetAgentId);
+      if (!targetAgent) {
+        targetAgent = this.registry.getByDisplayName(params.targetAgentId);
+      }
+
+      if (!targetAgent) {
+        return {
+          content: [{ type: 'text', text: `Target agent "${params.targetAgentId}" not found or not connected` }],
+          isError: true
+        };
+      }
+
+      // Enforce delegation permissions
+      const sourceAgentObj = this.registry.get(sourceAgent);
+      if (sourceAgentObj) {
+        const canDelegate = this.registry.canDelegate(sourceAgentObj.role, targetAgent.role);
+        if (!canDelegate) {
+          return {
+            content: [{ type: 'text', text: `Permission denied: ${sourceAgentObj.role} cannot delegate to ${targetAgent.role}` }],
+            isError: true
+          };
+        }
+      }
 
       const taskId = `task-${Date.now()}-${Math.random().toString(36).substring(7)}`;
-      // For now, sender is hardcoded or could be inferred if we passed current agent context
-      // But since tools are generic, we'll assume it comes from "system" or context if not provided
-      // Ideally, the mcp request itself should have sender info.
 
       this.queue.enqueue({
         id: taskId,
         command: 'execute_prompt',
         prompt: params.prompt,
-        from: { type: 'agent', id: 'unknown', name: 'Delegator' }, // TODO: Pass caller config
-        to: { agentId: params.targetAgentId },
+        from: { type: 'agent', id: sourceAgent, name: sourceAgentObj?.displayName || sourceAgent },
+        to: { agentId: targetAgent.id },
         priority: params.priority || 'normal',
         status: 'QUEUED',
         createdAt: Date.now(),
-        context: params.context
+        context: {
+          ...params.context,
+          isDelegation: true
+        }
       });
 
+      console.log(`[Tools] ${sourceAgentObj?.displayName || sourceAgent} delegated to ${targetAgent.displayName}: ${params.prompt.substring(0, 50)}...`);
+
       return {
-        content: [{ type: 'text', text: `Task assigned: ${taskId}` }]
+        content: [{ type: 'text', text: `Task delegated to ${targetAgent.displayName} (${targetAgent.id}): ${taskId}` }]
       };
     } catch (e) { return this.handleError(e); }
   }
@@ -174,7 +220,7 @@ export class ToolHandler {
         content: [{
           type: 'text', text: JSON.stringify({
             agentId: agent.id,
-            status: 'ONLINE', // In real impl, check heartbeat
+            status: 'ONLINE',
             role: agent.role
           })
         }]
@@ -196,6 +242,27 @@ export class ToolHandler {
 
       return {
         content: [{ type: 'text', text: `Task ${params.taskId} acknowledged` }]
+      };
+    } catch (e) { return this.handleError(e); }
+  }
+
+  async admin_update_agent(args: unknown) {
+    try {
+      const params = adminUpdateAgentSchema.parse(args);
+      const success = this.registry.updateAgent(params.agentId, {
+        displayName: params.displayName,
+        color: params.color
+      });
+
+      if (!success) {
+        return {
+          content: [{ type: 'text', text: `Agent ${params.agentId} not found` }],
+          isError: true
+        };
+      }
+
+      return {
+        content: [{ type: 'text', text: `Updated agent ${params.agentId} (name=${params.displayName}, color=${params.color})` }]
       };
     } catch (e) { return this.handleError(e); }
   }
