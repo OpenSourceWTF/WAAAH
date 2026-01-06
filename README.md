@@ -1,3 +1,5 @@
+![WAAAH Banner](docs/assets/banner.png)
+
 # WAAAH: Web-Age Autonomous Agent Hub
 
 WAAAH is a system for orchestrating autonomous AI agents to collaborate on complex software engineering tasks. It utilizes the Model Context Protocol (MCP) to establish a communication layer between an orchestration server, a proxy, and various client interfaces (CLI, Discord, VS Code).
