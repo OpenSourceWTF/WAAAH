@@ -38,6 +38,11 @@ export const getAgentStatusSchema = z.object({
   agentId: z.string()
 });
 
+export const ackTaskSchema = z.object({
+  taskId: z.string(),
+  agentId: z.string()
+});
+
 export class ToolHandler {
   constructor(
     private registry: AgentRegistry,
@@ -173,6 +178,24 @@ export class ToolHandler {
             role: agent.role
           })
         }]
+      };
+    } catch (e) { return this.handleError(e); }
+  }
+
+  async ack_task(args: unknown) {
+    try {
+      const params = ackTaskSchema.parse(args);
+      const result = this.queue.ackTask(params.taskId, params.agentId);
+
+      if (!result.success) {
+        return {
+          content: [{ type: 'text', text: `ACK failed: ${result.error}` }],
+          isError: true
+        };
+      }
+
+      return {
+        content: [{ type: 'text', text: `Task ${params.taskId} acknowledged` }]
       };
     } catch (e) { return this.handleError(e); }
   }

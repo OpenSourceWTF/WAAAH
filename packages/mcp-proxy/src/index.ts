@@ -91,6 +91,18 @@ const PROXY_TOOLS = [
       },
       required: ['agentId']
     }
+  },
+  {
+    name: 'ack_task',
+    description: 'Acknowledge receipt of a task (required after wait_for_prompt)',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        taskId: { type: 'string' },
+        agentId: { type: 'string' }
+      },
+      required: ['taskId', 'agentId']
+    }
   }
 ];
 

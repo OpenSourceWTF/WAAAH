@@ -23,8 +23,8 @@ const tools = new ToolHandler(registry, queue);
 app.get('/debug/state', (req, res) => {
   res.json({
     agents: registry.getAll(),
-    // TODO: Expose queue state better
-    queue: "Active"
+    connectedAgents: queue.getConnectedAgents(),
+    tasks: queue.getAllTasks().map(t => ({ id: t.id, status: t.status, to: t.to }))
   });
 });
 
@@ -114,6 +114,9 @@ app.post('/mcp/tools/:toolName', async (req, res) => {
       break;
     case 'get_agent_status':
       result = await tools.get_agent_status(args);
+      break;
+    case 'ack_task':
+      result = await tools.ack_task(args);
       break;
     default:
       res.status(404).json({ error: `Tool ${toolName} not found` });

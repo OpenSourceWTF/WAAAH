@@ -19,6 +19,7 @@ export interface AgentIdentity {
 
 export type TaskStatus =
   | 'QUEUED'
+  | 'PENDING_ACK'
   | 'ASSIGNED'
   | 'IN_PROGRESS'
   | 'COMPLETED'
@@ -93,6 +94,11 @@ export interface ListAgentsArgs {
 }
 
 export interface GetAgentStatusArgs {
+  agentId: string;
+}
+
+export interface AckTaskArgs {
+  taskId: string;
   agentId: string;
 }
 
