@@ -41,16 +41,27 @@ db.exec(`
     priority TEXT,
     fromAgentId TEXT,
     fromAgentName TEXT,
-    toAgentId TEXT, -- Target agent ID (optional)
-    toAgentRole TEXT, -- Target role (optional)
-    context TEXT, -- JSON
-    response TEXT, -- JSON
+    toAgentId TEXT,
+    toAgentRole TEXT,
+    context TEXT,
+    response TEXT,
     createdAt INTEGER NOT NULL,
     completedAt INTEGER
   );
 
+  CREATE TABLE IF NOT EXISTS security_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp INTEGER NOT NULL,
+    source TEXT NOT NULL,
+    fromId TEXT,
+    prompt TEXT NOT NULL,
+    flags TEXT NOT NULL,
+    action TEXT NOT NULL
+  );
+
   CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
   CREATE INDEX IF NOT EXISTS idx_aliases_agentId ON aliases(agentId);
+  CREATE INDEX IF NOT EXISTS idx_security_timestamp ON security_events(timestamp);
 `);
 
 interface AgentConfig {

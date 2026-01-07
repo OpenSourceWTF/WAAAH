@@ -1,8 +1,8 @@
-![WAAAH Banner](docs/assets/banner.png)
-
 # WAAAH: Web-Age Autonomous Agent Hub
 
 WAAAH is a system for orchestrating autonomous AI agents to collaborate on complex software engineering tasks. It utilizes the Model Context Protocol (MCP) to establish a communication layer between an orchestration server, a proxy, and various client interfaces (CLI, Discord, VS Code).
+
+![WAAAH Banner](docs/assets/banner.png)
 
 ## 🚀 Architecture
 
@@ -28,8 +28,21 @@ This is a monorepo managed with `pnpm workspaces`.
 
 - **[`packages/mcp-server`](packages/mcp-server)**: The central orchestration server. Handles agent registration, task queuing, and communication.
 - **[`packages/mcp-proxy`](packages/mcp-proxy)**: A bridge that runs locally with the agent, exposing MCP tools via `stdio` and communicating with the server via HTTP.
-- **[`packages/discord-bot`](packages/discord-bot)**: A Discord bot interface for users to easy enqueue tasks and monitor agent progress.
-- **[`packages/types`](packages/types)**: Shared TypeScript definitions and schemas.
+- **[`packages/bot`](packages/bot)**: Unified Discord/Slack bot for task submission and monitoring.
+- **[`packages/types`](packages/types)**: Shared TypeScript definitions and Zod schemas.
+
+## ⚡ WAAAH vs Single-Agent AI
+
+| Feature | WAAAH | Single Agent (e.g., Antigravity) |
+|---------|-------|----------------------------------|
+| **Agents** | Multiple specialized agents | One agent per session |
+| **Delegation** | PM → FullStack → TestEng | N/A |
+| **Persistence** | SQLite (tasks, agents, heartbeats) | Conversation only |
+| **Integration** | Discord, Slack, CLI | Direct IDE |
+| **Remote Control** | Yes (chat bots → HTTP) | Local only |
+
+**Use WAAAH when:** You need a squad of agents collaborating on larger projects.
+**Use single agent when:** Interactive pair programming in your IDE.
 
 ## 🛠️ Prerequisites
 
@@ -95,9 +108,18 @@ To deploy WAAAH with a persistent database, Nginx reverse proxy, and Let's Encry
 
 ---
 
-## 🤖 Antigravity Integration
+## 🤖 MCP Integration
 
-### Step 1: Configure MCP
+WAAAH works with any AI system supporting the Model Context Protocol (MCP).
+
+**[📖 Full MCP Integration Guide](docs/MCP_INTEGRATION.md)** - Covers:
+- Antigravity (VS Code)
+- Claude Desktop
+- Cursor / Windsurf
+- OpenAI Agents SDK
+- Chainlit / Cherry Studio
+
+### Quick Setup (Antigravity)
 
 Add to `~/.gemini/settings.json`:
 

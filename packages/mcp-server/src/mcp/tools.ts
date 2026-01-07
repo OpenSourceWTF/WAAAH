@@ -1,54 +1,30 @@
-import { z } from 'zod';
 import { AgentRegistry } from '../state/registry.js';
 import { TaskQueue } from '../state/queue.js';
-import { AgentRole, TaskStatus, TaskPriority } from '@waaah/types';
+import { scanPrompt, getSecurityContext } from '../security/prompt-scanner.js';
 
-export const registerAgentSchema = z.object({
-  agentId: z.string(),
-  role: z.custom<AgentRole>(),
-  displayName: z.string(),
-  capabilities: z.array(z.string())
-});
+// Import shared schemas from types package
+import {
+  registerAgentSchema,
+  waitForPromptSchema,
+  sendResponseSchema,
+  assignTaskSchema,
+  listAgentsSchema,
+  getAgentStatusSchema,
+  ackTaskSchema,
+  adminUpdateAgentSchema
+} from '@waaah/types';
 
-export const waitForPromptSchema = z.object({
-  agentId: z.string(),
-  timeout: z.number().optional()
-});
-
-export const sendResponseSchema = z.object({
-  taskId: z.string(),
-  status: z.custom<TaskStatus>(),
-  message: z.string(),
-  artifacts: z.array(z.string()).optional(),
-  blockedReason: z.string().optional()
-});
-
-export const assignTaskSchema = z.object({
-  targetAgentId: z.string(),
-  prompt: z.string(),
-  priority: z.custom<TaskPriority>().optional(),
-  context: z.record(z.string(), z.unknown()).optional(),
-  sourceAgentId: z.string().optional() // Who is delegating
-});
-
-export const listAgentsSchema = z.object({
-  role: z.custom<AgentRole>().optional()
-});
-
-export const getAgentStatusSchema = z.object({
-  agentId: z.string()
-});
-
-export const ackTaskSchema = z.object({
-  taskId: z.string(),
-  agentId: z.string()
-});
-
-export const adminUpdateAgentSchema = z.object({
-  agentId: z.string(),
-  displayName: z.string().optional(),
-  color: z.string().optional() // Hex color
-});
+// Re-export for backward compatibility if needed
+export {
+  registerAgentSchema,
+  waitForPromptSchema,
+  sendResponseSchema,
+  assignTaskSchema,
+  listAgentsSchema,
+  getAgentStatusSchema,
+  ackTaskSchema,
+  adminUpdateAgentSchema
+};
 
 export class ToolHandler {
   constructor(
@@ -95,12 +71,17 @@ export class ToolHandler {
   async wait_for_prompt(args: unknown) {
     try {
       const params = waitForPromptSchema.parse(args);
-      console.log(`[Tool] Agent ${params.agentId} waiting for prompt...`);
+      // Default timeout: 290s (Antigravity has 300s hard limit)
+      const timeoutMs = (params.timeout ?? 290) * 1000;
+      console.log(`[Tool] Agent ${params.agentId} waiting for prompt (timeout: ${timeoutMs / 1000}s)...`);
 
       const agent = this.registry.get(params.agentId);
       const role = agent?.role || 'developer';
 
-      const task = await this.queue.waitForTask(params.agentId, role);
+      // Update heartbeat on each wait call
+      this.registry.heartbeat(params.agentId);
+
+      const task = await this.queue.waitForTask(params.agentId, role, timeoutMs);
 
       if (!task) {
         return {
@@ -167,6 +148,16 @@ export class ToolHandler {
         }
       }
 
+      // Security: Scan prompt for attacks
+      const scan = scanPrompt(params.prompt);
+      if (!scan.allowed) {
+        console.warn(`[Security] Delegation blocked. Flags: ${scan.flags.join(', ')}`);
+        return {
+          content: [{ type: 'text', text: `Security: Delegation blocked. Flags: ${scan.flags.join(', ')}` }],
+          isError: true
+        };
+      }
+
       const taskId = `task-${Date.now()}-${Math.random().toString(36).substring(7)}`;
 
       this.queue.enqueue({
@@ -180,7 +171,8 @@ export class ToolHandler {
         createdAt: Date.now(),
         context: {
           ...params.context,
-          isDelegation: true
+          isDelegation: true,
+          security: getSecurityContext(process.env.WORKSPACE_ROOT || process.cwd())
         }
       });
 
@@ -216,12 +208,17 @@ export class ToolHandler {
         };
       }
 
+      // Check if agent is actually online based on heartbeat (5 min timeout)
+      const lastSeen = this.registry.getLastSeen(params.agentId);
+      const isOnline = lastSeen && (Date.now() - lastSeen) < 5 * 60 * 1000;
+
       return {
         content: [{
           type: 'text', text: JSON.stringify({
             agentId: agent.id,
-            status: 'ONLINE',
-            role: agent.role
+            status: isOnline ? 'ONLINE' : 'OFFLINE',
+            role: agent.role,
+            lastSeen
           })
         }]
       };

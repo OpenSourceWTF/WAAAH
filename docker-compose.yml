@@ -18,17 +18,26 @@ services:
     networks:
       - waaah-network
 
-  discord-bot:
+  # Unified Bot (Discord + Slack)
+  bot:
     build:
       context: .
-      dockerfile: packages/discord-bot/Dockerfile
-    container_name: waaah-discord-bot
+      dockerfile: packages/bot/Dockerfile
+    container_name: waaah-bot
     environment:
       - MCP_SERVER_URL=http://waaah-server:3000
+      - PLATFORM=${PLATFORM:-discord}
+      # Discord
       - DISCORD_TOKEN=${DISCORD_TOKEN}
+      - DELEGATION_CHANNEL_ID=${DELEGATION_CHANNEL_ID}
+      # Slack
+      - SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN}
+      - SLACK_SIGNING_SECRET=${SLACK_SIGNING_SECRET}
+      - SLACK_APP_TOKEN=${SLACK_APP_TOKEN}
+      - SLACK_DELEGATION_CHANNEL_ID=${SLACK_DELEGATION_CHANNEL_ID}
+      # Shared
       - WAAAH_API_KEY=${WAAAH_API_KEY}
       - APPROVED_USERS=${APPROVED_USERS}
-      - DELEGATION_CHANNEL_ID=${DELEGATION_CHANNEL_ID}
       - AGENTS_CONFIG=/app/config/agents.yaml
     volumes:
       - ./config:/app/config

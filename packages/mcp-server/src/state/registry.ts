@@ -162,4 +162,10 @@ export class AgentRegistry {
     const row = db.prepare('SELECT color FROM agents WHERE id = ?').get(agentId) as any;
     return row?.color;
   }
+
+  // Helper to get lastSeen timestamp
+  getLastSeen(agentId: string): number | undefined {
+    const row = db.prepare('SELECT lastSeen FROM agents WHERE id = ?').get(agentId) as any;
+    return row?.lastSeen;
+  }
 }

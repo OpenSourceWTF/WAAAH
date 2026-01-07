@@ -1,3 +1,4 @@
+import { EventEmitter } from 'events';
 import {
   Task,
   TaskStatus,
@@ -8,13 +9,14 @@ import { db } from './db.js';
 const ACK_TIMEOUT_MS = 60000;         // 60s to ACK a task before it's requeued
 const REQUEUE_CHECK_INTERVAL_MS = 10000; // Check every 10s
 
-export class TaskQueue {
+export class TaskQueue extends EventEmitter {
   // In-memory cache for fast access, but source of truth is DB
   private tasks: Map<string, Task> = new Map();
   // Map<TaskId, { agentId, sentAt }>
   private pendingAcks: Map<string, { taskId: string, agentId: string, sentAt: number }> = new Map();
 
   constructor() {
+    super();
     this.loadFromDB();
     this.startRequeueLoop();
   }
@@ -72,20 +74,22 @@ export class TaskQueue {
         createdAt: task.createdAt
       });
       console.log(`[Queue] Enqueued task: ${task.id} (${task.status})`);
+
+      // Emit event for waiting agents
+      this.emit('task', task);
     } catch (e: any) {
       console.error(`[Queue] Failed to persist task ${task.id}: ${e.message}`);
     }
   }
 
   // Find a task for a specific agent based on ID or Role
-  async waitForTask(agentId: string, role: AgentRole): Promise<Task> {
+  // Default timeout: 290s (Antigravity has 300s hard limit)
+  async waitForTask(agentId: string, role: AgentRole, timeoutMs: number = 290000): Promise<Task | null> {
     return new Promise((resolve) => {
       // 1. Check if there are pending tasks for this agent
       const pendingTask = this.findPendingTaskForAgent(agentId, role);
       if (pendingTask) {
-        // Mark as PENDING_ACK instead of ASSIGNED
         this.updateStatus(pendingTask.id, 'PENDING_ACK');
-
         this.pendingAcks.set(pendingTask.id, {
           taskId: pendingTask.id,
           agentId,
@@ -95,18 +99,17 @@ export class TaskQueue {
         return;
       }
 
-      // 2. If no task, we wait. Ideally we use EventEmitters.
-      // But for this simple impl, we can poll or just return null and let the agent retry?
-      // "wait_for_prompt" implies long-polling.
-      // Let's us a simple polling within this function for a short duration?
-      // OR, better, register a listener.
+      // 2. Use EventEmitter for instant notification
+      let resolved = false;
 
-      const checkInterval = setInterval(() => {
-        const task = this.findPendingTaskForAgent(agentId, role);
-        if (task) {
-          clearInterval(checkInterval);
+      const onTask = (task: Task) => {
+        if (resolved) return;
+        // Check if this task is for this agent
+        const isForMe = this.isTaskForAgent(task, agentId, role);
+        if (isForMe && task.status === 'QUEUED') {
+          resolved = true;
+          cleanup();
           this.updateStatus(task.id, 'PENDING_ACK');
-
           this.pendingAcks.set(task.id, {
             taskId: task.id,
             agentId,
@@ -114,30 +117,31 @@ export class TaskQueue {
           });
           resolve(task);
         }
-      }, 1000); // Check every second
+      };
 
-      // Timeout after 30s (server side timeout, client should have longer timeout)
-      // Actually, client has 5 min timeout. We should wait longer.
-      // But strict Long Polling usually holds connection.
-      // Let's wait 20 seconds then return null/error if nothing? 
-      // The current implementation of Tools.wait_for_prompt handles the loop?
-      // Ah, wait_for_prompt calls this. 
-      // Let's set a timeout to stop checking.
+      const cleanup = () => {
+        this.off('task', onTask);
+      };
+
+      this.on('task', onTask);
+
+      // Timeout after the specified duration
       setTimeout(() => {
-        clearInterval(checkInterval);
-        // resolve nothing? Typescript expects Task.
-        // We reject? Or we change return type to Promise<Task | null>
-        // Let's reject for strictness, caught by tool.
-        // But better: The tool should handle the timeout.
-        // For now, let's just detach the interval and let the promise hang? No, that leaks.
-        // Let's reject with 'TIMEOUT'. Tool can catch and return empty.
-        // But the previous implementation didn't show this logic.
-        // Let's look at how tools.ts used to work. It wasn't shown fully.
-        // But usually we just return null if we can't find one.
-        // Let's rely on the caller to manage the timeout if this Promise doesn't resolve?
-        // No, let's implicitly time out here after 25s so the HTTP request finishes.
-      }, 25000);
+        if (!resolved) {
+          resolved = true;
+          cleanup();
+          console.log(`[Queue] Wait timed out for agent ${agentId} after ${timeoutMs}ms`);
+          resolve(null);
+        }
+      }, timeoutMs);
     });
+  }
+
+  private isTaskForAgent(task: Task, agentId: string, role: AgentRole): boolean {
+    if (task.to.agentId && task.to.agentId === agentId) return true;
+    if (task.to.role && task.to.role === role) return true;
+    if (!task.to.agentId && !task.to.role) return true; // Any agent
+    return false;
   }
 
   // Acknowledge task receipt - transitions PENDING_ACK -> ASSIGNED

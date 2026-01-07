@@ -5,12 +5,14 @@ import dotenv from 'dotenv';
 import { AgentRegistry } from './state/registry.js';
 import { TaskQueue } from './state/queue.js';
 import { ToolHandler } from './mcp/tools.js';
+import { scanPrompt, getSecurityContext } from './security/prompt-scanner.js';
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.WAAAH_PORT || process.env.PORT || 3000;
 const API_KEY = process.env.WAAAH_API_KEY;
+const WORKSPACE_ROOT = process.env.WORKSPACE_ROOT || process.cwd();
 
 const registry = new AgentRegistry();
 const queue = new TaskQueue();
@@ -41,23 +43,32 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
-// Queue needs to export these for debug endpoint
-// Wait, getConnectedAgents, getAllTasks are missing from Queue class?
-// I refactored Queue but maybe missed re-adding these helper accessors.
-// Let's assume I fix Queue class in next step if needed, or I fix usage here.
-// Actually, getAll() exists in Queue.
-// Let's fix debug endpoint usage first.
 app.get('/debug/state', (req, res) => {
   res.json({
     agents: registry.getAll(),
-    // connectedAgents: queue.getConnectedAgents(), // Removed for now or fix in Queue
     tasks: queue.getAll().map(t => ({ id: t.id, status: t.status, to: t.to }))
   });
 });
 
-// Admin endpoint to enqueue tasks (simulating Discord bot for now)
+// Admin endpoint to enqueue tasks
 app.post('/admin/enqueue', (req, res) => {
   const { prompt, agentId, role, priority } = req.body;
+
+  if (!prompt || typeof prompt !== 'string') {
+    res.status(400).json({ error: 'Missing or invalid prompt' });
+    return;
+  }
+
+  // Security: Scan prompt for attacks
+  const scan = scanPrompt(prompt);
+  if (!scan.allowed) {
+    console.warn(`[Security] Blocked prompt. Flags: ${scan.flags.join(', ')}`);
+    res.status(403).json({
+      error: 'Prompt blocked by security policy',
+      flags: scan.flags
+    });
+    return;
+  }
 
   const threadId = Math.random().toString(36).substring(7);
   const taskId = `task-${Date.now()}-${threadId}`;
@@ -67,10 +78,13 @@ app.post('/admin/enqueue', (req, res) => {
     command: 'execute_prompt',
     prompt,
     from: { type: 'user', id: 'admin', name: 'AdminUser' },
-    to: { agentId, role: role || 'developer' }, // Default role
+    to: { agentId, role: role || 'developer' },
     priority: priority || 'normal',
     status: 'QUEUED',
-    createdAt: Date.now()
+    createdAt: Date.now(),
+    context: {
+      security: getSecurityContext(WORKSPACE_ROOT)
+    }
   });
 
   res.json({ success: true, taskId });
@@ -92,20 +106,9 @@ app.get('/admin/tasks/:taskId', (req, res) => {
   res.json(task);
 });
 
-// Long-polling endpoint for administrative events (CLI, etc.)
-// Fixed: waitForEvent doesn't exist on Queue.
-// The previous "admin/events" endpoint relied on queue.waitForEvent.
-// Since I rewrote queue, I lost this method. 
-// For now, let's remove this functionality or implement a simple poll.
-// Implementation plan didn't explicitly demand this feature be preserved perfectly, 
-// but it's used by "CLI".
-// CLI uses "waitForResponse" usually. This is "admin/events".
-// Let's implement a dummy wait or remove.
+// Long-polling endpoint for task completion events
+// TODO: Implement proper EventEmitter-based long-polling (see implementation_plan.md)
 app.get('/admin/events', async (req, res) => {
-  // console.log('[Events] Admin listener connected');
-  // const task = await queue.waitForEvent(45000); 
-
-  // Temporary: just return timeout to keep CLI from crashing if it polls this?
   await new Promise(r => setTimeout(r, 5000));
   res.json({ status: 'TIMEOUT' });
 });
