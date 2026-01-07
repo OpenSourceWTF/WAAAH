@@ -69,9 +69,30 @@ export class DiscordAdapter implements PlatformAdapter {
 
   async reply(context: MessageContext, message: string): Promise<string> {
     const original = context.raw as Message;
-    const reply = await original.reply(message);
-    this.replyCache.set(`${context.messageId}:reply`, reply);
-    return reply.id;
+
+    // Check override or if already in thread
+    const forceThread = process.env.DISCORD_FORCE_THREADING === 'true';
+    const isInThread = original.channel.isThread();
+
+    let sentMessage: Message;
+
+    if (forceThread || isInThread) {
+      // Reply in thread (creates one if needed/configured by interface) or as a reply reference
+      sentMessage = await original.reply(message);
+    } else {
+      // Send directly to channel (no thread, no reference)
+      // Cast to any because TS thinks some channel types don't have send (they do in this context)
+      const channel = original.channel as any;
+      if (channel.send) {
+        sentMessage = await channel.send(message);
+      } else {
+        // Fallback to reply if send not available
+        sentMessage = await original.reply(message);
+      }
+    }
+
+    this.replyCache.set(`${context.messageId}:reply`, sentMessage);
+    return sentMessage.id;
   }
 
   async editReply(context: MessageContext, replyId: string, message: string): Promise<void> {

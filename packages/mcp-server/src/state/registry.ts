@@ -108,7 +108,12 @@ export class AgentRegistry {
     const cutoff = Date.now() - timeoutMs;
     try {
       // Clean up agents that are stale OR have never connected (NULL lastSeen)
-      const result = db.prepare('DELETE FROM agents WHERE lastSeen < ? OR lastSeen IS NULL').run(cutoff);
+      // BUT preserve seeded role configurations (those with canDelegateTo set)
+      const result = db.prepare(`
+        DELETE FROM agents 
+        WHERE (lastSeen < ? OR lastSeen IS NULL) 
+        AND (canDelegateTo IS NULL OR canDelegateTo = '[]')
+      `).run(cutoff);
       if (result.changes > 0) {
         console.log(`[Registry] Cleaned up ${result.changes} offline agent(s)`);
       }

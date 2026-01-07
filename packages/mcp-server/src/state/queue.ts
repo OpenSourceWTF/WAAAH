@@ -176,6 +176,7 @@ export class TaskQueue extends EventEmitter {
     }
 
     // Transition to ASSIGNED
+    task.assignedTo = agentId;
     this.updateStatus(taskId, 'ASSIGNED');
     this.pendingAcks.delete(taskId);
     console.log(`[Queue] Task ${taskId} ACKed by ${agentId}, now ASSIGNED`);
@@ -193,6 +194,12 @@ export class TaskQueue extends EventEmitter {
       }
 
       this.persistUpdate(task);
+
+      // Emit completion event for listeners (like the bot)
+      if (['COMPLETED', 'FAILED', 'BLOCKED'].includes(status)) {
+        this.emit('completion', task);
+        console.log(`[Queue] Emitted completion event for task ${taskId} (${status})`);
+      }
     }
   }
 

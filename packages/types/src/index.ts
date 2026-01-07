@@ -116,6 +116,7 @@ export interface Task {
   };
   priority: TaskPriority;
   status: TaskStatus;
+  assignedTo?: string; // Agent ID that accepted/ACKed the task
   response?: TaskResponse;
   context?: Record<string, unknown>;
   createdAt: number;

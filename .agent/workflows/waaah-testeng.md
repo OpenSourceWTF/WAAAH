@@ -16,7 +16,7 @@ register_agent({
 
 STEP 2: Call this tool NOW:
 ```
-wait_for_prompt({agentId: "test-1", timeout: 300000})
+wait_for_prompt({agentId: "test-1", timeout: 290})
 ```
 
 STOP. Wait for the tool to return a task. Do not proceed until you receive one.

@@ -144,10 +144,10 @@ export class BotCore {
       });
 
       const taskId = response.data.taskId;
-      const roleHint = targetRole ? ` (routed to ${targetRole})` : '';
-      await this.adapter.reply(context, `✅ Task enqueued!${roleHint} ID: \`${taskId}\`\n⏳ Waiting for agent...`);
+      const roleHint = targetRole ? ` → ${targetRole}` : '';
+      await this.adapter.reply(context, `📋 Task \`${taskId}\`${roleHint}\n⏳ Waiting for agent...`);
 
-      // Poll for response
+      // Poll for response (includes assignment updates)
       this.pollForResponse(taskId, context);
 
     } catch (e: any) {
@@ -159,11 +159,22 @@ export class BotCore {
   private async pollForResponse(taskId: string, context: MessageContext): Promise<void> {
     const startTime = Date.now();
     const timeout = 5 * 60 * 1000; // 5 minutes
+    let wasAssigned = false;
+    let assignedAt = 0;
+    let assignedAgent = '';
+
+    const formatDuration = (ms: number): string => {
+      const seconds = Math.floor(ms / 1000);
+      if (seconds < 60) return `${seconds}s`;
+      const minutes = Math.floor(seconds / 60);
+      const remainingSecs = seconds % 60;
+      return `${minutes}m ${remainingSecs}s`;
+    };
 
     const poll = setInterval(async () => {
       if (Date.now() - startTime > timeout) {
         clearInterval(poll);
-        await this.adapter.editReply(context, '', `⌛ Task \`${taskId}\` timed out after 5 mins.`);
+        await this.adapter.editReply(context, '', `📋 \`${taskId}\`\n⌛ Timed out`);
         return;
       }
 
@@ -171,27 +182,33 @@ export class BotCore {
         const resp = await axios.get(`${this.config.mcpServerUrl}/admin/tasks/${taskId}`);
         const task: TaskResponse = resp.data;
 
+        // Update message when assigned (once)
+        if (task.status === 'ASSIGNED' && !wasAssigned) {
+          wasAssigned = true;
+          assignedAt = Date.now();
+          assignedAgent = task.assignedTo || 'agent';
+          await this.adapter.editReply(context, '', `📋 \`${taskId}\`\n👤 ${assignedAgent}`);
+        }
+
+        // Final states
         if (['COMPLETED', 'FAILED', 'BLOCKED'].includes(task.status)) {
           clearInterval(poll);
 
-          let message = '';
-          if (task.status === 'COMPLETED') {
-            const artifacts = task.response?.artifacts?.length
-              ? `\n**Artifacts:** ${task.response.artifacts.join(', ')}`
-              : '';
-            message = `✅ **Completed!** (ID: \`${taskId}\`)\n\n${task.response?.message}${artifacts}`;
-          } else if (task.status === 'FAILED') {
-            message = `❌ **Failed** (ID: \`${taskId}\`)\n\n${task.response?.message || 'Unknown error'}`;
-          } else if (task.status === 'BLOCKED') {
-            message = `⚠️ **Blocked** (ID: \`${taskId}\`)\n\n${task.response?.message}`;
-          }
+          const emoji = task.status === 'COMPLETED' ? '✅' : (task.status === 'BLOCKED' ? '⚠️' : '❌');
+          const duration = assignedAt ? formatDuration(Date.now() - assignedAt) : '';
+          const agent = assignedAgent || task.assignedTo || '';
+
+          // Line 1: status + task ID
+          // Line 2: agent + duration
+          const line2Parts = [agent, duration ? `⏱️ ${duration}` : ''].filter(Boolean).join(' · ');
+          const message = `${emoji} \`${taskId}\`\n${line2Parts || 'Done'}`;
 
           await this.adapter.editReply(context, '', message);
         }
       } catch (e: any) {
         console.error(`[Bot] Poll error for ${taskId}:`, e.message);
       }
-    }, 5000);
+    }, 3000);
   }
 
   private async handleUpdateCommand(content: string, context: MessageContext): Promise<void> {
@@ -300,23 +317,48 @@ export class BotCore {
         for (const event of events) {
           if (event.startsWith('data: ')) {
             try {
-              const task = JSON.parse(event.slice(6));
+              const data = JSON.parse(event.slice(6));
+              const { type, payload } = data;
 
-              await this.adapter.sendEmbed(this.config.delegationChannelId!, {
-                title: '🔀 Agent Delegation',
-                color: '#7289da',
-                fields: [
-                  { name: 'From', value: `\`${task.from}\``, inline: true },
-                  { name: 'To', value: `\`${task.to}\``, inline: true },
-                  { name: 'Task', value: task.prompt },
-                  { name: 'Task ID', value: `\`${task.taskId}\`` }
-                ],
-                timestamp: task.createdAt
-              });
+              if (type === 'delegation' || (!type && payload?.from)) { // Handle legacy format if needed
+                const task = payload || data;
+                await this.adapter.sendEmbed(this.config.delegationChannelId!, {
+                  title: '🔀 Agent Delegation',
+                  color: '#7289da',
+                  fields: [
+                    { name: 'From', value: `\`${task.from}\``, inline: true },
+                    { name: 'To', value: `\`${task.to}\``, inline: true },
+                    { name: 'Task', value: task.prompt },
+                    { name: 'Task ID', value: `\`${task.taskId}\`` }
+                  ],
+                  timestamp: task.createdAt
+                });
+                console.log(`[Bot] Posted delegation: ${task.from} -> ${task.to}`);
+              }
+              else if (type === 'completion') {
+                const task = payload;
+                const isSuccess = task.status === 'COMPLETED';
+                const color = isSuccess ? '#43b581' : (task.status === 'BLOCKED' ? '#faa61a' : '#f04747');
+                const emoji = isSuccess ? '✅' : (task.status === 'BLOCKED' ? '⚠️' : '❌');
 
-              console.log(`[Bot] Posted delegation: ${task.from} -> ${task.to}`);
+                // Truncate response message if too long
+                let responseMsg = task.response?.message || 'No response message';
+                if (responseMsg.length > 1000) responseMsg = responseMsg.slice(0, 997) + '...';
+
+                await this.adapter.sendEmbed(this.config.delegationChannelId!, {
+                  title: `${emoji} Task ${task.status}`,
+                  color,
+                  fields: [
+                    { name: 'Task ID', value: `\`${task.id}\``, inline: true },
+                    { name: 'Agent', value: `\`${task.to.agentId || task.to.role}\``, inline: true },
+                    { name: 'Result', value: responseMsg }
+                  ],
+                  timestamp: task.completedAt || Date.now()
+                });
+                console.log(`[Bot] Posted completion: ${task.id} (${task.status})`);
+              }
             } catch (parseErr) {
-              console.error('[Bot] Failed to parse delegation event:', parseErr);
+              console.error('[Bot] Failed to parse SSE event:', parseErr);
             }
           }
         }

@@ -64,6 +64,19 @@ describe('TaskQueue', () => {
       queue.enqueue(task);
       expect(queue.getTask('status-test-1')?.status).toBe('QUEUED');
     });
+    it('emits completion event when status updated to COMPLETED', async () => {
+      const task = mockTask({ id: 'completion-emit-test' });
+      queue.enqueue(task);
+
+      const eventPromise = new Promise<Task>((resolve) => {
+        queue.once('completion', resolve);
+      });
+
+      queue.updateStatus(task.id, 'COMPLETED', { message: 'Done' });
+      const completedTask = await eventPromise;
+      expect(completedTask.id).toBe('completion-emit-test');
+      expect(completedTask.status).toBe('COMPLETED');
+    });
   });
 
   describe('waitForTask', () => {

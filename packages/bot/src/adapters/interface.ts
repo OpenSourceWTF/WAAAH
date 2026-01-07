@@ -32,6 +32,7 @@ export interface TaskEnqueueRequest {
 export interface TaskResponse {
   taskId: string;
   status: 'QUEUED' | 'PENDING_ACK' | 'ASSIGNED' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED' | 'BLOCKED';
+  assignedTo?: string; // Agent ID that picked up the task
   response?: {
     message: string;
     artifacts?: string[];

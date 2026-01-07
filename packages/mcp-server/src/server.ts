@@ -138,15 +138,21 @@ app.get('/admin/delegations/stream', (req, res) => {
   res.flushHeaders();
 
   const onDelegation = (task: any) => {
-    res.write(`data: ${JSON.stringify(task)}\n\n`);
+    res.write(`data: ${JSON.stringify({ type: 'delegation', payload: task })}\n\n`);
+  };
+
+  const onCompletion = (task: any) => {
+    res.write(`data: ${JSON.stringify({ type: 'completion', payload: task })}\n\n`);
   };
 
   eventBus.on('delegation', onDelegation);
-  console.log('[SSE] Client connected to delegation stream');
+  queue.on('completion', onCompletion);
+  console.log('[SSE] Client connected to delegation/completion stream');
 
   req.on('close', () => {
     eventBus.off('delegation', onDelegation);
-    console.log('[SSE] Client disconnected from delegation stream');
+    queue.off('completion', onCompletion);
+    console.log('[SSE] Client disconnected from stream');
   });
 });
 

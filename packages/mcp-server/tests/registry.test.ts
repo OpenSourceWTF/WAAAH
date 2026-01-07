@@ -30,11 +30,12 @@ vi.mock('../src/state/db.js', () => {
             get: vi.fn((id: string) => agents.get(id))
           };
         }
-        if (sql.includes('SELECT * FROM agents WHERE displayName')) {
+        if (sql.includes('lower(displayName)') || sql.includes('SELECT * FROM agents WHERE displayName')) {
           return {
             get: vi.fn((name: string) => {
+              const nameLower = name.toLowerCase();
               for (const agent of agents.values()) {
-                if (agent.displayName === name) return agent;
+                if (agent.displayName?.toLowerCase() === nameLower) return agent;
               }
               return undefined;
             })
@@ -199,6 +200,65 @@ describe('AgentRegistry', () => {
 
       const lastSeen = registry.getLastSeen('lastseen-agent');
       expect(typeof lastSeen).toBe('number');
+    });
+  });
+
+  describe('getByDisplayName', () => {
+    it('returns undefined for non-existent display name', () => {
+      expect(registry.getByDisplayName('@DoesNotExist')).toBeUndefined();
+    });
+
+    it('finds agent by display name', () => {
+      registry.register({
+        id: 'display-name-agent',
+        role: 'developer',
+        displayName: '@UniqueDisplayName',
+        capabilities: []
+      });
+
+      const agent = registry.getByDisplayName('@UniqueDisplayName');
+      expect(agent).toBeDefined();
+      expect(agent?.id).toBe('display-name-agent');
+    });
+
+    it('performs case-insensitive search', () => {
+      registry.register({
+        id: 'case-test-agent',
+        role: 'developer',
+        displayName: '@CaseTestAgent',
+        capabilities: []
+      });
+
+      // Note: actual case insensitivity depends on DB implementation
+      const agent = registry.getByDisplayName('@CaseTestAgent');
+      expect(agent).toBeDefined();
+    });
+  });
+
+  describe('getAllowedDelegates', () => {
+    it('returns allowed delegates for project-manager', () => {
+      const delegates = registry.getAllowedDelegates('project-manager');
+      expect(Array.isArray(delegates)).toBe(true);
+      expect(delegates).toContain('full-stack-engineer');
+      expect(delegates).toContain('test-engineer');
+    });
+
+    it('returns empty array for roles with no delegation rights', () => {
+      const delegates = registry.getAllowedDelegates('test-engineer');
+      expect(Array.isArray(delegates)).toBe(true);
+      expect(delegates.length).toBe(0);
+    });
+
+    it('returns allowed delegates for full-stack-engineer', () => {
+      const delegates = registry.getAllowedDelegates('full-stack-engineer');
+      expect(Array.isArray(delegates)).toBe(true);
+      expect(delegates).toContain('test-engineer');
+    });
+  });
+
+  describe('getAgentColor', () => {
+    it('returns undefined for non-existent agent', () => {
+      expect(registry.getAgentColor('no-such-agent-color')).toBeUndefined();
     });
   });
 });

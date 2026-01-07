@@ -106,14 +106,31 @@ export class SlackAdapter implements PlatformAdapter {
   }
 
   async reply(context: MessageContext, message: string): Promise<string> {
-    const { say } = context.raw as { say: SayFn };
+    const { say, event } = context.raw as { say: SayFn; event?: MessageEvent };
 
     // If this is a slash command, we don't have a message TS to thread on
     const isSlashCommand = !!(context.raw as any).command;
 
+    // Check if we should force threading or if we're already in a thread
+    const forceThread = process.env.SLACK_FORCE_THREADING === 'true';
+    const eventAny = event as any;
+    const isInThread = eventAny?.thread_ts !== undefined;
+
+    // Determine thread_ts
+    let threadTs: string | undefined;
+    if (isSlashCommand) {
+      threadTs = undefined; // Slash commands don't have a parent to thread on
+    } else if (forceThread) {
+      threadTs = context.messageId; // Force threading to original message
+    } else if (isInThread) {
+      threadTs = eventAny.thread_ts; // Reply in existing thread
+    } else {
+      threadTs = undefined; // Main channel message → reply in channel, not thread
+    }
+
     const result = await say({
       text: message,
-      thread_ts: isSlashCommand ? undefined : context.messageId // Reply in thread only for messages
+      thread_ts: threadTs
     });
 
     const ts = (result as any).ts;
