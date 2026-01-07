@@ -27,6 +27,18 @@ SLACK_APP_TOKEN=xapp-...
 PLATFORM=slack
 ```
 
+### Getting Channel IDs (Slack)
+
+To configure `SLACK_DELEGATION_CHANNEL_ID`, you need the channel's ID:
+
+1. Right-click the channel name (e.g., `#bot-logs`) → **Copy Link**
+2. Paste it. The link looks like: `https://workspace.slack.com/archives/C12345678`
+3. The ID is the last segment: **`C12345678`**
+
+**Alternative**: Click the channel name → scroll to the bottom of the "About" tab → copy the **Channel ID**.
+
+> **Note**: The bot must be invited to the channel (`/invite @YourBotName`) to post there.
+
 ### Running Both
 ```env
 PLATFORM=both

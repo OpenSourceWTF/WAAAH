@@ -39,7 +39,7 @@ export type RegisterAgentArgs = z.infer<typeof registerAgentSchema>;
 
 export const waitForPromptSchema = z.object({
   agentId: z.string().min(1),
-  timeout: z.number().min(1).max(300).optional().default(290)
+  timeout: z.number().min(1).max(3600).optional().default(290)
 });
 export type WaitForPromptArgs = z.infer<typeof waitForPromptSchema>;
 

@@ -4,7 +4,54 @@ WAAAH is a system for orchestrating autonomous AI agents (who may also be orches
 
 ![WAAAH Banner](docs/assets/banner.png)
 
-## 🚀 Architecture
+## � Starting The WAAAH
+
+Run the orchestration server and bot for your team:
+
+```bash
+# 1. Configure environment
+cp .env.example .env
+# Edit .env with your tokens (WAAAH_API_KEY, DISCORD_TOKEN or SLACK_* tokens)
+
+# 2. Start with Docker
+docker compose up -d waaah-server bot
+
+# Or without Docker
+pnpm install && pnpm build
+pnpm serve &  # Background
+pnpm bot       # Foreground
+```
+
+## 🤝 Joining The WAAAH
+
+Connect your AI agent to an existing WAAAH server:
+
+1. **Add MCP config** (e.g., `~/.gemini/settings.json`):
+   ```json
+   {
+     "mcpServers": {
+       "waaah": {
+         "command": "node",
+         "args": ["/path/to/WAAAH/packages/mcp-proxy/dist/index.js"],
+         "env": {
+           "WAAAH_SERVER_URL": "https://your-waaah-server.com",
+           "AGENT_ID": "fullstack-1",
+           "AGENT_ROLE": "full-stack-engineer",
+           "WAAAH_API_KEY": "your_api_key"
+         }
+       }
+     }
+   }
+   ```
+
+2. **Initialize your agent** with a workflow command:
+   - `/waaah-fullstack` — Full Stack Engineer
+   - `/waaah-pm` — Project Manager  
+   - `/waaah-testeng` — Test Engineer
+
+3. **Start receiving tasks** — the agent enters an autonomous loop via `wait_for_prompt`.
+
+## �🚀 Architecture
 
 ```mermaid
 graph TD
@@ -48,6 +95,7 @@ This is a monorepo managed with `pnpm workspaces`.
 
 - **Node.js**: v18+
 - **PNPM**: All dependencies are managed via pnpm.
+- **Docker** (for containerized deployment): [Install Docker](https://docs.docker.com/engine/install/)
 
 ## 🏃 Quick Start
 
@@ -58,7 +106,7 @@ This is a monorepo managed with `pnpm workspaces`.
 
 2.  **Start the Server**
     ```bash
-    pnpm server
+    pnpm serve
     ```
 
 3.  **Send a Task via CLI**
@@ -167,7 +215,7 @@ The agent will receive the task via `wait_for_prompt` and execute autonomously.
 
 | Script | Description |
 |--------|-------------|
-| `pnpm server` | Start MCP orchestration server (Local) |
+| `pnpm serve` | Start MCP orchestration server (Local) |
 | `pnpm cli <command>` | CLI for local testing |
 | `pnpm bot` | Start Discord bot |
 | `docker compose up` | Start full stack (Server + Nginx + DB) |
