@@ -23,7 +23,7 @@ export class DiscordAdapter extends BaseAdapter {
     });
   }
 
-  async connect(): Promise<void> {
+  async performConnect(): Promise<void> {
     return new Promise((resolve, reject) => {
       this.client.once('ready', () => {
         this.log(`Logged in as ${this.client.user?.tag}`);

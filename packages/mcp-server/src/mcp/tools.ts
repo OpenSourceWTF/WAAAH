@@ -1,7 +1,7 @@
 import { AgentRegistry } from '../state/registry.js';
 import { TaskQueue } from '../state/queue.js';
 import { scanPrompt, getSecurityContext } from '../security/prompt-scanner.js';
-import { emitDelegation } from '../state/events.js';
+import { emitDelegation, emitActivity } from '../state/events.js';
 
 // Import shared schemas from types package
 import {
@@ -38,6 +38,10 @@ export {
   adminUpdateAgentSchema
 };
 
+/**
+ * Handles incoming MCP tool requests and orchestrates interactions between the AgentRegistry and TaskQueue.
+ * Implements the core logic for all exposed MCP tools.
+ */
 export class ToolHandler {
   constructor(
     private registry: AgentRegistry,
@@ -52,6 +56,12 @@ export class ToolHandler {
     };
   }
 
+  /**
+   * Registers a new agent with the system.
+   * 
+   * @param args - The arguments for the register_agent tool (registerAgentSchema).
+   * @returns MCP Tool content with registration details.
+   */
   async register_agent(args: unknown) {
     try {
       const params = registerAgentSchema.parse(args);
@@ -64,6 +74,11 @@ export class ToolHandler {
 
       // Return permissions for this role
       const canDelegateTo = this.registry.getAllowedDelegates(params.role);
+
+      emitActivity('AGENT', `Agent ${params.displayName || finalAgentId} connected`, {
+        agentId: finalAgentId,
+        role: params.role
+      });
 
       return {
         content: [{
@@ -80,6 +95,13 @@ export class ToolHandler {
     } catch (e) { return this.handleError(e); }
   }
 
+  /**
+   * LONG-POLLING implementation for agents to wait for new tasks.
+   * Agents call this to signal availability. It blocks until a task is available or timeout occurs.
+   * 
+   * @param args - The arguments for wait_for_prompt tool (waitForPromptSchema).
+   * @returns MCP Tool content with new task details or TIMEOUT status.
+   */
   async wait_for_prompt(args: unknown) {
     try {
       const params = waitForPromptSchema.parse(args);
@@ -93,18 +115,29 @@ export class ToolHandler {
       // Update heartbeat on each wait call (start of long-poll)
       this.registry.heartbeat(params.agentId);
 
-      const task = await this.queue.waitForTask(params.agentId, role, timeoutMs);
+      const result = await this.queue.waitForTask(params.agentId, role, timeoutMs);
 
       // Update heartbeat again after wait completes (maintains "recent" status
       // during the gap before the agent calls wait_for_prompt again)
       this.registry.heartbeat(params.agentId);
 
-      if (!task) {
+      if (!result) {
         return {
           content: [{ type: 'text', text: JSON.stringify({ status: 'TIMEOUT' }) }]
         };
       }
 
+      // Check if it's an Eviction Signal
+      if ('controlSignal' in result && result.controlSignal === 'EVICT') {
+        return {
+          content: [{
+            type: 'text', text: JSON.stringify(result)
+          }]
+        };
+      }
+
+      // It's a Task
+      const task = result as any; // Cast to Task
       return {
         content: [{
           type: 'text', text: JSON.stringify({
@@ -119,6 +152,13 @@ export class ToolHandler {
     } catch (e) { return this.handleError(e); }
   }
 
+  /**
+   * Waits for a specific task to complete.
+   * Used by agents to block execution until a dependency task is finished.
+   * 
+   * @param args - The arguments for wait_for_task tool (waitForTaskSchema).
+   * @returns MCP Tool content with task completion status.
+   */
   async wait_for_task(args: unknown) {
     try {
       const params = waitForTaskSchema.parse(args);
@@ -149,6 +189,12 @@ export class ToolHandler {
     } catch (e) { return this.handleError(e); }
   }
 
+  /**
+   * Sends a response or status update for a task.
+   * 
+   * @param args - The arguments for send_response tool (sendResponseSchema).
+   * @returns MCP Tool content confirming response receipt.
+   */
   async send_response(args: unknown) {
     try {
       const params = sendResponseSchema.parse(args);
@@ -169,6 +215,13 @@ export class ToolHandler {
     } catch (e) { return this.handleError(e); }
   }
 
+  /**
+   * Delegates a task to another agent.
+   * Enforces role-based permissions and security scanning.
+   * 
+   * @param args - The arguments for assign_task tool (assignTaskSchema).
+   * @returns MCP Tool content with the new delegated task ID.
+   */
   async assign_task(args: unknown) {
     try {
       const params = assignTaskSchema.parse(args);
@@ -179,18 +232,44 @@ export class ToolHandler {
         this.registry.heartbeat(sourceAgent);
       }
 
-      // Resolve target by displayName or agentId
-      let targetAgent = this.registry.get(params.targetAgentId);
-      if (!targetAgent) {
-        targetAgent = this.registry.getByDisplayName(params.targetAgentId);
-      }
-      if (!targetAgent) {
-        targetAgent = this.registry.getByRole(params.targetAgentId);
+      // Resolve Target
+      let targetAgentId: string | undefined;
+      let targetRole: string | undefined; // AgentRole type
+      let targetDisplayName: string | undefined;
+
+      // 1. Try ID
+      const byId = this.registry.get(params.targetAgentId);
+      if (byId) {
+        targetAgentId = byId.id;
+        targetRole = byId.role;
+        targetDisplayName = byId.displayName;
       }
 
-      if (!targetAgent) {
+      // 2. Try Display Name
+      if (!targetAgentId) {
+        const byName = this.registry.getByDisplayName(params.targetAgentId);
+        if (byName) {
+          targetAgentId = byName.id;
+          targetRole = byName.role;
+          targetDisplayName = byName.displayName;
+        }
+      }
+
+      // 3. Try Role (Broadcast Mode)
+      if (!targetAgentId) {
+        // Check if the input string itself is a valid role that exists in the DB
+        // getByRole returns the most recent agent, proving the role exists.
+        const byRoleSample = this.registry.getByRole(params.targetAgentId);
+        if (byRoleSample) {
+          targetRole = byRoleSample.role; // Use the canonical role from DB
+          targetDisplayName = `Role: ${targetRole}`;
+          // keeping targetAgentId undefined = BROADCAST to all agents of this role
+        }
+      }
+
+      if (!targetRole) {
         return {
-          content: [{ type: 'text', text: `Target agent "${params.targetAgentId}" not found or not connected` }],
+          content: [{ type: 'text', text: `Target agent or role "${params.targetAgentId}" not found` }],
           isError: true
         };
       }
@@ -198,10 +277,11 @@ export class ToolHandler {
       // Enforce delegation permissions
       const sourceAgentObj = this.registry.get(sourceAgent);
       if (sourceAgentObj) {
-        const canDelegate = this.registry.canDelegate(sourceAgentObj.role, targetAgent.role);
+        // We cast to any because AgentRole enum typings might be strict in the codebase 
+        const canDelegate = this.registry.canDelegate(sourceAgentObj.role, targetRole as any);
         if (!canDelegate) {
           return {
-            content: [{ type: 'text', text: `Permission denied: ${sourceAgentObj.role} cannot delegate to ${targetAgent.role}` }],
+            content: [{ type: 'text', text: `Permission denied: ${sourceAgentObj.role} cannot delegate to ${targetRole}` }],
             isError: true
           };
         }
@@ -224,7 +304,10 @@ export class ToolHandler {
         command: 'execute_prompt',
         prompt: params.prompt,
         from: { type: 'agent', id: sourceAgent, name: sourceAgentObj?.displayName || sourceAgent },
-        to: { agentId: targetAgent.id },
+        to: {
+          agentId: targetAgentId, // If undefined, this is a broadcase
+          role: targetRole as any
+        },
         priority: params.priority || 'normal',
         status: 'QUEUED',
         createdAt: Date.now(),
@@ -235,24 +318,31 @@ export class ToolHandler {
         }
       });
 
-      console.log(`[Tools] ${sourceAgentObj?.displayName || sourceAgent} delegated to ${targetAgent.displayName}: ${params.prompt.substring(0, 50)}...`);
+      const logTarget = targetAgentId ? `${targetDisplayName}` : `Role: ${targetRole} (Broadcast)`;
+      console.log(`[Tools] ${sourceAgentObj?.displayName || sourceAgent} delegated to ${logTarget}: ${params.prompt.substring(0, 50)}...`);
 
       // Emit delegation event for real-time notifications (SSE stream)
       emitDelegation({
         taskId,
         from: sourceAgentObj?.displayName || sourceAgent,
-        to: targetAgent.displayName || targetAgent.id, // Fallback to agentId or empty string.
+        to: targetDisplayName || targetRole || 'Unknown',
         prompt: params.prompt.length > 200 ? params.prompt.substring(0, 200) + '...' : params.prompt,
         priority: params.priority || 'normal',
         createdAt: Date.now()
       });
 
       return {
-        content: [{ type: 'text', text: `Task delegated to ${targetAgent.displayName} (${targetAgent.id}): ${taskId}` }]
+        content: [{ type: 'text', text: `Task delegated to ${logTarget}: ${taskId}` }]
       };
     } catch (e) { return this.handleError(e); }
   }
 
+  /**
+   * Lists available agents, filtering by role if requested.
+   * 
+   * @param args - The arguments for list_agents tool (listAgentsSchema).
+   * @returns MCP Tool content with list of matching agents.
+   */
   async list_agents(args: unknown) {
     try {
       const params = listAgentsSchema.parse(args);
@@ -293,6 +383,12 @@ export class ToolHandler {
     } catch (e) { return this.handleError(e); }
   }
 
+  /**
+   * Gets detailed status logic for a specific agent.
+   * 
+   * @param args - The arguments for get_agent_status tool (getAgentStatusSchema).
+   * @returns MCP Tool content with agent status details.
+   */
   async get_agent_status(args: unknown) {
     try {
       const params = getAgentStatusSchema.parse(args);
@@ -336,6 +432,13 @@ export class ToolHandler {
     } catch (e) { return this.handleError(e); }
   }
 
+  /**
+   * Acknowledges receipt of a task.
+   * Required for the 3-loop handshake (wait -> ack -> execute).
+   * 
+   * @param args - The arguments for ack_task tool (ackTaskSchema).
+   * @returns MCP Tool content confirming acknowledgment.
+   */
   async ack_task(args: unknown) {
     try {
       const params = ackTaskSchema.parse(args);
@@ -356,6 +459,12 @@ export class ToolHandler {
     } catch (e) { return this.handleError(e); }
   }
 
+  /**
+   * Updates an agent's metadata (displayName, color, status) via Admin API.
+   * 
+   * @param args - The arguments for admin_update_agent tool (adminUpdateAgentSchema).
+   * @returns MCP Tool content confirming update.
+   */
   async admin_update_agent(args: unknown) {
     try {
       const params = adminUpdateAgentSchema.parse(args);
@@ -375,6 +484,29 @@ export class ToolHandler {
 
       return {
         content: [{ type: 'text', text: `Updated agent ${params.agentId}` }]
+      };
+    } catch (e) { return this.handleError(e); }
+  }
+
+  /**
+   * Triggers an eviction for a specific agent.
+   */
+  async admin_evict_agent(args: unknown) {
+    try {
+      // Manual parsing or use a schema if defined in types
+      // const params = adminEvictAgentSchema.parse(args); 
+      // Reuse the partial schema or define one. For now manual check for simple args.
+      const params = args as any;
+      if (!params.agentId || !params.reason) {
+        return {
+          content: [{ type: 'text', text: 'Missing agentId or reason' }],
+          isError: true
+        };
+      }
+
+      this.queue.queueEviction(params.agentId, params.reason, params.action || 'RESTART');
+      return {
+        content: [{ type: 'text', text: `Eviction queued for ${params.agentId}` }]
       };
     } catch (e) { return this.handleError(e); }
   }

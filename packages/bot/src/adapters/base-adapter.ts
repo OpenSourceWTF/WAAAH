@@ -16,8 +16,42 @@ export abstract class BaseAdapter implements PlatformAdapter {
     this.approvedUsers = approvedUsers;
   }
 
-  abstract connect(): Promise<void>;
+  // Abstract methods for platform-specific implementation
+  protected abstract performConnect(): Promise<void>;
   abstract disconnect(): Promise<void>;
+
+  // Wrapper with auto-reconnection logic
+  async connect(): Promise<void> {
+    await this.exponentialBackoff(async () => {
+      await this.performConnect();
+    });
+  }
+
+  protected async exponentialBackoff(
+    operation: () => Promise<void>,
+    maxRetries: number = -1, // Infinite
+    baseDelay: number = 1000,
+    maxDelay: number = 30000
+  ): Promise<void> {
+    let retries = 0;
+    while (true) {
+      try {
+        await operation();
+        return; // Success
+      } catch (err: any) {
+        if (maxRetries >= 0 && retries >= maxRetries) {
+          this.error(`Max retries reached. Giving up.`);
+          throw err;
+        }
+
+        const delay = Math.min(baseDelay * Math.pow(1.5, retries), maxDelay);
+        this.error(`Connection failed: ${err.message}. Retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        retries++;
+      }
+    }
+  }
+
   abstract reply(context: MessageContext, message: string): Promise<string>;
   abstract editReply(context: MessageContext, replyId: string, message: string): Promise<void>;
   abstract sendEmbed(channelId: string, embed: EmbedData): Promise<void>;

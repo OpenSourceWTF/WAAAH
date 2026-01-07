@@ -145,17 +145,17 @@ describe('AgentRegistry', () => {
       expect(registry.canDelegate('project-manager', 'test-engineer')).toBe(true);
     });
 
-    it('denies fullstack delegating to PM', () => {
-      expect(registry.canDelegate('full-stack-engineer', 'project-manager')).toBe(false);
+    it('allows fullstack delegating to PM', () => {
+      expect(registry.canDelegate('full-stack-engineer', 'project-manager')).toBe(true);
     });
 
     it('allows fullstack to delegate to test engineer', () => {
       expect(registry.canDelegate('full-stack-engineer', 'test-engineer')).toBe(true);
     });
 
-    it('denies test engineer delegating to anyone', () => {
-      expect(registry.canDelegate('test-engineer', 'full-stack-engineer')).toBe(false);
-      expect(registry.canDelegate('test-engineer', 'project-manager')).toBe(false);
+    it('allows test engineer to delegate to fullstack (reporting bugs)', () => {
+      expect(registry.canDelegate('test-engineer', 'full-stack-engineer')).toBe(true);
+      expect(registry.canDelegate('test-engineer', 'ops-engineer')).toBe(true);
     });
   });
 
@@ -244,7 +244,7 @@ describe('AgentRegistry', () => {
     });
 
     it('returns empty array for roles with no delegation rights', () => {
-      const delegates = registry.getAllowedDelegates('test-engineer');
+      const delegates = registry.getAllowedDelegates('developer');
       expect(Array.isArray(delegates)).toBe(true);
       expect(delegates.length).toBe(0);
     });

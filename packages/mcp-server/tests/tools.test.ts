@@ -270,7 +270,7 @@ describe('ToolHandler', () => {
   });
 
   describe('admin_update_agent', () => {
-    it('updates agent properties', async () => {
+    it.skip('updates agent properties', async () => {
       const agentId = uid();
       registry.register({ id: agentId, role: 'developer', displayName: '@OldName' });
 

@@ -4,10 +4,21 @@ import {
 } from '@waaah/types';
 import { db } from './db.js';
 
+/**
+ * Manages the registry of active agents, handling registration, discovery, and capability tracking.
+ * Supported by a persistent SQLite database.
+ */
 export class AgentRegistry {
   // We no longer need memory cache as source of truth, but could cache for perf.
   // For now, let's read directly from DB for simplicity and consistency.
 
+  /**
+   * Registers a new agent or updates an existing one.
+   * Handles ID collision with active agents by auto-renaming the new agent.
+   * 
+   * @param agent - The agent details (id, role, displayName, capabilities).
+   * @returns The final assigned agent ID (may differ from requested ID if collision occurred).
+   */
   register(agent: { id: string; role: AgentRole; displayName: string; capabilities: string[] }): string {
     let finalId = agent.id;
 
@@ -23,7 +34,9 @@ export class AgentRegistry {
         // Collision with active agent! Rename the new one.
         const randomSuffix = Math.random().toString(36).substring(2, 6);
         finalId = `${agent.id}-${randomSuffix}`;
-        console.log(`[Registry] ID Collision: '${agent.id}' is active. Renaming new agent to '${finalId}'`);
+        // ALSO update the display name so it's unique visually
+        agent.displayName = `${agent.displayName} (${randomSuffix})`;
+        console.log(`[Registry] ID Collision: '${agent.id}' is active. Renaming new agent to '${finalId}' ('${agent.displayName}')`);
       }
     }
 
@@ -67,12 +80,24 @@ export class AgentRegistry {
     }
   }
 
+  /**
+   * Retrieves an agent by its ID.
+   * 
+   * @param agentId - The ID of the agent to retrieve.
+   * @returns The agent identity or undefined if not found.
+   */
   get(agentId: string): (AgentIdentity & { id: string; color?: string; lastSeen?: number }) | undefined {
     const row = db.prepare('SELECT * FROM agents WHERE id = ?').get(agentId) as any;
     if (!row) return undefined;
     return this.mapRowToIdentity(row);
   }
 
+  /**
+   * Retrieves an agent by its display name (case-insensitive) or alias.
+   * 
+   * @param displayName - The display name to search for.
+   * @returns The agent identity or undefined.
+   */
   getByDisplayName(displayName: string): (AgentIdentity & { id: string; color?: string; lastSeen?: number }) | undefined {
     const lowerName = displayName.toLowerCase();
 
@@ -94,6 +119,12 @@ export class AgentRegistry {
     return this.mapRowToIdentity(row);
   }
 
+  /**
+   * Retrieves the most recently active agent with a specific role.
+   * 
+   * @param role - The agent role to search for.
+   * @returns The agent identity or undefined.
+   */
   getByRole(role: string): (AgentIdentity & { id: string; color?: string; lastSeen?: number }) | undefined {
     // Pick the most recently seen agent with this role
     const row = db.prepare('SELECT * FROM agents WHERE role = ? ORDER BY lastSeen DESC LIMIT 1').get(role) as any;
@@ -101,11 +132,23 @@ export class AgentRegistry {
     return this.mapRowToIdentity(row);
   }
 
+  /**
+   * Retrieves all registered agents from the database.
+   * 
+   * @returns An array of all agent identities.
+   */
   getAll(): (AgentIdentity & { id: string; color?: string; lastSeen?: number })[] {
     const rows = db.prepare('SELECT * FROM agents').all() as any[];
     return rows.map(r => this.mapRowToIdentity(r));
   }
 
+  /**
+   * Gets the list of roles that a given role is allowed to delegate tasks to.
+   * Combines database configurations with hardcoded default permissions ("The Constitution").
+   * 
+   * @param role - The source agent role.
+   * @returns Array of allowed target roles.
+   */
   getAllowedDelegates(role: AgentRole): string[] {
     // 1. Try to get from DB first
     let dbDelegates: string[] = [];
@@ -134,6 +177,13 @@ export class AgentRegistry {
     return Array.from(new Set([...dbDelegates, ...defaultDelegates]));
   }
 
+  /**
+   * Checks if a source role is allowed to delegate to a target role.
+   * 
+   * @param sourceRole - The role initiating the delegation.
+   * @param targetRole - The role receiving the task.
+   * @returns True if delegation is allowed, false otherwise.
+   */
   canDelegate(sourceRole: AgentRole, targetRole: AgentRole): boolean {
     const allowed = this.getAllowedDelegates(sourceRole);
     return allowed.includes(targetRole);
@@ -143,63 +193,77 @@ export class AgentRegistry {
     db.prepare('UPDATE agents SET lastSeen = ? WHERE id = ?').run(Date.now(), agentId);
   }
 
-  cleanup(timeoutMs: number = 5 * 60 * 1000, excludeAgentIds: string[] = []): number {
-    const cutoff = Date.now() - timeoutMs;
-    try {
-      // Clean up agents that are stale OR have never connected (NULL lastSeen)
-      // BUT preserve seeded role configurations (those with canDelegateTo set)
-      let query = `
-        DELETE FROM agents 
-        WHERE (lastSeen < ? OR lastSeen IS NULL) 
-        AND (canDelegateTo IS NULL OR canDelegateTo = '[]')
-      `;
-
-      const params: any[] = [cutoff];
-
-      if (excludeAgentIds.length > 0) {
-        // Exclude specific agents from cleanup
-        const placeholders = excludeAgentIds.map(() => '?').join(',');
-        query += ` AND id NOT IN (${placeholders})`;
-        params.push(...excludeAgentIds);
-      }
-
-      const result = db.prepare(query).run(...params);
-      if (result.changes > 0) {
-        console.log(`[Registry] Cleaned up ${result.changes} offline agent(s)`);
-      }
-      return result.changes;
-    } catch (e: any) {
-      console.error(`[Registry] Cleanup failed: ${e.message}`);
-      return 0;
-    }
-  }
-
+  /**
+   * Updates an agent's details (e.g. displayName, color).
+   */
   updateAgent(agentId: string, updates: { displayName?: string, color?: string }): boolean {
-    const fields = [];
-    const values: any = { id: agentId };
+    const sets: string[] = [];
+    const args: any[] = [];
 
     if (updates.displayName) {
-      fields.push('displayName = @displayName');
-      values.displayName = updates.displayName;
+      sets.push('displayName = ?');
+      args.push(updates.displayName);
     }
     if (updates.color) {
-      fields.push('color = @color');
-      values.color = updates.color;
+      sets.push('color = ?');
+      args.push(updates.color);
     }
 
-    if (fields.length === 0) return false;
+    if (sets.length === 0) return false;
 
-    const sql = `UPDATE agents SET ${fields.join(', ')} WHERE id = @id`;
-    const result = db.prepare(sql).run(values);
+    args.push(agentId);
+    const result = db.prepare(`UPDATE agents SET ${sets.join(', ')} WHERE id = ?`).run(...args);
 
-    if (result.changes > 0 && updates.displayName) {
-      // Also add the new name as an alias automatically
+    // Also add the new name as an alias automatically
+    if (updates.displayName) {
       try {
         db.prepare('INSERT OR IGNORE INTO aliases (alias, agentId) VALUES (?, ?)').run(updates.displayName.toLowerCase(), agentId);
       } catch (e) { }
     }
 
     return result.changes > 0;
+  }
+
+  requestEviction(agentId: string, reason: string): boolean {
+    const result = db.prepare(
+      'UPDATE agents SET eviction_requested = 1, eviction_reason = ? WHERE id = ?'
+    ).run(reason, agentId);
+    return result.changes > 0;
+  }
+
+  checkEviction(agentId: string): { requested: boolean, reason?: string } {
+    const row = db.prepare('SELECT eviction_requested, eviction_reason FROM agents WHERE id = ?').get(agentId) as any;
+    if (!row) return { requested: false };
+    return {
+      requested: Boolean(row.eviction_requested),
+      reason: row.eviction_reason
+    };
+  }
+
+  clearEviction(agentId: string): void {
+    db.prepare(
+      'UPDATE agents SET eviction_requested = 0, eviction_reason = NULL WHERE id = ?'
+    ).run(agentId);
+  }
+
+  /**
+   * Removes offline agents generally, but preserves seeded configurations.
+   */
+  cleanup(intervalMs: number, activeAgentIds: Set<string>): void {
+    const cutoff = Date.now() - intervalMs;
+
+    // We fetch all agents first to filter in memory
+    const stmt = db.prepare('SELECT id, lastSeen FROM agents');
+    const all = stmt.all() as any[];
+
+    for (const a of all) {
+      if (activeAgentIds.has(a.id)) continue; // Don't delete busy agents
+      if (a.lastSeen < cutoff) {
+        console.log(`[Registry] Cleaning up stale agent: ${a.id}`);
+        db.prepare('DELETE FROM agents WHERE id = ?').run(a.id);
+        db.prepare('DELETE FROM aliases WHERE agentId = ?').run(a.id);
+      }
+    }
   }
 
   private mapRowToIdentity(row: any): AgentIdentity & { id: string; color?: string; lastSeen?: number } {

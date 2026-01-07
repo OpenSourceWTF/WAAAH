@@ -6,7 +6,7 @@
     "build": "pnpm -r run build",
     "test": "pnpm -r run test",
     "lint": "pnpm -r run lint",
-    "serve": "tsx --watch packages/mcp-server/src/index.ts",
+    "serve": "tsx packages/mcp-server/src/index.ts",
     "serve:prod": "node packages/mcp-server/dist/index.js",
     "cli": "tsx packages/cli/src/index.ts",
     "bot": "tsx --watch packages/bot/src/index.ts",

@@ -1,3 +1,7 @@
+/**
+ * Main Express server entry point for the WAAAH MCP.
+ * Configures middleware, API routes, and tool handling.
+ */
 import express from 'express';
 import bodyParser from 'body-parser';
 import cors from 'cors';
@@ -6,7 +10,7 @@ import { AgentRegistry } from './state/registry.js';
 import { TaskQueue } from './state/queue.js';
 import { ToolHandler } from './mcp/tools.js';
 import { scanPrompt, getSecurityContext } from './security/prompt-scanner.js';
-import { eventBus } from './state/events.js';
+import { eventBus, emitActivity } from './state/events.js';
 import path from 'path';
 
 dotenv.config();
@@ -18,6 +22,11 @@ const WORKSPACE_ROOT = process.env.WORKSPACE_ROOT || process.cwd();
 
 const registry = new AgentRegistry();
 const queue = new TaskQueue();
+queue.startScheduler();
+
+// Track active bot connections (SSE streams)
+let activeDelegationStreams = 0;
+
 const tools = new ToolHandler(registry, queue);
 
 // Middleware
@@ -49,7 +58,11 @@ app.use((req, res, next) => {
   next();
 });
 
-// Health check (unauthenticated)
+/**
+ * GET /health
+ * Simple health check endpoint to verify server responsiveness.
+ * @returns { status: 'ok' }
+ */
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
@@ -61,7 +74,18 @@ app.get('/debug/state', (req, res) => {
   });
 });
 
-// Admin endpoint to enqueue tasks
+app.get('/admin/stats', (req, res) => {
+  res.json(queue.getStats());
+});
+
+/**
+ * POST /admin/enqueue
+ * Enqueues a new task from the Admin interface.
+ * Security: Validates prompt for malicious patterns.
+ * 
+ * @body { prompt, agentId, role, priority }
+ * @returns { success: true, taskId: string }
+ */
 app.post('/admin/enqueue', (req, res) => {
   const { prompt, agentId, role, priority } = req.body;
 
@@ -105,16 +129,50 @@ app.get('/admin/tasks', (req, res) => {
   res.json(queue.getAll());
 });
 
-// Query task history from database (includes COMPLETED/FAILED)
+/**
+ * GET /admin/tasks/history
+ * Retrieves task history from database with filtering.
+ * 
+ * @query status - Filter by status (single or comma-separated)
+ * @query agentId - Filter by assigned agent
+ * @query limit - Max results (default 50)
+ * @query offset - Pagination offset (default 0)
+ * @query q - Fuzzy search term
+ */
 app.get('/admin/tasks/history', (req, res) => {
-  const { status, agentId, limit, offset } = req.query;
+  const { status, agentId, limit, offset, q } = req.query;
   const tasks = queue.getTaskHistory({
     status: status as string,
     agentId: agentId as string,
     limit: limit ? parseInt(limit as string, 10) : 50,
-    offset: offset ? parseInt(offset as string, 10) : 0
+    offset: offset ? parseInt(offset as string, 10) : 0,
+    search: q as string
   });
   res.json(tasks);
+});
+
+/**
+ * GET /admin/stats
+ * Retrieves global task statistics.
+ */
+app.get('/admin/stats', (req, res) => {
+  const stats = queue.getStats();
+  res.json(stats);
+});
+
+/**
+ * GET /admin/logs
+ * Retrieves recent chronological system activity logs.
+ * @returns Array of log objects.
+ */
+app.get('/admin/logs', (req, res) => {
+  try {
+    const logs = queue.getLogs(100);
+    res.json(logs);
+  } catch (e) {
+    console.error('Failed to fetch logs:', e);
+    res.json([]);
+  }
 });
 
 app.get('/admin/tasks/:taskId', (req, res) => {
@@ -146,6 +204,19 @@ app.post('/admin/tasks/:taskId/cancel', (req, res) => {
   res.json({ success: true, taskId });
 });
 
+// Force retry a task
+app.post('/admin/tasks/:taskId/retry', (req, res) => {
+  const { taskId } = req.params;
+  const result = queue.forceRetry(taskId);
+
+  if (!result.success) {
+    res.status(400).json({ error: result.error });
+    return;
+  }
+
+  res.json({ success: true, taskId });
+});
+
 // Long-polling endpoint for task completion events
 // TODO: Implement proper EventEmitter-based long-polling (see implementation_plan.md)
 app.get('/admin/events', async (req, res) => {
@@ -153,7 +224,11 @@ app.get('/admin/events', async (req, res) => {
   res.json({ status: 'TIMEOUT' });
 });
 
-// SSE stream for real-time delegation notifications
+/**
+ * GET /admin/delegations/stream
+ * Server-Sent Events (SSE) stream for real-time updates.
+ * Emits 'delegation', 'completion', and 'activity' events.
+ */
 app.get('/admin/delegations/stream', (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
@@ -168,20 +243,48 @@ app.get('/admin/delegations/stream', (req, res) => {
     res.write(`data: ${JSON.stringify({ type: 'completion', payload: task })}\n\n`);
   };
 
+  const onActivity = (activity: any) => {
+    res.write(`data: ${JSON.stringify(activity)}\n\n`);
+  };
+
   eventBus.on('delegation', onDelegation);
   queue.on('completion', onCompletion);
-  console.log('[SSE] Client connected to delegation/completion stream');
+  eventBus.on('activity', onActivity);
+
+  activeDelegationStreams++;
+  console.log('[SSE] Client connected to delegation/completion stream. Total:', activeDelegationStreams);
 
   req.on('close', () => {
     eventBus.off('delegation', onDelegation);
     queue.off('completion', onCompletion);
-    console.log('[SSE] Client disconnected from stream');
+    eventBus.off('activity', onActivity);
+    activeDelegationStreams = Math.max(0, activeDelegationStreams - 1);
+    console.log('[SSE] Client disconnected from stream. Total:', activeDelegationStreams);
+  });
+});
+
+// Get bot connection status
+app.get('/admin/bot/status', (req, res) => {
+  res.json({
+    connected: activeDelegationStreams > 0,
+    count: activeDelegationStreams
   });
 });
 
 app.post('/admin/queue/clear', (req, res) => {
   queue.clear();
   res.json({ success: true, message: 'Queue cleared' });
+});
+
+// Evict an agent
+app.post('/admin/evict', (req, res) => {
+  const { agentId, reason, action } = req.body;
+  if (!agentId || !reason) {
+    res.status(400).json({ error: 'Missing agentId or reason' });
+    return;
+  }
+  queue.queueEviction(agentId, reason, action || 'RESTART');
+  res.json({ success: true, message: `Eviction queued for ${agentId}` });
 });
 
 // Get all agents with their connection status
@@ -192,6 +295,18 @@ app.get('/admin/agents/status', async (req, res) => {
     res.json(JSON.parse(content));
   } else {
     res.json([]);
+  }
+});
+
+app.post('/admin/agents/:agentId/evict', (req, res) => {
+  const { agentId } = req.params;
+  const { reason } = req.body;
+
+  const success = registry.requestEviction(agentId, reason || 'Admin requested eviction');
+  if (success) {
+    res.json({ success: true, message: `Eviction requested for ${agentId}` });
+  } else {
+    res.status(404).json({ error: 'Agent not found' });
   }
 });
 
@@ -235,6 +350,9 @@ app.post('/mcp/tools/:toolName', async (req, res) => {
     case 'wait_for_task':
       result = await tools.wait_for_task(args);
       break;
+    case 'admin_evict_agent':
+      result = await tools.admin_evict_agent(args);
+      break;
     default:
       res.status(404).json({ error: `Tool ${toolName} not found` });
       return;
@@ -243,24 +361,61 @@ app.post('/mcp/tools/:toolName', async (req, res) => {
   res.json(result);
 });
 
-const server = app.listen(PORT, () => {
-  console.log(`WAAAH MCP Server running on port ${PORT}`);
+// Fallback for SPA routing (must be after all API routes)
+app.get('/admin/*', (req, res) => {
+  res.sendFile(path.join(WORKSPACE_ROOT, 'packages/mcp-server/public/index.html'));
 });
 
-server.on('error', (e: any) => {
-  if (e.code === 'EADDRINUSE') {
-    console.error(`❌ Port ${PORT} is already in use.`);
-    console.error('   Hint: Another WAAAH server might be running in the background.');
-    process.exit(1);
-  } else {
-    console.error('❌ Server error:', e.message);
-  }
-});
+let server: any;
+
+if (process.env.NODE_ENV !== 'test') {
+  server = app.listen(PORT, () => {
+    console.log(`WAAAH MCP Server running on port ${PORT}`);
+  });
+}
+
+export { app, server };
+
+// Graceful Shutdown
+const shutdown = () => {
+  console.log('Shutting down WAAAH MCP Server...');
+  if (server) server.close();
+  queue.stopScheduler();
+  process.exit(0);
+};
+
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);
+
+if (server) {
+  server.on('error', (e: any) => {
+    if (e.code === 'EADDRINUSE') {
+      console.error(`❌ Port ${PORT} is already in use.`);
+      console.error('   Hint: Another WAAAH server might be running in the background.');
+      process.exit(1);
+    } else {
+      console.error('❌ Server error:', e.message);
+    }
+  });
+}
 
 // Periodic cleanup of offline agents (every 5 minutes)
 const CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
 setInterval(() => {
   // Prevent cleaning up agents that are currently assigned tasks
   const busyAgents = queue.getBusyAgentIds();
-  registry.cleanup(CLEANUP_INTERVAL_MS, busyAgents);
+
+  // Cleanup disconnected agents first
+  const cutoff = Date.now() - CLEANUP_INTERVAL_MS;
+  const all = registry.getAll();
+
+  const protectedAgents = new Set([...busyAgents, ...queue.getWaitingAgents()]);
+
+  for (const a of all) {
+    if (a.lastSeen && a.lastSeen < cutoff && !protectedAgents.has(a.id)) {
+      emitActivity('AGENT', `Agent ${a.displayName || a.id} disconnected (timeout)`, { agentId: a.id });
+    }
+  }
+
+  registry.cleanup(CLEANUP_INTERVAL_MS, protectedAgents);
 }, CLEANUP_INTERVAL_MS);

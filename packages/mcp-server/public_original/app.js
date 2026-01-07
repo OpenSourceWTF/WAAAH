@@ -10,14 +10,32 @@ async function fetchAgents() {
   }
 }
 
+let currentTab = 'active';
+
 async function fetchTasks() {
   try {
-    const response = await fetch(`${API_BASE}/tasks`);
+    let url = `${API_BASE}/tasks`;
+    if (currentTab === 'history') {
+      url = `${API_BASE}/tasks/history?status=COMPLETED,FAILED,CANCELLED&limit=50`;
+    }
+
+    const response = await fetch(url);
     const tasks = await response.json();
     renderTasks(tasks);
   } catch (e) {
     console.error('Failed to fetch tasks:', e);
   }
+}
+
+function switchTab(tab) {
+  currentTab = tab;
+  // Update UI
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.textContent.toLowerCase() === tab);
+  });
+  // Fetch immediately
+  renderTasks([]); // Clear momentary
+  fetchTasks();
 }
 
 function renderAgents(agents) {
@@ -60,7 +78,7 @@ function renderTasks(tasks) {
   }
 
   list.innerHTML = tasks.map(task => `
-        <div class="task-item priority-${task.priority}">
+        <div class="task-item priority-${task.priority} status-${task.status.toLowerCase()}">
             <div class="task-info">
                 <h3>${escapeHtml(task.prompt.substring(0, 80))}${task.prompt.length > 80 ? '...' : ''}</h3>
                 <div class="task-meta">
@@ -72,6 +90,8 @@ function renderTasks(tasks) {
                 <div class="task-status status-${task.status.toLowerCase()}">${task.status}</div>
                 ${['QUEUED', 'IN_PROGRESS', 'ASSIGNED', 'PENDING_ACK'].includes(task.status) ?
       `<button class="btn-cancel" onclick="cancelTask('${task.id}')">Cancel</button>` : ''}
+                ${['IN_PROGRESS', 'ASSIGNED', 'PENDING_ACK', 'CANCELLED', 'FAILED'].includes(task.status) ?
+      `<button class="btn-retry" onclick="retryTask('${task.id}')">Force Retry</button>` : ''}
             </div>
         </div>
     `).join('');
@@ -94,6 +114,23 @@ async function cancelTask(taskId) {
   }
 }
 
+async function retryTask(taskId) {
+  if (!confirm('Are you sure you want to FORCE RETRY this task? This will reset its status to queued.')) return;
+
+  try {
+    const res = await fetch(`${API_BASE}/tasks/${taskId}/retry`, { method: 'POST' });
+    if (res.ok) {
+      fetchTasks(); // Refresh immediately
+    } else {
+      const err = await res.json();
+      alert('Failed to retry: ' + err.error);
+    }
+  } catch (e) {
+    console.error('Retry failed:', e);
+    alert('Network error during retry');
+  }
+}
+
 // Helper to escape HTML to prevent XSS in prompts
 function escapeHtml(text) {
   const div = document.createElement('div');
@@ -108,14 +145,39 @@ function getAgentName(id) {
   return id;
 }
 
+// Bot Status Polling
+async function fetchBotStatus() {
+  try {
+    const res = await fetch(`${API_BASE}/bot/status`);
+    const data = await res.json();
+
+    const dot = document.getElementById('bot-status-dot');
+    const text = document.getElementById('bot-status-text');
+
+    if (data.connected) {
+      dot.className = 'dot online';
+      text.textContent = `Bot Online (${data.count})`;
+      text.style.color = 'var(--success)';
+    } else {
+      dot.className = 'dot offline';
+      text.textContent = 'Bot Offline';
+      text.style.color = 'var(--text-secondary)';
+    }
+  } catch (e) {
+    console.warn('Failed to fetch bot status', e);
+  }
+}
+
 // Initial Load & Polling
 document.addEventListener('DOMContentLoaded', () => {
   fetchAgents();
   fetchTasks();
+  fetchBotStatus();
 
   // Poll every 2 seconds
   setInterval(() => {
     fetchAgents();
     fetchTasks();
+    fetchBotStatus();
   }, 2000);
 });

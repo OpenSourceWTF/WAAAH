@@ -62,7 +62,11 @@ const FORBIDDEN_PATHS = [
 ];
 
 /**
- * Scan a prompt for potential security issues
+ * Scans a prompt string for potential security threats or role - breaking injection attempts.
+ * Uses a list of regex patterns to detect issues.
+ * 
+ * @param prompt - The input prompt to scan.
+ * @returns A ScanResult object containing allowed status and any detected flags.
  */
 export function scanPrompt(prompt: string): ScanResult {
   const flags: string[] = [];
@@ -82,8 +86,14 @@ export function scanPrompt(prompt: string): ScanResult {
   };
 }
 
+
 /**
- * Check if a path is allowed based on workspace root
+ * Checks if a target path is safely within the workspace root.
+ * Prevents path traversal and access to forbidden system directories.
+ * 
+ * @param targetPath - The absolute or relative path to check.
+ * @param workspaceRoot - The root directory to enforce confinement within.
+ * @returns True if the path is allowed, false otherwise.
  */
 export function isPathAllowed(targetPath: string, workspaceRoot: string): boolean {
   const normalizedPath = path.resolve(targetPath);
@@ -109,8 +119,13 @@ export function isPathAllowed(targetPath: string, workspaceRoot: string): boolea
   return true;
 }
 
+
 /**
- * Get security context to inject into tasks
+ * Generates a standard security context object for task execution.
+ * Includes policy definitions and restrictions list.
+ * 
+ * @param workspaceRoot - The root directory of the workspace.
+ * @returns Security context object.
  */
 export function getSecurityContext(workspaceRoot: string) {
   return {
@@ -126,8 +141,16 @@ export function getSecurityContext(workspaceRoot: string) {
   };
 }
 
+
 /**
- * Log a security event to the database
+ * Logs a security event to the database for audit purposes.
+ * 
+ * @param db - The database instance.
+ * @param source - The source of the prompt(cli, discord, agent).
+ * @param fromId - The ID of the entity sending the prompt.
+ * @param prompt - The prompt content(will be truncated).
+ * @param flags - Array of detected security flags.
+ * @param action - The action taken(BLOCKED, ALLOWED, WARNED).
  */
 export function logSecurityEvent(
   db: any,

@@ -25,7 +25,7 @@ export class SlackAdapter extends BaseAdapter {
     });
   }
 
-  async connect(): Promise<void> {
+  async performConnect(): Promise<void> {
     // Listen for app_mention events (when bot is @mentioned)
     this.app.event('app_mention', async ({ event, say, client }) => {
       const userId = event.user ?? 'unknown';

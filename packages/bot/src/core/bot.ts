@@ -295,7 +295,9 @@ export class BotCore {
     this.connectDelegationStream();
   }
 
-  private async connectDelegationStream(): Promise<void> {
+  private async connectDelegationStream(retryCount = 0): Promise<void> {
+    const connectionStart = Date.now();
+
     try {
       const response = await axios.get(
         `${this.config.mcpServerUrl}/admin/delegations/stream`,
@@ -369,20 +371,31 @@ export class BotCore {
 
       response.data.on('error', (err: Error) => {
         console.error('[Bot] SSE stream error:', err.message);
-        // Reconnect after delay
-        setTimeout(() => this.connectDelegationStream(), 5000);
+        this.scheduleReconnect(connectionStart, retryCount);
       });
 
       response.data.on('end', () => {
-        console.log('[Bot] SSE stream ended, reconnecting...');
-        setTimeout(() => this.connectDelegationStream(), 1000);
+        console.log('[Bot] SSE stream ended.');
+        this.scheduleReconnect(connectionStart, retryCount);
       });
 
       console.log(`[Bot] Delegation SSE stream connected`);
+
     } catch (err: any) {
       console.error('[Bot] Failed to connect delegation stream:', err.message);
-      // Retry connection after delay
-      setTimeout(() => this.connectDelegationStream(), 5000);
+      this.scheduleReconnect(connectionStart, retryCount);
     }
+  }
+
+  private scheduleReconnect(lastConnectTime: number, currentRetries: number): void {
+    // If we were connected for more than 30s, reset retries
+    const uptime = Date.now() - lastConnectTime;
+    const nextRetries = uptime > 30000 ? 0 : currentRetries + 1;
+
+    // Exponential backoff: 1s, 1.5s, 2.25s... cap at 30s
+    const delay = Math.min(1000 * Math.pow(1.5, nextRetries), 30000);
+
+    console.log(`[Bot] Reconnecting SSE in ${Math.round(delay)}ms (Attempt ${nextRetries + 1})...`);
+    setTimeout(() => this.connectDelegationStream(nextRetries), delay);
   }
 }

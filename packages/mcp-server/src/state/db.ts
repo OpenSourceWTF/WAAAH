@@ -13,6 +13,10 @@ if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
 }
 
+/**
+ * The singleton BetterSQLite3 database instance.
+ * Automatically initialized with schema on startup if needed.
+ */
 export const db = new Database(DB_PATH);
 // db.pragma('journal_mode = WAL'); // Better concurrency
 
@@ -25,6 +29,8 @@ db.exec(`
     color TEXT,
     capabilities TEXT, -- JSON array
     lastSeen INTEGER,
+    eviction_requested BOOLEAN DEFAULT 0,
+    eviction_reason TEXT,
     canDelegateTo TEXT -- JSON array
   );
 
@@ -46,7 +52,8 @@ db.exec(`
     context TEXT,
     response TEXT,
     createdAt INTEGER NOT NULL,
-    completedAt INTEGER
+    completedAt INTEGER,
+    assignedTo TEXT
   );
 
   CREATE TABLE IF NOT EXISTS security_events (
@@ -62,7 +69,55 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
   CREATE INDEX IF NOT EXISTS idx_aliases_agentId ON aliases(agentId);
   CREATE INDEX IF NOT EXISTS idx_security_timestamp ON security_events(timestamp);
+
+  CREATE TABLE IF NOT EXISTS logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp INTEGER NOT NULL,
+    category TEXT NOT NULL,
+    message TEXT NOT NULL,
+    metadata TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_logs_timestamp ON logs(timestamp DESC);
 `);
+
+// Migration: Add assignedTo to tasks if missing
+const taskColumns = db.prepare('PRAGMA table_info(tasks)').all() as any[];
+if (!taskColumns.some(c => c.name === 'assignedTo')) {
+  console.log('[DB] Migrating: Adding assignedTo column to tasks table');
+  try {
+    db.prepare('ALTER TABLE tasks ADD COLUMN assignedTo TEXT').run();
+    console.log('Migrated tasks table: added assignedTo column');
+  } catch (e: any) {
+    if (!e.message.includes('duplicate column name')) {
+      console.error('Migration failed:', e);
+    }
+  }
+}
+
+// Migration: Add eviction columns to agents table
+const agentColumns = db.prepare('PRAGMA table_info(agents)').all() as any[];
+if (!agentColumns.some(c => c.name === 'eviction_requested')) {
+  console.log('[DB] Migrating: Adding eviction_requested column to agents table');
+  try {
+    db.prepare('ALTER TABLE agents ADD COLUMN eviction_requested BOOLEAN DEFAULT 0').run();
+    console.log('Migrated agents table: added eviction_requested column');
+  } catch (e: any) {
+    if (!e.message.includes('duplicate column name')) {
+      console.error('Migration failed (eviction_requested):', e);
+    }
+  }
+}
+if (!agentColumns.some(c => c.name === 'eviction_reason')) {
+  console.log('[DB] Migrating: Adding eviction_reason column to agents table');
+  try {
+    db.prepare('ALTER TABLE agents ADD COLUMN eviction_reason TEXT').run();
+    console.log('Migrated agents table: added eviction_reason column');
+  } catch (e: any) {
+    if (!e.message.includes('duplicate column name')) {
+      console.error('Migration failed (eviction_reason):', e);
+    }
+  }
+}
 
 interface AgentConfig {
   displayName?: string;

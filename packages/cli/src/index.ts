@@ -11,12 +11,16 @@ if (WAAAH_API_KEY) {
   axios.defaults.headers.common['X-API-Key'] = WAAAH_API_KEY;
 }
 
+import { restartCommand } from './commands/restart.js';
+
 const program = new Command();
 
 program
   .name('waaah')
-  .description('WAAAH CLI - Interact with the agent orchestration system')
-  .version('0.1.0');
+  .description('WAAAH MCP CLI')
+  .version('0.0.1');
+
+program.addCommand(restartCommand);
 
 async function checkServerConnection(): Promise<boolean> {
   try {

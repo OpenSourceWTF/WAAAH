@@ -1,10 +1,10 @@
 ---
-description: Check the status of a specific task
+description: Check the status of the agent fleet
 ---
 
-# Check Task Status
+# Check Fleet Status
 
-This workflow allows you to check the current status of a previously assigned task.
+This workflow allows you to see all active agents and their current tasks.
 
 ## Step 1: List Active Tasks
 

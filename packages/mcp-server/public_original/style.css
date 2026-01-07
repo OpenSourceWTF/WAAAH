@@ -60,7 +60,12 @@ header {
   align-items: center;
   gap: 0.5rem;
   font-size: 0.9rem;
-  color: var(--success);
+  color: var(--text-secondary);
+}
+
+.status-indicator .divider {
+  margin: 0 1rem;
+  color: var(--border);
 }
 
 .dot {
@@ -223,6 +228,30 @@ main {
   border-left-color: var(--accent);
 }
 
+/* CSS Specificity: Status should override priority. Ensure these are defined AFTER priority classes. */
+.task-item.status-completed {
+  border-left-color: var(--success);
+}
+
+.task-item.status-queued,
+.task-item.status-assigned,
+.task-item.status-pending_ack {
+  border-left-color: var(--warning);
+}
+
+.task-item.status-in_progress {
+  border-left-color: #29B6F6;
+}
+
+.task-item.status-failed,
+.task-item.status-blocked {
+  border-left-color: var(--danger);
+}
+
+.task-item.status-cancelled {
+  border-left-color: var(--text-secondary);
+}
+
 .task-info h3 {
   font-size: 0.95rem;
   margin-bottom: 0.2rem;
@@ -258,14 +287,14 @@ main {
 }
 
 .status-assigned {
-  color: var(--accent);
-  border: 1px solid var(--accent);
-  background-color: rgba(76, 175, 80, 0.1);
+  color: var(--warning);
+  border: 1px solid var(--warning);
+  background-color: rgba(255, 167, 38, 0.1);
 }
 
 .status-pending_ack {
-  color: var(--accent);
-  border: 1px solid var(--accent);
+  color: var(--warning);
+  border: 1px solid var(--warning);
   opacity: 0.7;
 }
 
@@ -331,6 +360,23 @@ main {
   color: white;
 }
 
+.btn-retry {
+  background-color: transparent;
+  border: 1px solid var(--warning);
+  color: var(--warning);
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.7rem;
+  transition: all 0.2s;
+  margin-left: 5px;
+}
+
+.btn-retry:hover {
+  background-color: var(--warning);
+  color: var(--bg-primary);
+}
+
 /* Activity Log (Bottom Panel) */
 .activity-log {
   height: 200px;
@@ -347,4 +393,31 @@ main {
 .log-time {
   color: var(--text-secondary);
   margin-right: 1rem;
+}
+
+/* Tabs */
+.tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin: 0 1rem;
+}
+
+.tab-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.tab-btn.active {
+  background: var(--border);
+  color: var(--text-primary);
+}
+
+.tab-btn:hover:not(.active) {
+  background: rgba(255, 255, 255, 0.05);
 }

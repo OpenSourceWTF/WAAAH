@@ -14,7 +14,7 @@ class TestAdapter extends BaseAdapter {
     super(new Set());
   }
 
-  async connect() { }
+  async performConnect() { }
   async disconnect() { }
   async reply(ctx: MessageContext, msg: string) { return 'reply-id'; }
   async editReply(ctx: MessageContext, id: string, msg: string) { }

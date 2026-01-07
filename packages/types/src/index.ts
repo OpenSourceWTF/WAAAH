@@ -252,6 +252,16 @@ export const TOOL_NAMES = [
   'list_agents',
   'get_agent_status',
   'ack_task',
-  'admin_update_agent'
+  'admin_update_agent',
+  'admin_evict_agent'
 ] as const;
 export type ToolName = typeof TOOL_NAMES[number];
+
+/**
+ * Payload sent to an agent to signal eviction.
+ */
+export interface EvictionSignal {
+  controlSignal: 'EVICT';
+  reason: string;
+  action: 'RESTART' | 'SHUTDOWN';
+}
