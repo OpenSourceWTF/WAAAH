@@ -77,6 +77,40 @@ describe('TaskQueue', () => {
       expect(completedTask.id).toBe('completion-emit-test');
       expect(completedTask.status).toBe('COMPLETED');
     });
+
+    it('sets completedAt timestamp when status set to COMPLETED', () => {
+      const task = mockTask({ id: 'timestamp-test' });
+      queue.enqueue(task);
+
+      const beforeComplete = Date.now();
+      queue.updateStatus(task.id, 'COMPLETED', { message: 'Done' });
+      const afterComplete = Date.now();
+
+      const completedTask = queue.getTask('timestamp-test');
+      expect(completedTask?.completedAt).toBeDefined();
+      expect(completedTask?.completedAt).toBeGreaterThanOrEqual(beforeComplete);
+      expect(completedTask?.completedAt).toBeLessThanOrEqual(afterComplete);
+    });
+
+    it('includes createdAt and completedAt for duration calculation in completion events', async () => {
+      const task = mockTask({ id: 'duration-calc-test' });
+      queue.enqueue(task);
+
+      const eventPromise = new Promise<Task>((resolve) => {
+        queue.once('completion', resolve);
+      });
+
+      queue.updateStatus(task.id, 'COMPLETED', { message: 'Done' });
+      const completedTask = await eventPromise;
+
+      // createdAt is set when task is created in mockTask
+      expect(completedTask.createdAt).toBeDefined();
+      expect(completedTask.completedAt).toBeDefined();
+
+      // Duration can be calculated
+      const duration = (completedTask.completedAt || 0) - completedTask.createdAt;
+      expect(duration).toBeGreaterThanOrEqual(0);
+    });
   });
 
   describe('waitForTask', () => {
@@ -148,6 +182,17 @@ describe('TaskQueue', () => {
       const result = queue.ackTask('non-existent', 'agent-1');
       expect(result.success).toBe(false);
       expect(result.error).toContain('not found');
+    });
+
+    it('sets assignedTo property on the task', async () => {
+      const task = mockTask({ id: 'assigned-to-test' });
+      queue.enqueue(task);
+      await queue.waitForTask('assigned-agent', 'developer', 1000);
+
+      queue.ackTask('assigned-to-test', 'assigned-agent');
+
+      const ackdTask = queue.getTask('assigned-to-test');
+      expect(ackdTask?.assignedTo).toBe('assigned-agent');
     });
   });
 

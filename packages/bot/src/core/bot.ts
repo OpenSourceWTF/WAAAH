@@ -144,11 +144,11 @@ export class BotCore {
       });
 
       const taskId = response.data.taskId;
-      const roleHint = targetRole ? ` → ${targetRole}` : '';
-      await this.adapter.reply(context, `📋 Task \`${taskId}\`${roleHint}\n⏳ Waiting for agent...`);
+      const roleDisplay = targetRole ? `**@${targetRole.replace(/-/g, '')}**` : '';
+      await this.adapter.reply(context, `📋 **Task Scheduled** \`${taskId}\`${roleDisplay ? ` → ${roleDisplay}` : ''}`);
 
       // Poll for response (includes assignment updates)
-      this.pollForResponse(taskId, context);
+      this.pollForResponse(taskId, context, targetRole);
 
     } catch (e: any) {
       console.error('[Bot] Enqueue error:', e.message);
@@ -156,7 +156,7 @@ export class BotCore {
     }
   }
 
-  private async pollForResponse(taskId: string, context: MessageContext): Promise<void> {
+  private async pollForResponse(taskId: string, context: MessageContext, targetRole?: string): Promise<void> {
     const startTime = Date.now();
     const timeout = 5 * 60 * 1000; // 5 minutes
     let wasAssigned = false;
@@ -164,17 +164,14 @@ export class BotCore {
     let assignedAgent = '';
 
     const formatDuration = (ms: number): string => {
-      const seconds = Math.floor(ms / 1000);
-      if (seconds < 60) return `${seconds}s`;
-      const minutes = Math.floor(seconds / 60);
-      const remainingSecs = seconds % 60;
-      return `${minutes}m ${remainingSecs}s`;
+      const seconds = (ms / 1000).toFixed(1);
+      return `${seconds}s`;
     };
 
     const poll = setInterval(async () => {
       if (Date.now() - startTime > timeout) {
         clearInterval(poll);
-        await this.adapter.editReply(context, '', `📋 \`${taskId}\`\n⌛ Timed out`);
+        await this.adapter.editReply(context, '', `⌛ **Task Timed Out** \`${taskId}\``);
         return;
       }
 
@@ -187,22 +184,22 @@ export class BotCore {
           wasAssigned = true;
           assignedAt = Date.now();
           assignedAgent = task.assignedTo || 'agent';
-          await this.adapter.editReply(context, '', `📋 \`${taskId}\`\n👤 ${assignedAgent}`);
+          await this.adapter.editReply(context, '', `👤 **Task Assigned** \`${taskId}\` to @${assignedAgent}`);
         }
 
         // Final states
         if (['COMPLETED', 'FAILED', 'BLOCKED'].includes(task.status)) {
           clearInterval(poll);
 
-          const emoji = task.status === 'COMPLETED' ? '✅' : (task.status === 'BLOCKED' ? '⚠️' : '❌');
           const duration = assignedAt ? formatDuration(Date.now() - assignedAt) : '';
-          const agent = assignedAgent || task.assignedTo || '';
+          const agent = assignedAgent || task.assignedTo || 'agent';
 
-          // Line 1: status + task ID
-          // Line 2: agent + duration
-          const line2Parts = [agent, duration ? `⏱️ ${duration}` : ''].filter(Boolean).join(' · ');
-          const message = `${emoji} \`${taskId}\`\n${line2Parts || 'Done'}`;
+          let statusWord = 'Completed';
+          let emoji = '✅';
+          if (task.status === 'FAILED') { statusWord = 'Failed'; emoji = '❌'; }
+          if (task.status === 'BLOCKED') { statusWord = 'Blocked'; emoji = '⚠️'; }
 
+          const message = `${emoji} **Task ${statusWord}** \`${taskId}\` by @${agent}${duration ? ` in ${duration}` : ''}`;
           await this.adapter.editReply(context, '', message);
         }
       } catch (e: any) {
@@ -343,19 +340,25 @@ export class BotCore {
 
                 // Truncate response message if too long
                 let responseMsg = task.response?.message || 'No response message';
-                if (responseMsg.length > 1000) responseMsg = responseMsg.slice(0, 997) + '...';
+                if (responseMsg.length > 500) responseMsg = responseMsg.slice(0, 497) + '...';
+
+                // Calculate duration
+                const duration = task.completedAt && task.createdAt
+                  ? ((task.completedAt - task.createdAt) / 1000).toFixed(1) + 's'
+                  : 'N/A';
 
                 await this.adapter.sendEmbed(this.config.delegationChannelId!, {
                   title: `${emoji} Task ${task.status}`,
                   color,
                   fields: [
                     { name: 'Task ID', value: `\`${task.id}\``, inline: true },
-                    { name: 'Agent', value: `\`${task.to.agentId || task.to.role}\``, inline: true },
+                    { name: 'Agent', value: `\`${task.assignedTo || task.to?.agentId || task.to?.role || 'unknown'}\``, inline: true },
+                    { name: 'Duration', value: duration, inline: true },
                     { name: 'Result', value: responseMsg }
                   ],
                   timestamp: task.completedAt || Date.now()
                 });
-                console.log(`[Bot] Posted completion: ${task.id} (${task.status})`);
+                console.log(`[Bot] Posted completion: ${task.id} (${task.status}) in ${duration}`);
               }
             } catch (parseErr) {
               console.error('[Bot] Failed to parse SSE event:', parseErr);
