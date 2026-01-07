@@ -87,12 +87,14 @@ describe('waitForPromptSchema', () => {
     expect(waitForPromptSchema.parse({ agentId: 'test', timeout: 60 }).timeout).toBe(60);
   });
 
-  it('rejects timeout > 300', () => {
-    expect(() => waitForPromptSchema.parse({ agentId: 'test', timeout: 301 })).toThrow();
+  it('coerces timeout > 300 to default max (290)', () => {
+    expect(waitForPromptSchema.parse({ agentId: 'test', timeout: 301 }).timeout).toBe(290);
+    expect(waitForPromptSchema.parse({ agentId: 'test', timeout: 3600 }).timeout).toBe(290);
   });
 
-  it('rejects timeout < 1', () => {
-    expect(() => waitForPromptSchema.parse({ agentId: 'test', timeout: 0 })).toThrow();
+  it('coerces timeout < 1 to min (1)', () => {
+    expect(waitForPromptSchema.parse({ agentId: 'test', timeout: 0 }).timeout).toBe(1);
+    expect(waitForPromptSchema.parse({ agentId: 'test', timeout: -5 }).timeout).toBe(1);
   });
 });
 

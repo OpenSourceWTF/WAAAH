@@ -123,15 +123,35 @@ program
 
 // Get agent status
 program
-  .command('status <agentId>')
-  .description('Get status of a specific agent')
-  .action(async (agentId: string) => {
+  .command('status [agentId]')
+  .description('Get status of agents (all if no agentId provided)')
+  .action(async (agentId?: string) => {
     try {
-      const response = await axios.post(`${SERVER_URL}/mcp/tools/get_agent_status`, { agentId });
-      const content = response.data.content?.[0]?.text;
-      if (content) {
-        const status = JSON.parse(content);
-        console.log(`Status: ${status.status}`);
+      if (agentId) {
+        const response = await axios.post(`${SERVER_URL}/mcp/tools/get_agent_status`, { agentId });
+        const content = response.data.content?.[0]?.text;
+        if (content) {
+          const status = JSON.parse(content);
+          const icon = status.status === 'WAITING' ? '🟢' : status.status === 'PROCESSING' ? '🔵' : '⚪';
+          console.log(`${icon} ${status.displayName || status.agentId} [${status.role}]: ${status.status}`);
+          if (status.currentTasks?.length) {
+            console.log(`   Tasks: ${status.currentTasks.join(', ')}`);
+          }
+        }
+      } else {
+        // Show all agents with status
+        const response = await axios.get(`${SERVER_URL}/admin/agents/status`);
+        const agents = response.data;
+        if (agents.length === 0) {
+          console.log('No agents registered.');
+        } else {
+          console.log('Agent Status:');
+          agents.forEach((a: any) => {
+            const icon = a.status === 'WAITING' ? '🟢' : a.status === 'PROCESSING' ? '🔵' : '⚪';
+            const tasks = a.currentTasks?.length ? ` (${a.currentTasks.length} task(s))` : '';
+            console.log(`  ${icon} ${a.displayName} (${a.agentId}) [${a.role}]: ${a.status}${tasks}`);
+          });
+        }
       }
     } catch (error: any) {
       console.error(`❌ Failed: ${error.message}`);
@@ -212,18 +232,37 @@ async function interactiveMode() {
         });
         console.log(`✅ Task enqueued: ${response.data.taskId}`);
         // No blocking here!
-      } else if (cmd === 'status' && args[1]) {
-        const response = await axios.post(`${SERVER_URL}/mcp/tools/get_agent_status`, { agentId: args[1] });
-        const content = response.data.content?.[0]?.text;
-        if (content) {
-          const status = JSON.parse(content);
-          console.log(`Status: ${status.status}`);
+      } else if (cmd === 'status') {
+        if (args[1]) {
+          const response = await axios.post(`${SERVER_URL}/mcp/tools/get_agent_status`, { agentId: args[1] });
+          const content = response.data.content?.[0]?.text;
+          if (content) {
+            const status = JSON.parse(content);
+            const icon = status.status === 'WAITING' ? '🟢' : status.status === 'PROCESSING' ? '🔵' : '⚪';
+            console.log(`${icon} ${status.displayName || status.agentId} [${status.role}]: ${status.status}`);
+            if (status.currentTasks?.length) {
+              console.log(`   Tasks: ${status.currentTasks.join(', ')}`);
+            }
+          }
+        } else {
+          const response = await axios.get(`${SERVER_URL}/admin/agents/status`);
+          const agents = response.data;
+          if (agents.length === 0) {
+            console.log('No agents registered.');
+          } else {
+            console.log('Agent Status:');
+            agents.forEach((a: any) => {
+              const icon = a.status === 'WAITING' ? '🟢' : a.status === 'PROCESSING' ? '🔵' : '⚪';
+              const tasks = a.currentTasks?.length ? ` (${a.currentTasks.length} task(s))` : '';
+              console.log(`  ${icon} ${a.displayName} (${a.agentId}) [${a.role}]: ${a.status}${tasks}`);
+            });
+          }
         }
       } else if (cmd === 'debug') {
         const response = await axios.get(`${SERVER_URL}/debug/state`);
         console.log(JSON.stringify(response.data, null, 2));
       } else if (cmd === 'help') {
-        console.log('Commands: send <agent> <prompt>, list, status <agent>, debug, exit');
+        console.log('Commands: send <agent> <prompt>, list, status [agent], debug, exit');
       } else if (cmd) {
         console.log('Unknown command. Type "help" for available commands.');
       }

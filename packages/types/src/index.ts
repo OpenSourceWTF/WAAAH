@@ -39,7 +39,14 @@ export type RegisterAgentArgs = z.infer<typeof registerAgentSchema>;
 
 export const waitForPromptSchema = z.object({
   agentId: z.string().min(1),
-  timeout: z.number().min(1).max(3600).optional().default(290)
+  timeout: z.number()
+    .optional()
+    .default(290)
+    .transform((val) => {
+      if (val > 300) return 290;  // Coerce to default max
+      if (val < 1) return 1;       // Coerce to min
+      return val;
+    })
 });
 export type WaitForPromptArgs = z.infer<typeof waitForPromptSchema>;
 
@@ -128,10 +135,13 @@ export interface TaskResponse {
 
 export interface AgentStatus {
   agentId: string;
-  status: 'ONLINE' | 'OFFLINE';
+  status: AgentConnectionStatus;
   lastSeen: number;
   currentTask?: string;
 }
+
+export type AgentConnectionStatus = 'OFFLINE' | 'WAITING' | 'PROCESSING';
+
 
 // ===== Tool Names =====
 export const TOOL_NAMES = [

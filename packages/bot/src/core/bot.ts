@@ -45,9 +45,16 @@ export class BotCore {
 
       if (config?.agents) {
         for (const [roleName, agentConfig] of Object.entries(config.agents)) {
+          // Add displayName as alias (e.g., @fullstack -> full-stack-engineer)
           if (agentConfig.displayName) {
-            this.roleAliases[agentConfig.displayName.toLowerCase()] = roleName;
+            const displayLower = agentConfig.displayName.toLowerCase();
+            this.roleAliases[displayLower] = roleName;
+            // Also without @ prefix
+            if (displayLower.startsWith('@')) {
+              this.roleAliases[displayLower.slice(1)] = roleName;
+            }
           }
+          // Add configured aliases
           if (agentConfig.aliases) {
             for (const alias of agentConfig.aliases) {
               this.roleAliases[`@${alias.toLowerCase()}`] = roleName;
@@ -78,14 +85,23 @@ export class BotCore {
   }
 
   private async handleMessage(content: string, context: MessageContext): Promise<void> {
+    // Normalize content for command checking
+    const normalized = content.trim();
+    const command = normalized.toLowerCase();
+
     // Handle admin commands
-    if (content.startsWith('update')) {
-      await this.handleUpdateCommand(content, context);
+    if (command.startsWith('update')) {
+      await this.handleUpdateCommand(normalized, context);
       return;
     }
 
-    if (content.startsWith('clear')) {
+    if (command.startsWith('clear')) {
       await this.handleClearCommand(context);
+      return;
+    }
+
+    if (command === 'status' || command.startsWith('status ')) {
+      await this.handleStatusCommand(context);
       return;
     }
 
@@ -99,6 +115,11 @@ export class BotCore {
         targetRole = this.roleAliases[firstWord];
         content = words.slice(1).join(' ');
       }
+    }
+
+    if (!targetRole) {
+      await this.adapter.reply(context, '❌ **Error:** Please specify a target agent (e.g. `@FullStack`). Unassigned tasks are not supported.');
+      return;
     }
 
     // Detect priority
@@ -206,38 +227,117 @@ export class BotCore {
     }
   }
 
+  private async handleStatusCommand(context: MessageContext): Promise<void> {
+    const aliasCount = Object.keys(this.roleAliases).length;
+    const uptime = process.uptime();
+    const hours = Math.floor(uptime / 3600);
+    const minutes = Math.floor((uptime % 3600) / 60);
+
+    let agentDetails = '';
+    let totalRegistered = 0;
+    let onlineCount = 0;
+
+    try {
+      // 1. Fetch all agents
+      const resp = await axios.post(`${this.config.mcpServerUrl}/mcp/tools/list_agents`, {});
+      const content = resp.data.content?.[0]?.text;
+
+      if (content) {
+        const agents = JSON.parse(content) as any[];
+        totalRegistered = agents.length;
+
+        // 2. Filter online (last 5 mins)
+        const fiveMinsAgo = Date.now() - 5 * 60 * 1000;
+        const onlineAgents = agents.filter(a => a.lastSeen && a.lastSeen > fiveMinsAgo);
+        onlineCount = onlineAgents.length;
+
+        if (onlineAgents.length > 0) {
+          agentDetails = '\n**Connected Agents:**\n' +
+            onlineAgents.map(a => `- **${a.displayName}** (\`${a.id}\`) - ${a.role}`).join('\n');
+        } else {
+          agentDetails = '\n**Connected Agents:** None';
+        }
+      }
+    } catch (e: any) {
+      agentDetails = `\n**Agents:** Error fetching list (${e.message})`;
+    }
+
+    const details = [
+      `**MCP Server:** ${this.config.mcpServerUrl}`,
+      `**Uptime:** ${hours}h ${minutes}m`,
+      `**Aliases Loaded:** ${aliasCount}`,
+      `**Agents Registered:** ${totalRegistered}`,
+      `**Agents Online:** ${onlineCount}`,
+      agentDetails
+    ].join('\n');
+
+    await this.adapter.reply(context, `🤖 **WAAAH Bot Online**\n\n${details}`);
+  }
+
   private startDelegationPolling(): void {
-    const seenTaskIds = new Set<string>();
+    console.log(`[Bot] Starting delegation SSE stream...`);
 
-    setInterval(async () => {
-      try {
-        const resp = await axios.get(`${this.config.mcpServerUrl}/admin/tasks`);
-        const tasks = resp.data as any[];
+    // Use SSE stream for real-time delegation notifications
+    this.connectDelegationStream();
+  }
 
-        for (const task of tasks) {
-          if (task.context?.isDelegation && !seenTaskIds.has(task.id)) {
-            seenTaskIds.add(task.id);
+  private async connectDelegationStream(): Promise<void> {
+    try {
+      const response = await axios.get(
+        `${this.config.mcpServerUrl}/admin/delegations/stream`,
+        { responseType: 'stream', timeout: 0 }
+      );
 
-            await this.adapter.sendEmbed(this.config.delegationChannelId!, {
-              title: '🔀 Agent Delegation',
-              color: '#7289da',
-              fields: [
-                { name: 'From', value: `\`${task.from?.name || task.from?.id}\``, inline: true },
-                { name: 'To', value: `\`${task.to?.agentId}\``, inline: true },
-                { name: 'Task', value: task.prompt.length > 200 ? task.prompt.slice(0, 200) + '...' : task.prompt },
-                { name: 'Task ID', value: `\`${task.id}\`` }
-              ],
-              timestamp: task.createdAt
-            });
+      let buffer = '';
 
-            console.log(`[Bot] Posted delegation: ${task.from?.name} -> ${task.to?.agentId}`);
+      response.data.on('data', async (chunk: Buffer) => {
+        buffer += chunk.toString();
+
+        // Parse SSE events (data: {...}\n\n)
+        const events = buffer.split('\n\n');
+        buffer = events.pop() || ''; // Keep incomplete last chunk
+
+        for (const event of events) {
+          if (event.startsWith('data: ')) {
+            try {
+              const task = JSON.parse(event.slice(6));
+
+              await this.adapter.sendEmbed(this.config.delegationChannelId!, {
+                title: '🔀 Agent Delegation',
+                color: '#7289da',
+                fields: [
+                  { name: 'From', value: `\`${task.from}\``, inline: true },
+                  { name: 'To', value: `\`${task.to}\``, inline: true },
+                  { name: 'Task', value: task.prompt },
+                  { name: 'Task ID', value: `\`${task.taskId}\`` }
+                ],
+                timestamp: task.createdAt
+              });
+
+              console.log(`[Bot] Posted delegation: ${task.from} -> ${task.to}`);
+            } catch (parseErr) {
+              console.error('[Bot] Failed to parse delegation event:', parseErr);
+            }
           }
         }
-      } catch {
-        // Silently ignore
-      }
-    }, 5000);
+      });
 
-    console.log(`[Bot] Delegation notifications enabled`);
+      response.data.on('error', (err: Error) => {
+        console.error('[Bot] SSE stream error:', err.message);
+        // Reconnect after delay
+        setTimeout(() => this.connectDelegationStream(), 5000);
+      });
+
+      response.data.on('end', () => {
+        console.log('[Bot] SSE stream ended, reconnecting...');
+        setTimeout(() => this.connectDelegationStream(), 1000);
+      });
+
+      console.log(`[Bot] Delegation SSE stream connected`);
+    } catch (err: any) {
+      console.error('[Bot] Failed to connect delegation stream:', err.message);
+      // Retry connection after delay
+      setTimeout(() => this.connectDelegationStream(), 5000);
+    }
   }
 }

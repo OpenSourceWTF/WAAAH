@@ -104,15 +104,18 @@ export class AgentRegistry {
     db.prepare('UPDATE agents SET lastSeen = ? WHERE id = ?').run(Date.now(), agentId);
   }
 
-  cleanup(timeoutMs: number = 5 * 60 * 1000): void {
+  cleanup(timeoutMs: number = 5 * 60 * 1000): number {
     const cutoff = Date.now() - timeoutMs;
-    // We don't DELETE from DB, we just consider them offline.
-    // If the requirement implies "cleanup" of memory, there is no memory to clean.
-    // Usage of `cleanup` in server.ts might expect valid "online" agents.
-    // But persistence means we remember them forever.
-    // So this method effectively does nothing for the DB, 
-    // OR it could mark them as 'inactive' status if we had a status column.
-    // For now, no-op is fine, or just log who is offline.
+    try {
+      const result = db.prepare('DELETE FROM agents WHERE lastSeen < ?').run(cutoff);
+      if (result.changes > 0) {
+        console.log(`[Registry] Cleaned up ${result.changes} offline agent(s)`);
+      }
+      return result.changes;
+    } catch (e: any) {
+      console.error(`[Registry] Cleanup failed: ${e.message}`);
+      return 0;
+    }
   }
 
   updateAgent(agentId: string, updates: { displayName?: string, color?: string }): boolean {
@@ -143,17 +146,15 @@ export class AgentRegistry {
     return result.changes > 0;
   }
 
-  private mapRowToIdentity(row: any): AgentIdentity & { color?: string } {
+  private mapRowToIdentity(row: any): AgentIdentity & { color?: string; lastSeen?: number } {
     return {
       id: row.id,
       role: row.role as AgentRole,
       displayName: row.displayName,
       capabilities: JSON.parse(row.capabilities || '[]'),
-      // Add extra props that might not be in the strict AgentIdentity type yet,
-      // but we can cast or extend the type later. 
-      // For now, let's adhere to the type but maybe attach color if we update the type def.
-      // Wait, I should update the type definition for AgentIdentity to include Color.
-      // For now, I'll return it and cast as any if needed, but ideally I update the type.
+      // Add extra props that might not be in the strict AgentIdentity type yet
+      color: row.color,
+      lastSeen: row.lastSeen
     };
   }
 

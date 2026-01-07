@@ -14,6 +14,8 @@ export class TaskQueue extends EventEmitter {
   private tasks: Map<string, Task> = new Map();
   // Map<TaskId, { agentId, sentAt }>
   private pendingAcks: Map<string, { taskId: string, agentId: string, sentAt: number }> = new Map();
+  // Track agents currently long-polling (WAITING state)
+  private waitingAgents: Set<string> = new Set();
 
   constructor() {
     super();
@@ -85,10 +87,14 @@ export class TaskQueue extends EventEmitter {
   // Find a task for a specific agent based on ID or Role
   // Default timeout: 290s (Antigravity has 300s hard limit)
   async waitForTask(agentId: string, role: AgentRole, timeoutMs: number = 290000): Promise<Task | null> {
+    // Track this agent as waiting
+    this.waitingAgents.add(agentId);
+
     return new Promise((resolve) => {
       // 1. Check if there are pending tasks for this agent
       const pendingTask = this.findPendingTaskForAgent(agentId, role);
       if (pendingTask) {
+        this.waitingAgents.delete(agentId);
         this.updateStatus(pendingTask.id, 'PENDING_ACK');
         this.pendingAcks.set(pendingTask.id, {
           taskId: pendingTask.id,
@@ -109,6 +115,7 @@ export class TaskQueue extends EventEmitter {
         if (isForMe && task.status === 'QUEUED') {
           resolved = true;
           cleanup();
+          this.waitingAgents.delete(agentId);
           this.updateStatus(task.id, 'PENDING_ACK');
           this.pendingAcks.set(task.id, {
             taskId: task.id,
@@ -121,6 +128,7 @@ export class TaskQueue extends EventEmitter {
 
       const cleanup = () => {
         this.off('task', onTask);
+        this.waitingAgents.delete(agentId);
       };
 
       this.on('task', onTask);
@@ -297,5 +305,25 @@ export class TaskQueue extends EventEmitter {
       createdAt: row.createdAt,
       completedAt: row.completedAt
     };
+  }
+
+  // ===== Agent Status Helpers =====
+
+  /** Get all agents currently long-polling */
+  getWaitingAgents(): string[] {
+    return Array.from(this.waitingAgents);
+  }
+
+  /** Check if a specific agent is currently waiting */
+  isAgentWaiting(agentId: string): boolean {
+    return this.waitingAgents.has(agentId);
+  }
+
+  /** Get tasks assigned to or in-progress for an agent */
+  getAssignedTasksForAgent(agentId: string): Task[] {
+    return Array.from(this.tasks.values()).filter(t =>
+      (t.status === 'ASSIGNED' || t.status === 'IN_PROGRESS' || t.status === 'PENDING_ACK') &&
+      t.to.agentId === agentId
+    );
   }
 }

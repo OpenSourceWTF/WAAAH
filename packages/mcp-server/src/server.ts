@@ -6,6 +6,7 @@ import { AgentRegistry } from './state/registry.js';
 import { TaskQueue } from './state/queue.js';
 import { ToolHandler } from './mcp/tools.js';
 import { scanPrompt, getSecurityContext } from './security/prompt-scanner.js';
+import { eventBus } from './state/events.js';
 
 dotenv.config();
 
@@ -113,9 +114,40 @@ app.get('/admin/events', async (req, res) => {
   res.json({ status: 'TIMEOUT' });
 });
 
+// SSE stream for real-time delegation notifications
+app.get('/admin/delegations/stream', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  const onDelegation = (task: any) => {
+    res.write(`data: ${JSON.stringify(task)}\n\n`);
+  };
+
+  eventBus.on('delegation', onDelegation);
+  console.log('[SSE] Client connected to delegation stream');
+
+  req.on('close', () => {
+    eventBus.off('delegation', onDelegation);
+    console.log('[SSE] Client disconnected from delegation stream');
+  });
+});
+
 app.post('/admin/queue/clear', (req, res) => {
   queue.clear();
   res.json({ success: true, message: 'Queue cleared' });
+});
+
+// Get all agents with their connection status
+app.get('/admin/agents/status', async (req, res) => {
+  const result = await tools.list_connected_agents({});
+  const content = result.content?.[0]?.text;
+  if (content) {
+    res.json(JSON.parse(content));
+  } else {
+    res.json([]);
+  }
 });
 
 // Tool Routing
@@ -152,6 +184,9 @@ app.post('/mcp/tools/:toolName', async (req, res) => {
     case 'admin_update_agent':
       result = await tools.admin_update_agent(args);
       break;
+    case 'list_connected_agents':
+      result = await tools.list_connected_agents(args);
+      break;
     default:
       res.status(404).json({ error: `Tool ${toolName} not found` });
       return;
@@ -173,3 +208,9 @@ server.on('error', (e: any) => {
     console.error('❌ Server error:', e.message);
   }
 });
+
+// Periodic cleanup of offline agents (every 5 minutes)
+const CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
+setInterval(() => {
+  registry.cleanup(CLEANUP_INTERVAL_MS);
+}, CLEANUP_INTERVAL_MS);

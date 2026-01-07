@@ -39,6 +39,17 @@ To configure `SLACK_DELEGATION_CHANNEL_ID`, you need the channel's ID:
 
 > **Note**: The bot must be invited to the channel (`/invite @YourBotName`) to post there.
 
+### Configuring Slash Commands (Optional)
+
+To enable `/waaah` command support:
+1. Go to **Slash Commands** in your Slack App settings.
+2. Click **Create New Command**.
+3. Command: `/waaah`
+4. Request URL: (Leave empty if using Socket Mode)
+5. Description: "Interact with WAAAH"
+6. Usage Hint: `[task description]`
+7. Click **Save** and **Reinstall to Workspace**.
+
 ### Running Both
 ```env
 PLATFORM=both

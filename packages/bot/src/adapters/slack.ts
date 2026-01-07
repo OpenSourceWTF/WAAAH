@@ -52,6 +52,51 @@ export class SlackAdapter implements PlatformAdapter {
       }
     });
 
+    // Listen for slash command /waaah
+    this.app.command('/waaah', async ({ command, ack, say, client }) => {
+      await ack();
+
+      const userId = command.user_id;
+
+      // Filter approved users
+      if (this.approvedUsers.size > 0 && !this.approvedUsers.has(userId)) {
+        await client.chat.postEphemeral({
+          channel: command.channel_id,
+          user: userId,
+          text: "You are not authorized to use this bot."
+        });
+        return;
+      }
+
+      const content = command.text.trim();
+
+      // For slash commands, we don't have a message TS to thread on by default,
+      // but we can just use the channel. Or we can post a message first?
+      // Actually, let's just use the channel ID.
+      // BotCore expects to reply to messageId. For Slash Commands, we can't reply in thread effectively unless we post a message first.
+      // But typically slash commands are ephemeral or start a new thread.
+      // Let's treat it as a new message.
+
+      const context: MessageContext = {
+        messageId: command.trigger_id, // Use trigger_id as messageId reference (though it's not a message ts)
+        channelId: command.channel_id,
+        serverId: command.team_id,
+        authorId: userId,
+        authorName: command.user_name,
+        platform: 'slack',
+        // Start a new thread for the response?
+        // If we want the bot to reply in a thread, we need a parent message TS.
+        // Slash commands don't generate a parent message unless we post one.
+        // For now, let's just reply in main channel if no thread TS.
+        // Modified SlackAdapter.reply will handle it.
+        raw: { command, say, client }
+      };
+
+      if (this.messageHandler) {
+        await this.messageHandler(content, context);
+      }
+    });
+
     await this.app.start();
     console.log('[Slack] Bot connected via Socket Mode');
   }
@@ -62,9 +107,13 @@ export class SlackAdapter implements PlatformAdapter {
 
   async reply(context: MessageContext, message: string): Promise<string> {
     const { say } = context.raw as { say: SayFn };
+
+    // If this is a slash command, we don't have a message TS to thread on
+    const isSlashCommand = !!(context.raw as any).command;
+
     const result = await say({
       text: message,
-      thread_ts: context.messageId // Reply in thread
+      thread_ts: isSlashCommand ? undefined : context.messageId // Reply in thread only for messages
     });
 
     const ts = (result as any).ts;

@@ -6,14 +6,17 @@
     "build": "pnpm -r run build",
     "test": "pnpm -r run test",
     "lint": "pnpm -r run lint",
-    "serve": "node packages/mcp-server/dist/index.js",
-    "cli": "node packages/cli/dist/index.js",
-    "bot": "node packages/bot/dist/index.js",
+    "serve": "tsx --watch packages/mcp-server/src/index.ts",
+    "serve:prod": "node packages/mcp-server/dist/index.js",
+    "cli": "tsx packages/cli/src/index.ts",
+    "bot": "tsx --watch packages/bot/src/index.ts",
+    "bot:prod": "node packages/bot/dist/index.js",
     "proxy": "node packages/mcp-proxy/dist/index.js"
   },
   "devDependencies": {
     "@types/node": "^20.10.5",
     "@vitest/coverage-v8": "^4.0.16",
+    "tsx": "^4.21.0",
     "typescript": "^5.3.3",
     "vitest": "^4.0.16"
   },

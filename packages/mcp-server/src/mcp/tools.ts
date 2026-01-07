@@ -1,6 +1,7 @@
 import { AgentRegistry } from '../state/registry.js';
 import { TaskQueue } from '../state/queue.js';
 import { scanPrompt, getSecurityContext } from '../security/prompt-scanner.js';
+import { emitDelegation } from '../state/events.js';
 
 // Import shared schemas from types package
 import {
@@ -178,6 +179,16 @@ export class ToolHandler {
 
       console.log(`[Tools] ${sourceAgentObj?.displayName || sourceAgent} delegated to ${targetAgent.displayName}: ${params.prompt.substring(0, 50)}...`);
 
+      // Emit delegation event for real-time notifications (SSE stream)
+      emitDelegation({
+        taskId,
+        from: sourceAgentObj?.displayName || sourceAgent,
+        to: targetAgent.displayName,
+        prompt: params.prompt.length > 200 ? params.prompt.substring(0, 200) + '...' : params.prompt,
+        priority: params.priority || 'normal',
+        createdAt: Date.now()
+      });
+
       return {
         content: [{ type: 'text', text: `Task delegated to ${targetAgent.displayName} (${targetAgent.id}): ${taskId}` }]
       };
@@ -208,17 +219,31 @@ export class ToolHandler {
         };
       }
 
-      // Check if agent is actually online based on heartbeat (5 min timeout)
+      // Determine connection status
+      const isWaiting = this.queue.isAgentWaiting(params.agentId);
+      const assignedTasks = this.queue.getAssignedTasksForAgent(params.agentId);
       const lastSeen = this.registry.getLastSeen(params.agentId);
-      const isOnline = lastSeen && (Date.now() - lastSeen) < 5 * 60 * 1000;
+      const isRecent = lastSeen && (Date.now() - lastSeen) < 5 * 60 * 1000;
+
+      let status: 'OFFLINE' | 'WAITING' | 'PROCESSING' = 'OFFLINE';
+      if (assignedTasks.length > 0) {
+        status = 'PROCESSING';
+      } else if (isWaiting) {
+        status = 'WAITING';
+      } else if (isRecent) {
+        // Recently seen but not actively waiting - might be between polls
+        status = 'WAITING';
+      }
 
       return {
         content: [{
           type: 'text', text: JSON.stringify({
             agentId: agent.id,
-            status: isOnline ? 'ONLINE' : 'OFFLINE',
+            displayName: agent.displayName,
+            status,
             role: agent.role,
-            lastSeen
+            lastSeen,
+            currentTasks: assignedTasks.map(t => t.id)
           })
         }]
       };
@@ -260,6 +285,41 @@ export class ToolHandler {
 
       return {
         content: [{ type: 'text', text: `Updated agent ${params.agentId} (name=${params.displayName}, color=${params.color})` }]
+      };
+    } catch (e) { return this.handleError(e); }
+  }
+
+  /** List all agents with their connection status (WAITING/PROCESSING/OFFLINE) */
+  async list_connected_agents(_args: unknown) {
+    try {
+      const agents = this.registry.getAll();
+      const waitingAgents = this.queue.getWaitingAgents();
+
+      const result = agents.map(agent => {
+        const assignedTasks = this.queue.getAssignedTasksForAgent(agent.id);
+        const lastSeen = this.registry.getLastSeen(agent.id);
+        const isRecent = lastSeen && (Date.now() - lastSeen) < 5 * 60 * 1000;
+        const isWaiting = waitingAgents.includes(agent.id);
+
+        let status: 'OFFLINE' | 'WAITING' | 'PROCESSING' = 'OFFLINE';
+        if (assignedTasks.length > 0) {
+          status = 'PROCESSING';
+        } else if (isWaiting || isRecent) {
+          status = 'WAITING';
+        }
+
+        return {
+          agentId: agent.id,
+          displayName: agent.displayName,
+          role: agent.role,
+          status,
+          lastSeen,
+          currentTasks: assignedTasks.map(t => t.id)
+        };
+      });
+
+      return {
+        content: [{ type: 'text', text: JSON.stringify(result) }]
       };
     } catch (e) { return this.handleError(e); }
   }
