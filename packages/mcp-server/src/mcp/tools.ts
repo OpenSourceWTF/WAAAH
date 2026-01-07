@@ -7,6 +7,7 @@ import { emitDelegation } from '../state/events.js';
 import {
   registerAgentSchema,
   waitForPromptSchema,
+  waitForTaskSchema,
   sendResponseSchema,
   assignTaskSchema,
   listAgentsSchema,
@@ -102,6 +103,36 @@ export class ToolHandler {
             from: task.from,
             priority: task.priority,
             context: task.context
+          })
+        }]
+      };
+    } catch (e) { return this.handleError(e); }
+  }
+
+  async wait_for_task(args: unknown) {
+    try {
+      const params = waitForTaskSchema.parse(args);
+      const timeoutMs = (params.timeout ?? 300) * 1000;
+      console.log(`[Tool] Waiting for task ${params.taskId} to complete (timeout: ${timeoutMs / 1000}s)...`);
+
+      const task = await this.queue.waitForTaskCompletion(params.taskId, timeoutMs);
+
+      if (!task) {
+        return {
+          content: [{ type: 'text', text: JSON.stringify({ status: 'NOT_FOUND', taskId: params.taskId }) }],
+          isError: true
+        };
+      }
+
+      const isComplete = ['COMPLETED', 'FAILED', 'BLOCKED'].includes(task.status);
+
+      return {
+        content: [{
+          type: 'text', text: JSON.stringify({
+            taskId: task.id,
+            status: task.status,
+            completed: isComplete,
+            response: task.response
           })
         }]
       };

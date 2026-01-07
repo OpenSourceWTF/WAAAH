@@ -184,6 +184,45 @@ export class TaskQueue extends EventEmitter {
     return { success: true };
   }
 
+  // Wait for a specific task to complete (used for dependency coordination)
+  async waitForTaskCompletion(taskId: string, timeoutMs: number = 300000): Promise<Task | null> {
+    return new Promise((resolve) => {
+      let resolved = false;
+
+      // Check if already complete
+      const existingTask = this.getTask(taskId) || this.getTaskFromDB(taskId);
+      if (existingTask && ['COMPLETED', 'FAILED', 'BLOCKED'].includes(existingTask.status)) {
+        console.log(`[Queue] Task ${taskId} already complete (${existingTask.status})`);
+        resolve(existingTask);
+        return;
+      }
+
+      // Listen for completion events
+      const onCompletion = (task: Task) => {
+        if (task.id === taskId && !resolved) {
+          resolved = true;
+          this.off('completion', onCompletion);
+          console.log(`[Queue] Task ${taskId} completed with status ${task.status}`);
+          resolve(task);
+        }
+      };
+
+      this.on('completion', onCompletion);
+
+      // Timeout
+      setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          this.off('completion', onCompletion);
+          console.log(`[Queue] Wait for task ${taskId} timed out after ${timeoutMs}ms`);
+          // Return current state even if not complete
+          const task = this.getTask(taskId) || this.getTaskFromDB(taskId);
+          resolve(task || null);
+        }
+      }, timeoutMs);
+    });
+  }
+
   updateStatus(taskId: string, status: TaskStatus, response?: any): void {
     const task = this.tasks.get(taskId);
     if (task) {

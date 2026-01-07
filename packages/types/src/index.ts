@@ -3,6 +3,7 @@ import { z } from 'zod';
 // ===== Core Types =====
 
 export const AgentRoleSchema = z.enum([
+  'boss',
   'project-manager',
   'full-stack-engineer',
   'test-engineer',
@@ -143,11 +144,25 @@ export interface AgentStatus {
 
 export type AgentConnectionStatus = 'OFFLINE' | 'WAITING' | 'PROCESSING';
 
+// Wait for a specific task to complete
+export const waitForTaskSchema = z.object({
+  taskId: z.string().min(1),
+  timeout: z.number()
+    .optional()
+    .default(300)
+    .transform((val) => {
+      if (val > 600) return 600;  // Max 10 minutes
+      if (val < 1) return 1;
+      return val;
+    })
+});
+export type WaitForTaskArgs = z.infer<typeof waitForTaskSchema>;
 
 // ===== Tool Names =====
 export const TOOL_NAMES = [
   'register_agent',
   'wait_for_prompt',
+  'wait_for_task',
   'send_response',
   'assign_task',
   'list_agents',

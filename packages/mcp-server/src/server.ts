@@ -209,6 +209,9 @@ app.post('/mcp/tools/:toolName', async (req, res) => {
     case 'list_connected_agents':
       result = await tools.list_connected_agents(args);
       break;
+    case 'wait_for_task':
+      result = await tools.wait_for_task(args);
+      break;
     default:
       res.status(404).json({ error: `Tool ${toolName} not found` });
       return;

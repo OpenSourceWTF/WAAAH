@@ -6,7 +6,6 @@ import {
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import axios from 'axios';
-import { z } from 'zod';
 
 const SERVER_URL = process.env.WAAAH_SERVER_URL || 'http://localhost:3000';
 const AGENT_ID = process.env.AGENT_ID || 'unknown-agent';
@@ -109,6 +108,18 @@ const PROXY_TOOLS = [
         agentId: { type: 'string' }
       },
       required: ['taskId', 'agentId']
+    }
+  },
+  {
+    name: 'wait_for_task',
+    description: 'Wait for a specific task to complete (for dependency coordination)',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        taskId: { type: 'string', description: 'Task ID to wait for completion' },
+        timeout: { type: 'number', description: 'Timeout in seconds (default 300)' }
+      },
+      required: ['taskId']
     }
   }
 ];
