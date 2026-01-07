@@ -1,16 +1,19 @@
 /**
  * Discord Platform Adapter
  */
-import { Client, GatewayIntentBits, Message, EmbedBuilder, TextChannel } from 'discord.js';
-import { PlatformAdapter, MessageContext, MessageHandler, EmbedData } from './interface.js';
+import { Client, GatewayIntentBits, Message, TextChannel } from 'discord.js';
+import { BaseAdapter } from './base-adapter.js';
+import { MessageContext, EmbedData } from './interface.js';
+import { toDiscordEmbed } from './embed-formatter.js';
 
-export class DiscordAdapter implements PlatformAdapter {
+export class DiscordAdapter extends BaseAdapter {
   readonly platform = 'discord' as const;
   private client: Client;
-  private messageHandler?: MessageHandler;
-  private replyCache = new Map<string, Message>();
+  private token: string;
 
-  constructor(private token: string, private approvedUsers: Set<string>) {
+  constructor(token: string, approvedUsers: Set<string>) {
+    super(approvedUsers);
+    this.token = token;
     this.client = new Client({
       intents: [
         GatewayIntentBits.Guilds,
@@ -23,17 +26,12 @@ export class DiscordAdapter implements PlatformAdapter {
   async connect(): Promise<void> {
     return new Promise((resolve, reject) => {
       this.client.once('ready', () => {
-        console.log(`[Discord] Logged in as ${this.client.user?.tag}`);
+        this.log(`Logged in as ${this.client.user?.tag}`);
         resolve();
       });
 
       this.client.on('messageCreate', async (message: Message) => {
         if (message.author.bot) return;
-
-        // Filter approved users
-        if (this.approvedUsers.size > 0 && !this.approvedUsers.has(message.author.id)) {
-          return;
-        }
 
         // Only respond to bot mentions
         if (!this.client.user || !message.mentions.has(this.client.user)) {
@@ -51,12 +49,12 @@ export class DiscordAdapter implements PlatformAdapter {
           authorId: message.author.id,
           authorName: message.author.tag,
           platform: 'discord',
-          raw: message
+          raw: message,
+          isThread: message.channel.isThread(),
+          threadId: message.channel.isThread() ? message.channelId : undefined
         };
 
-        if (this.messageHandler) {
-          await this.messageHandler(content, context);
-        }
+        await this.processMessage(content, context);
       });
 
       this.client.login(this.token).catch(reject);
@@ -70,15 +68,31 @@ export class DiscordAdapter implements PlatformAdapter {
   async reply(context: MessageContext, message: string): Promise<string> {
     const original = context.raw as Message;
 
-    // Check override or if already in thread
-    const forceThread = process.env.DISCORD_FORCE_THREADING === 'true';
-    const isInThread = original.channel.isThread();
+    // Use centralized threading logic
+    const useThread = this.shouldReplyInThread(context, 'DISCORD_FORCE_THREADING');
 
     let sentMessage: Message;
 
-    if (forceThread || isInThread) {
-      // Reply in thread (creates one if needed/configured by interface) or as a reply reference
-      sentMessage = await original.reply(message);
+    if (useThread) {
+      // If already in a thread, just reply.
+      if (context.isThread) {
+        sentMessage = await original.reply(message);
+      } else {
+        // We need to create a thread from the original message if possible
+        try {
+          const threadName = `Thread for ${context.authorName}`;
+          // startThread is available on Message if the channel supports it
+          const thread = await original.startThread({
+            name: threadName.substring(0, 100), // Discord max length
+            autoArchiveDuration: 60, // 1 hour
+          });
+          sentMessage = await thread.send(message);
+        } catch (err) {
+          this.error(`Failed to create thread: ${err}`);
+          // Fallback to normal reply if threading fails
+          sentMessage = await original.reply(message);
+        }
+      }
     } else {
       // Send directly to channel (no thread, no reference)
       // Cast to any because TS thinks some channel types don't have send (they do in this context)
@@ -91,12 +105,12 @@ export class DiscordAdapter implements PlatformAdapter {
       }
     }
 
-    this.replyCache.set(`${context.messageId}:reply`, sentMessage);
+    this.cacheReply(context.messageId, sentMessage);
     return sentMessage.id;
   }
 
   async editReply(context: MessageContext, replyId: string, message: string): Promise<void> {
-    const reply = this.replyCache.get(`${context.messageId}:reply`);
+    const reply = this.getCachedReply<Message>(context.messageId);
     if (reply) {
       await reply.edit(message);
     }
@@ -106,22 +120,8 @@ export class DiscordAdapter implements PlatformAdapter {
     const channel = await this.client.channels.fetch(channelId) as TextChannel;
     if (!channel?.isTextBased()) return;
 
-    const discordEmbed = new EmbedBuilder()
-      .setTitle(embed.title)
-      .setColor((embed.color || '#7289da') as any);
-
-    for (const field of embed.fields) {
-      discordEmbed.addFields({ name: field.name, value: field.value, inline: field.inline });
-    }
-
-    if (embed.timestamp) {
-      discordEmbed.setTimestamp(embed.timestamp);
-    }
-
+    const discordEmbed = toDiscordEmbed(embed);
     await channel.send({ embeds: [discordEmbed] });
   }
-
-  onMessage(handler: MessageHandler): void {
-    this.messageHandler = handler;
-  }
 }
+

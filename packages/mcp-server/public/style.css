@@ -1,0 +1,350 @@
+:root {
+  --bg-primary: #121815;
+  /* Darker charcoal/green tint */
+  --bg-secondary: #0D110F;
+  /* Almost black */
+  --bg-tertiary: #1E2922;
+  /* Lighter "Ork" background */
+  --text-primary: #E0E7E2;
+  --text-secondary: #8B9FA0;
+  --accent: #4CAF50;
+  /* Ork Green */
+  --success: #66BB6A;
+  --warning: #FFA726;
+  --danger: #EF5350;
+  --border: #2E4033;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  line-height: 1.5;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+header {
+  padding: 1rem 2rem;
+  background-color: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.logo {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.logo span {
+  color: var(--accent);
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: var(--success);
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--text-secondary);
+}
+
+.dot.online {
+  background-color: var(--success);
+  box-shadow: 0 0 8px var(--success);
+}
+
+.dot.offline {
+  background-color: var(--danger);
+}
+
+main {
+  flex: 1;
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  overflow: hidden;
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+  flex: 1;
+  min-height: 0;
+}
+
+.panel {
+  background-color: var(--bg-secondary);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.panel-header {
+  padding: 1rem;
+  background-color: rgba(0, 0, 0, 0.1);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.panel-header h2 {
+  font-size: 1.1rem;
+  font-weight: 500;
+}
+
+.badge {
+  background-color: var(--bg-tertiary);
+  padding: 0.2rem 0.6rem;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.grid-content,
+.list-content,
+.log-content {
+  padding: 1rem;
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* Agent Cards */
+.grid-content {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.agent-card {
+  background-color: var(--bg-primary);
+  padding: 1rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  position: relative;
+  transition: transform 0.2s, border-color 0.2s;
+}
+
+.agent-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent);
+}
+
+.agent-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.agent-name {
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.agent-role {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.agent-status {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  font-weight: 700;
+  margin-top: auto;
+}
+
+.agent-status.online {
+  color: var(--success);
+}
+
+.agent-status.waiting {
+  color: var(--success);
+}
+
+.agent-status.offline {
+  color: var(--text-secondary);
+  opacity: 0.5;
+}
+
+.agent-status.processing {
+  color: var(--warning);
+}
+
+/* Task List */
+.task-item {
+  background-color: var(--bg-primary);
+  padding: 1rem;
+  border-radius: 6px;
+  border-left: 4px solid var(--border);
+  margin-bottom: 0.8rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.task-item.priority-critical {
+  border-left-color: var(--danger);
+}
+
+.task-item.priority-high {
+  border-left-color: var(--warning);
+}
+
+.task-item.priority-normal {
+  border-left-color: var(--accent);
+}
+
+.task-info h3 {
+  font-size: 0.95rem;
+  margin-bottom: 0.2rem;
+}
+
+.task-meta {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  display: flex;
+  gap: 1rem;
+}
+
+.task-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+
+.task-status {
+  display: inline-block;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  background-color: var(--bg-tertiary);
+}
+
+.status-queued {
+  color: var(--warning);
+  border: 1px solid var(--warning);
+  background-color: rgba(255, 167, 38, 0.1);
+}
+
+.status-assigned {
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  background-color: rgba(76, 175, 80, 0.1);
+}
+
+.status-pending_ack {
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  opacity: 0.7;
+}
+
+.status-in_progress {
+  color: #29B6F6;
+  border: 1px solid #29B6F6;
+  background-color: rgba(41, 182, 246, 0.1);
+}
+
+.status-completed {
+  color: var(--success);
+  border: 1px solid var(--success);
+  background-color: rgba(102, 187, 106, 0.1);
+}
+
+.status-failed {
+  color: var(--danger);
+  border: 1px solid var(--danger);
+  background-color: rgba(239, 83, 80, 0.1);
+}
+
+.status-cancelled {
+  color: var(--text-secondary);
+  border: 1px solid var(--text-secondary);
+  text-decoration: line-through;
+}
+
+.status-blocked {
+  color: var(--danger);
+  border: 1px dashed var(--danger);
+}
+
+.agent-current-task {
+  font-size: 0.75rem;
+  margin-top: 0.5rem;
+  padding: 0.3rem;
+  background-color: rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
+  border-left: 3px solid var(--warning);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.agent-current-task span {
+  color: var(--text-primary);
+  font-family: monospace;
+}
+
+.btn-cancel {
+  background-color: transparent;
+  border: 1px solid var(--danger);
+  color: var(--danger);
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.7rem;
+  transition: all 0.2s;
+}
+
+.btn-cancel:hover {
+  background-color: var(--danger);
+  color: white;
+}
+
+/* Activity Log (Bottom Panel) */
+.activity-log {
+  height: 200px;
+  flex: none;
+}
+
+.log-entry {
+  font-family: monospace;
+  font-size: 0.9rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.log-time {
+  color: var(--text-secondary);
+  margin-right: 1rem;
+}

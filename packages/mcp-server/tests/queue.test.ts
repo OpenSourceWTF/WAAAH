@@ -18,6 +18,7 @@ vi.mock('../src/state/db.js', () => {
 
 import { TaskQueue } from '../src/state/queue.js';
 import { Task } from '@waaah/types';
+import { db } from '../src/state/db.js';
 
 // Helper to create mock tasks
 function mockTask(overrides: Partial<Task> = {}): Task {
@@ -313,4 +314,80 @@ describe('TaskQueue', () => {
       expect(tasks[0].id).toBe('assigned-test-1');
     });
   });
+
+  describe('cancelTask', () => {
+    it('cancels a QUEUED task successfully', () => {
+      const task = mockTask({ id: 'cancel-queue-test', status: 'QUEUED' });
+      queue.enqueue(task);
+
+      const result = queue.cancelTask('cancel-queue-test');
+      expect(result.success).toBe(true);
+      expect(queue.getTask('cancel-queue-test')?.status).toBe('CANCELLED');
+    });
+
+    it('cancels a PENDING_ACK task and cleans up pendingAcks', async () => {
+      const task = mockTask({ id: 'cancel-pending-ack-test' });
+      queue.enqueue(task);
+
+      // Move to PENDING_ACK
+      await queue.waitForTask('agent-1', 'developer', 100);
+      expect(queue.getTask('cancel-pending-ack-test')?.status).toBe('PENDING_ACK');
+
+      const result = queue.cancelTask('cancel-pending-ack-test');
+      expect(result.success).toBe(true);
+      expect(queue.getTask('cancel-pending-ack-test')?.status).toBe('CANCELLED');
+
+      // Should fail to ACK now because pending map entry is gone
+      const ackResult = queue.ackTask('cancel-pending-ack-test', 'agent-1');
+      expect(ackResult.success).toBe(false);
+    });
+
+    it('fails to cancel a COMPLETED task', () => {
+      const task = mockTask({ id: 'cancel-completed-test', status: 'COMPLETED' });
+      queue.enqueue(task);
+      // Force status update (enqueue sets to QUEUED usually, but we mock it)
+      // Actually enqueue forces set, but let's update it to be sure logic holds
+      queue.updateStatus('cancel-completed-test', 'COMPLETED', {});
+
+      const result = queue.cancelTask('cancel-completed-test');
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('already COMPLETED');
+      expect(queue.getTask('cancel-completed-test')?.status).toBe('COMPLETED');
+    });
+
+    expect(result.error).toContain('not found');
+  });
+
+  it('cancels a task loaded from DB (archived/not-in-memory)', () => {
+    // Mock db.prepare().get() to return a task row
+    const mockTaskRow = {
+      id: 'archived-cancel-test',
+      status: 'QUEUED',
+      prompt: 'test prompt',
+      fromAgentId: 'user',
+      fromAgentName: 'User',
+      toAgentId: 'agent-1',
+      context: '{}',
+      createdAt: Date.now()
+    };
+
+    // Ensure db.prepare returns our mock row when looking up the task
+    vi.mocked(db.prepare).mockImplementationOnce(() => ({
+      get: () => mockTaskRow,
+      run: vi.fn(),
+      all: vi.fn()
+    } as any));
+
+    // Task is NOT in memory initially
+    // queue.enqueue is NOT called
+
+    const result = queue.cancelTask('archived-cancel-test');
+
+    expect(result.success).toBe(true);
+    // Should now be in memory and CANCELLED
+    const task = queue.getTask('archived-cancel-test');
+    expect(task).toBeDefined();
+    expect(task?.status).toBe('CANCELLED');
+  });
+});
 });

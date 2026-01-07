@@ -8,8 +8,26 @@ export class AgentRegistry {
   // We no longer need memory cache as source of truth, but could cache for perf.
   // For now, let's read directly from DB for simplicity and consistency.
 
-  register(agent: AgentIdentity): void {
-    // Upsert agent
+  register(agent: { id: string; role: AgentRole; displayName: string; capabilities: string[] }): string {
+    let finalId = agent.id;
+
+    // Check for collision with an ACTIVE agent
+    // We define "active" as seen within the last 5 minutes.
+    // If inactive, we allow overwrite (reclaim).
+    const existing = this.get(agent.id);
+    if (existing && existing.lastSeen) {
+      const timeSinceLastSeen = Date.now() - existing.lastSeen;
+      const IS_ACTIVE_THRESHOLD = 5 * 60 * 1000; // 5 minutes
+
+      if (timeSinceLastSeen < IS_ACTIVE_THRESHOLD) {
+        // Collision with active agent! Rename the new one.
+        const randomSuffix = Math.random().toString(36).substring(2, 6);
+        finalId = `${agent.id}-${randomSuffix}`;
+        console.log(`[Registry] ID Collision: '${agent.id}' is active. Renaming new agent to '${finalId}'`);
+      }
+    }
+
+    // Upsert agent with finalId
     const stmt = db.prepare(`
       INSERT INTO agents (id, role, displayName, lastSeen, capabilities)
       VALUES (@id, @role, @displayName, @lastSeen, @capabilities)
@@ -29,7 +47,7 @@ export class AgentRegistry {
 
     try {
       stmt.run({
-        id: agent.id,
+        id: finalId,
         role: agent.role,
         displayName: agent.displayName,
         lastSeen: Date.now(),
@@ -40,19 +58,22 @@ export class AgentRegistry {
       // We don't want to clobber existing aliases, just ensure the basic ones exist.
       // But aliases are complex. Let's keep it simple: DB seeding handles the main ones.
 
-      console.log(`[Registry] Registered agent: ${agent.id}`);
+      console.log(`[Registry] Registered agent: ${finalId}`);
+      return finalId;
     } catch (e: any) {
       console.error(`[Registry] Registration failed: ${e.message}`);
+      // Fallback: return original ID if insertion fails, though it likely failed due to DB error
+      return finalId;
     }
   }
 
-  get(agentId: string): AgentIdentity | undefined {
+  get(agentId: string): (AgentIdentity & { id: string; color?: string; lastSeen?: number }) | undefined {
     const row = db.prepare('SELECT * FROM agents WHERE id = ?').get(agentId) as any;
     if (!row) return undefined;
     return this.mapRowToIdentity(row);
   }
 
-  getByDisplayName(displayName: string): AgentIdentity | undefined {
+  getByDisplayName(displayName: string): (AgentIdentity & { id: string; color?: string; lastSeen?: number }) | undefined {
     const lowerName = displayName.toLowerCase();
 
     // 1. Direct match on displayName
@@ -73,26 +94,44 @@ export class AgentRegistry {
     return this.mapRowToIdentity(row);
   }
 
-  getAll(): AgentIdentity[] {
+  getByRole(role: string): (AgentIdentity & { id: string; color?: string; lastSeen?: number }) | undefined {
+    // Pick the most recently seen agent with this role
+    const row = db.prepare('SELECT * FROM agents WHERE role = ? ORDER BY lastSeen DESC LIMIT 1').get(role) as any;
+    if (!row) return undefined;
+    return this.mapRowToIdentity(row);
+  }
+
+  getAll(): (AgentIdentity & { id: string; color?: string; lastSeen?: number })[] {
     const rows = db.prepare('SELECT * FROM agents').all() as any[];
     return rows.map(r => this.mapRowToIdentity(r));
   }
 
   getAllowedDelegates(role: AgentRole): string[] {
-    // This is stored in JSON in the agent row if seeded, or potentially global config?
-    // In our seeding logic, we put it in the `canDelegateTo` column on the AGENT row.
-    // But permissions are technically ROLE based.
-    // Let's grab ANY agent with this role and check their permissions (or the first one).
-    // Or, we should have a `roles` table. 
-    // Given the current schema in db.ts: `canDelegateTo TEXT` is on the `agents` table.
-
+    // 1. Try to get from DB first
+    let dbDelegates: string[] = [];
     const row = db.prepare('SELECT canDelegateTo FROM agents WHERE role = ? LIMIT 1').get(role) as any;
+
     if (row && row.canDelegateTo) {
       try {
-        return JSON.parse(row.canDelegateTo);
-      } catch (e) { return []; }
+        dbDelegates = JSON.parse(row.canDelegateTo);
+      } catch (e) { dbDelegates = []; }
     }
-    return [];
+
+    // 2. Define Hardcoded Defaults (The "Constitution")
+    const defaults: Record<string, string[]> = {
+      'boss': ['project-manager', 'full-stack-engineer', 'test-engineer', 'ops-engineer', 'designer', 'developer', 'code-monk'],
+      'project-manager': ['full-stack-engineer', 'test-engineer', 'designer', 'ops-engineer'],
+      'full-stack-engineer': ['project-manager', 'test-engineer', 'ops-engineer'],
+      'test-engineer': ['full-stack-engineer', 'ops-engineer'], // Report bugs back
+      'ops-engineer': ['full-stack-engineer'] // Escalate issues
+    };
+
+    // 3. Merge: If DB has specific rules, use them? Or Union?
+    // Let's Union them to be safe, ensuring code-defaults always work.
+    const defaultDelegates = defaults[role] || [];
+
+    // Unique merge
+    return Array.from(new Set([...dbDelegates, ...defaultDelegates]));
   }
 
   canDelegate(sourceRole: AgentRole, targetRole: AgentRole): boolean {
@@ -104,16 +143,27 @@ export class AgentRegistry {
     db.prepare('UPDATE agents SET lastSeen = ? WHERE id = ?').run(Date.now(), agentId);
   }
 
-  cleanup(timeoutMs: number = 5 * 60 * 1000): number {
+  cleanup(timeoutMs: number = 5 * 60 * 1000, excludeAgentIds: string[] = []): number {
     const cutoff = Date.now() - timeoutMs;
     try {
       // Clean up agents that are stale OR have never connected (NULL lastSeen)
       // BUT preserve seeded role configurations (those with canDelegateTo set)
-      const result = db.prepare(`
+      let query = `
         DELETE FROM agents 
         WHERE (lastSeen < ? OR lastSeen IS NULL) 
         AND (canDelegateTo IS NULL OR canDelegateTo = '[]')
-      `).run(cutoff);
+      `;
+
+      const params: any[] = [cutoff];
+
+      if (excludeAgentIds.length > 0) {
+        // Exclude specific agents from cleanup
+        const placeholders = excludeAgentIds.map(() => '?').join(',');
+        query += ` AND id NOT IN (${placeholders})`;
+        params.push(...excludeAgentIds);
+      }
+
+      const result = db.prepare(query).run(...params);
       if (result.changes > 0) {
         console.log(`[Registry] Cleaned up ${result.changes} offline agent(s)`);
       }
@@ -152,7 +202,7 @@ export class AgentRegistry {
     return result.changes > 0;
   }
 
-  private mapRowToIdentity(row: any): AgentIdentity & { color?: string; lastSeen?: number } {
+  private mapRowToIdentity(row: any): AgentIdentity & { id: string; color?: string; lastSeen?: number } {
     return {
       id: row.id,
       role: row.role as AgentRole,

@@ -7,6 +7,7 @@ import { TaskQueue } from './state/queue.js';
 import { ToolHandler } from './mcp/tools.js';
 import { scanPrompt, getSecurityContext } from './security/prompt-scanner.js';
 import { eventBus } from './state/events.js';
+import path from 'path';
 
 dotenv.config();
 
@@ -22,6 +23,15 @@ const tools = new ToolHandler(registry, queue);
 // Middleware
 app.use(cors());
 app.use(bodyParser.json());
+// Serve Admin Dashboard
+app.use('/admin', express.static(path.join(WORKSPACE_ROOT, 'packages/mcp-server/public')));
+app.use('/admin', (req, res, next) => {
+  // Redirect root /admin to /admin/index.html to avoid 404s on directory root
+  if (req.path === '/') {
+    return res.redirect('/admin/index.html');
+  }
+  next();
+});
 
 // API Key Authentication (if configured)
 app.use((req, res, next) => {
@@ -121,6 +131,19 @@ app.get('/admin/tasks/:taskId', (req, res) => {
   }
 
   res.json(task);
+});
+
+// Cancel a task
+app.post('/admin/tasks/:taskId/cancel', (req, res) => {
+  const { taskId } = req.params;
+  const result = queue.cancelTask(taskId);
+
+  if (!result.success) {
+    res.status(400).json({ error: result.error });
+    return;
+  }
+
+  res.json({ success: true, taskId });
 });
 
 // Long-polling endpoint for task completion events
@@ -237,5 +260,7 @@ server.on('error', (e: any) => {
 // Periodic cleanup of offline agents (every 5 minutes)
 const CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
 setInterval(() => {
-  registry.cleanup(CLEANUP_INTERVAL_MS);
+  // Prevent cleaning up agents that are currently assigned tasks
+  const busyAgents = queue.getBusyAgentIds();
+  registry.cleanup(CLEANUP_INTERVAL_MS, busyAgents);
 }, CLEANUP_INTERVAL_MS);

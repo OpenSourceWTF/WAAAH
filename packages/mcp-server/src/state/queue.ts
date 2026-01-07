@@ -242,6 +242,40 @@ export class TaskQueue extends EventEmitter {
     }
   }
 
+  cancelTask(taskId: string): { success: boolean, error?: string } {
+    let task = this.tasks.get(taskId);
+
+    // If not in memory, check DB
+    if (!task) {
+      task = this.getTaskFromDB(taskId);
+    }
+
+    if (!task) {
+      return { success: false, error: 'Task not found' };
+    }
+
+    const terminalStates: TaskStatus[] = ['COMPLETED', 'FAILED', 'BLOCKED', 'CANCELLED'];
+    if (terminalStates.includes(task.status)) {
+      return { success: false, error: `Task is already ${task.status}` };
+    }
+
+    // Force load into memory if it wasn't there (so updateStatus works)
+    if (!this.tasks.has(taskId)) {
+      this.tasks.set(taskId, task);
+    }
+
+    // Update status
+    this.updateStatus(taskId, 'CANCELLED');
+
+    // If it was waiting for ACK, remove from pendingAcks
+    if (this.pendingAcks.has(taskId)) {
+      this.pendingAcks.delete(taskId);
+    }
+
+    console.log(`[Queue] Task ${taskId} cancelled by admin`);
+    return { success: true };
+  }
+
   private persistUpdate(task: Task): void {
     const updates: string[] = ['status = @status'];
     const params: any = { id: task.id, status: task.status };
@@ -363,6 +397,20 @@ export class TaskQueue extends EventEmitter {
   /** Check if a specific agent is currently waiting */
   isAgentWaiting(agentId: string): boolean {
     return this.waitingAgents.has(agentId);
+  }
+
+  /** Get all agents that are currently assigned tasks (ASSIGNED, IN_PROGRESS, PENDING_ACK) */
+  getBusyAgentIds(): string[] {
+    const busyStatus: TaskStatus[] = ['ASSIGNED', 'IN_PROGRESS', 'PENDING_ACK'];
+    const busyAgents = new Set<string>();
+
+    for (const task of this.tasks.values()) {
+      // If task is active and assigned to a specific agent
+      if (busyStatus.includes(task.status) && task.to.agentId) {
+        busyAgents.add(task.to.agentId);
+      }
+    }
+    return Array.from(busyAgents);
   }
 
   /** Get tasks assigned to or in-progress for an agent */

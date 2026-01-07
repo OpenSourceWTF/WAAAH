@@ -6,15 +6,25 @@ import { emitDelegation } from '../state/events.js';
 // Import shared schemas from types package
 import {
   registerAgentSchema,
-  waitForPromptSchema,
+  // waitForPromptSchema, // We create this one dynamically
   waitForTaskSchema,
   sendResponseSchema,
   assignTaskSchema,
   listAgentsSchema,
   getAgentStatusSchema,
   ackTaskSchema,
-  adminUpdateAgentSchema
+  adminUpdateAgentSchema,
+  createWaitForPromptSchema,
+  DEFAULT_PROMPT_TIMEOUT,
+  MAX_PROMPT_TIMEOUT
 } from '@waaah/types';
+
+// Parse timeout from env (default to types default)
+const PROMPT_TIMEOUT = process.env.WAAAH_PROMPT_TIMEOUT
+  ? parseInt(process.env.WAAAH_PROMPT_TIMEOUT, 10)
+  : DEFAULT_PROMPT_TIMEOUT;
+
+const waitForPromptSchema = createWaitForPromptSchema(PROMPT_TIMEOUT, MAX_PROMPT_TIMEOUT);
 
 // Re-export for backward compatibility if needed
 export {
@@ -45,11 +55,11 @@ export class ToolHandler {
   async register_agent(args: unknown) {
     try {
       const params = registerAgentSchema.parse(args);
-      this.registry.register({
-        id: params.agentId,
+      const finalAgentId = this.registry.register({
+        id: params.agentId || `agent-${Date.now()}`,
         role: params.role,
-        displayName: params.displayName,
-        capabilities: params.capabilities
+        displayName: params.displayName || '', // Ensure string
+        capabilities: params.capabilities || []
       });
 
       // Return permissions for this role
@@ -60,7 +70,7 @@ export class ToolHandler {
           type: 'text',
           text: JSON.stringify({
             registered: true,
-            agentId: params.agentId,
+            agentId: finalAgentId, // Use the actual ID (may have been renamed)
             displayName: params.displayName,
             role: params.role,
             canDelegateTo
@@ -174,6 +184,9 @@ export class ToolHandler {
       if (!targetAgent) {
         targetAgent = this.registry.getByDisplayName(params.targetAgentId);
       }
+      if (!targetAgent) {
+        targetAgent = this.registry.getByRole(params.targetAgentId);
+      }
 
       if (!targetAgent) {
         return {
@@ -228,7 +241,7 @@ export class ToolHandler {
       emitDelegation({
         taskId,
         from: sourceAgentObj?.displayName || sourceAgent,
-        to: targetAgent.displayName,
+        to: targetAgent.displayName || targetAgent.id, // Fallback to agentId or empty string.
         prompt: params.prompt.length > 200 ? params.prompt.substring(0, 200) + '...' : params.prompt,
         priority: params.priority || 'normal',
         createdAt: Date.now()
@@ -244,10 +257,38 @@ export class ToolHandler {
     try {
       const params = listAgentsSchema.parse(args);
       const agents = this.registry.getAll();
-      const filtered = params.role ? agents.filter(a => a.role === params.role) : agents;
+      const waitingAgents = this.queue.getWaitingAgents();
+
+      const inputs = (params.role && params.role !== 'any')
+        ? agents.filter(a => a.role === params.role)
+        : agents;
+
+      const result = inputs.map(agent => {
+        const assignedTasks = this.queue.getAssignedTasksForAgent(agent.id);
+        const lastSeen = this.registry.getLastSeen(agent.id);
+        const isRecent = lastSeen && (Date.now() - lastSeen) < 5 * 60 * 1000;
+        const isWaiting = waitingAgents.includes(agent.id);
+
+        let status: 'OFFLINE' | 'WAITING' | 'PROCESSING' = 'OFFLINE';
+        if (assignedTasks.length > 0) {
+          status = 'PROCESSING';
+        } else if (isWaiting || isRecent) {
+          status = 'WAITING';
+        }
+
+        return {
+          id: agent.id,
+          role: agent.role,
+          displayName: agent.displayName,
+          capabilities: agent.capabilities,
+          lastSeen,
+          status,
+          currentTask: assignedTasks[0]?.id
+        };
+      });
 
       return {
-        content: [{ type: 'text', text: JSON.stringify(filtered) }]
+        content: [{ type: 'text', text: JSON.stringify(result) }]
       };
     } catch (e) { return this.handleError(e); }
   }
@@ -318,10 +359,12 @@ export class ToolHandler {
   async admin_update_agent(args: unknown) {
     try {
       const params = adminUpdateAgentSchema.parse(args);
-      const success = this.registry.updateAgent(params.agentId, {
-        displayName: params.displayName,
-        color: params.color
-      });
+      const updates: any = {};
+      if (params.status) updates.status = params.status;
+      if (params.metadata?.displayName) updates.displayName = params.metadata.displayName as string;
+      if (params.metadata?.color) updates.color = params.metadata.color as string;
+
+      const success = this.registry.updateAgent(params.agentId, updates);
 
       if (!success) {
         return {
@@ -331,7 +374,7 @@ export class ToolHandler {
       }
 
       return {
-        content: [{ type: 'text', text: `Updated agent ${params.agentId} (name=${params.displayName}, color=${params.color})` }]
+        content: [{ type: 'text', text: `Updated agent ${params.agentId}` }]
       };
     } catch (e) { return this.handleError(e); }
   }

@@ -20,6 +20,10 @@ export interface MessageContext {
   platform: 'discord' | 'slack';
   /** Raw platform-specific data */
   raw?: unknown;
+  /** Whether the message is inside a thread */
+  isThread?: boolean;
+  /** ID of the thread (if applicable) */
+  threadId?: string;
 }
 
 export interface TaskEnqueueRequest {
@@ -39,34 +43,72 @@ export interface TaskResponse {
   };
 }
 
+/**
+ * Interface for Platform Adapters (Discord, Slack, etc.)
+ * Standardizes interaction across different chat platforms.
+ */
 export interface PlatformAdapter {
-  /** Platform name for logging */
-  readonly platform: 'discord' | 'slack';
+  platform: 'discord' | 'slack';
 
-  /** Initialize and connect to the platform */
+  /**
+   * Connect to the platform gateway/socket.
+   */
   connect(): Promise<void>;
 
-  /** Disconnect from the platform */
+  /**
+   * Disconnect and cleanup resources.
+   */
   disconnect(): Promise<void>;
 
-  /** Reply to a message in the same channel */
+  /**
+   * Reply to a specific message.
+   * @param context - The context of the message being replied to
+   * @param message - The text content of the reply
+   * @returns The ID of the sent reply message
+   */
   reply(context: MessageContext, message: string): Promise<string>;
 
-  /** Edit a previously sent message */
+  /**
+   * Edit a previously sent reply.
+   * @param context - The context of the original command/message
+   * @param replyId - The ID of the reply to edit (returned by reply())
+   * @param message - The new text content
+   */
   editReply(context: MessageContext, replyId: string, message: string): Promise<void>;
 
-  /** Send an embed/rich message (delegation notifications, etc) */
+  /**
+   * Send a rich embed to a channel.
+   * @param channelId - The ID of the target channel
+   * @param embed - The embed data to send
+   */
   sendEmbed(channelId: string, embed: EmbedData): Promise<void>;
 
-  /** Register message handler - called by core when messages arrive */
+  /**
+   * Register a handler for incoming messages.
+   * @param handler - The callback function to invoke when a message is received
+   */
   onMessage(handler: MessageHandler): void;
 }
 
+/**
+ * Callback function type for handling incoming messages
+ */
 export type MessageHandler = (content: string, context: MessageContext) => Promise<void>;
 
+/**
+ * Data structure for rich embeds/blocks
+ */
 export interface EmbedData {
+  /** Title of the embed section */
   title: string;
+  /** Optional color (hex code) */
   color?: string;
-  fields: { name: string; value: string; inline?: boolean }[];
+  /** Key-value fields to display */
+  fields: {
+    name: string;
+    value: string;
+    inline?: boolean
+  }[];
+  /** Epoch timestamp (ms) */
   timestamp?: number;
 }
