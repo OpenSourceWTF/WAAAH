@@ -206,7 +206,7 @@ waaah/
 │   │       ├── proxy.ts            # Bidirectional proxy
 │   │       └── index.ts
 │   │
-│   └── discord-bot/                # Discord integration
+│   └── bot/                         # Unified Discord/Slack bot
 │       └── src/
 │           ├── bot.ts              # Discord.js client
 │           ├── parser.ts           # Mention parsing

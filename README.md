@@ -182,7 +182,7 @@ The agent will receive the task via `wait_for_prompt` and execute autonomously.
 - **[`packages/mcp-server`](packages/mcp-server)**: Central orchestration server
 - **[`packages/mcp-proxy`](packages/mcp-proxy)**: Stdio↔HTTP bridge for agents
 - **[`packages/cli`](packages/cli)**: Command-line interface
-- **[`packages/discord-bot`](packages/discord-bot)**: Discord integration
+- **[`packages/bot`](packages/bot)**: Unified Discord/Slack bot
 - **[`packages/types`](packages/types)**: Shared TypeScript definitions
 
 ## 🤝 Contributing
