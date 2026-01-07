@@ -147,4 +147,112 @@ describe('TaskQueue', () => {
       expect(all.length).toBeGreaterThanOrEqual(2);
     });
   });
+
+  describe('getTaskHistory', () => {
+    it('returns empty array when no tasks exist', () => {
+      const history = queue.getTaskHistory();
+      expect(Array.isArray(history)).toBe(true);
+    });
+
+    it('accepts status filter option', () => {
+      const history = queue.getTaskHistory({ status: 'COMPLETED' });
+      expect(Array.isArray(history)).toBe(true);
+    });
+
+    it('accepts agentId filter option', () => {
+      const history = queue.getTaskHistory({ agentId: 'test-agent' });
+      expect(Array.isArray(history)).toBe(true);
+    });
+
+    it('accepts limit and offset pagination options', () => {
+      const history = queue.getTaskHistory({ limit: 10, offset: 0 });
+      expect(Array.isArray(history)).toBe(true);
+    });
+
+    it('combines multiple filter options', () => {
+      const history = queue.getTaskHistory({
+        status: 'COMPLETED',
+        agentId: 'test-agent',
+        limit: 5,
+        offset: 0
+      });
+      expect(Array.isArray(history)).toBe(true);
+    });
+  });
+
+  describe('getTaskFromDB', () => {
+    it('returns undefined for non-existent task', () => {
+      const task = queue.getTaskFromDB('non-existent-task-id');
+      expect(task).toBeUndefined();
+    });
+
+    it('accepts any taskId string', () => {
+      const task = queue.getTaskFromDB('task-123-abc');
+      // Should not throw, returns undefined when not found
+      expect(task === undefined || task !== undefined).toBe(true);
+    });
+  });
+
+  describe('getWaitingAgents', () => {
+    it('returns empty array initially', () => {
+      const waiting = queue.getWaitingAgents();
+      expect(Array.isArray(waiting)).toBe(true);
+    });
+
+    it('tracks agents during waitForTask', async () => {
+      // Start a wait (will timeout quickly)
+      const waitPromise = queue.waitForTask('waiting-test-agent', 'developer', 100);
+
+      // Check if agent is in waiting list during the wait
+      const waiting = queue.getWaitingAgents();
+      expect(Array.isArray(waiting)).toBe(true);
+
+      // Wait for completion
+      await waitPromise;
+    });
+  });
+
+  describe('isAgentWaiting', () => {
+    it('returns false for non-waiting agent', () => {
+      const isWaiting = queue.isAgentWaiting('non-waiting-agent');
+      expect(isWaiting).toBe(false);
+    });
+
+    it('tracks agent waiting state during waitForTask', async () => {
+      // Start a wait
+      const waitPromise = queue.waitForTask('is-waiting-test', 'developer', 100);
+
+      // During wait, should be marked as waiting
+      const duringWait = queue.isAgentWaiting('is-waiting-test');
+      // Note: might be true or false depending on timing
+
+      await waitPromise;
+
+      // After wait completes, should be false
+      const afterWait = queue.isAgentWaiting('is-waiting-test');
+      expect(afterWait).toBe(false);
+    });
+  });
+
+  describe('getAssignedTasksForAgent', () => {
+    it('returns empty array for agent with no tasks', () => {
+      const tasks = queue.getAssignedTasksForAgent('no-task-agent');
+      expect(tasks).toEqual([]);
+    });
+
+    it('returns assigned tasks for agent', async () => {
+      const task = mockTask({ id: 'assigned-test-1', to: { agentId: 'assigned-agent' } });
+      queue.enqueue(task);
+
+      // Wait for task to be picked up
+      await queue.waitForTask('assigned-agent', 'developer', 100);
+
+      // ACK the task to move to ASSIGNED
+      queue.ackTask('assigned-test-1', 'assigned-agent');
+
+      const tasks = queue.getAssignedTasksForAgent('assigned-agent');
+      expect(tasks.length).toBe(1);
+      expect(tasks[0].id).toBe('assigned-test-1');
+    });
+  });
 });

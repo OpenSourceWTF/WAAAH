@@ -6,17 +6,8 @@
         "${HOME}/projects/WAAAH/packages/mcp-proxy/dist/index.js"
       ],
       "env": {
-        "WAAAH_SERVER_URL": "http://localhost:3000",
-        "AGENT_ID": "fullstack-1",
-        "AGENT_ROLE": "full-stack-engineer"
+        "WAAAH_SERVER_URL": "http://localhost:3000"
       }
-    },
-    "github": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@modelcontextprotocol/server-github"
-      ]
     }
   }
 }

@@ -95,9 +95,25 @@ app.get('/admin/tasks', (req, res) => {
   res.json(queue.getAll());
 });
 
+// Query task history from database (includes COMPLETED/FAILED)
+app.get('/admin/tasks/history', (req, res) => {
+  const { status, agentId, limit, offset } = req.query;
+  const tasks = queue.getTaskHistory({
+    status: status as string,
+    agentId: agentId as string,
+    limit: limit ? parseInt(limit as string, 10) : 50,
+    offset: offset ? parseInt(offset as string, 10) : 0
+  });
+  res.json(tasks);
+});
+
 app.get('/admin/tasks/:taskId', (req, res) => {
   const { taskId } = req.params;
-  const task = queue.getTask(taskId);
+  // First check in-memory, then fall back to database
+  let task = queue.getTask(taskId);
+  if (!task) {
+    task = queue.getTaskFromDB(taskId);
+  }
 
   if (!task) {
     res.status(404).json({ error: 'Task not found' });

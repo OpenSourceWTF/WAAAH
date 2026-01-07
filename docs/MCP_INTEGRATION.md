@@ -40,9 +40,8 @@ Add to `~/.gemini/settings.json`:
       "command": "node",
       "args": ["/path/to/WAAAH/packages/mcp-proxy/dist/index.js"],
       "env": {
-        "MCP_SERVER_URL": "http://localhost:3000",
-        "WAAAH_API_KEY": "your-api-key",
-        "AGENT_ID": "gemini-cli-1"
+        "WAAAH_SERVER_URL": "http://localhost:3000",
+        "WAAAH_API_KEY": "your-api-key"
       }
     }
   }
@@ -62,18 +61,17 @@ Antigravity is a VS Code-based AI coding assistant with full MCP support.
 
 ### Step 1: Configure MCP Server
 
-Add to your VS Code settings (`settings.json`):
+Add to your VS Code settings or `~/.gemini/antigravity/mcp_config.json`:
 
 ```json
 {
-  "antigravity.mcpServers": {
+  "mcpServers": {
     "waaah": {
       "command": "node",
       "args": ["/path/to/WAAAH/packages/mcp-proxy/dist/index.js"],
       "env": {
-        "MCP_SERVER_URL": "http://localhost:3000",
-        "WAAAH_API_KEY": "your-api-key",
-        "AGENT_ID": "fullstack-1"
+        "WAAAH_SERVER_URL": "http://localhost:3000",
+        "WAAAH_API_KEY": "your-api-key"
       }
     }
   }
@@ -107,9 +105,8 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) o
       "command": "node",
       "args": ["/path/to/WAAAH/packages/mcp-proxy/dist/index.js"],
       "env": {
-        "MCP_SERVER_URL": "http://localhost:3000",
-        "WAAAH_API_KEY": "your-api-key",
-        "AGENT_ID": "claude-agent-1"
+        "WAAAH_SERVER_URL": "http://localhost:3000",
+        "WAAAH_API_KEY": "your-api-key"
       }
     }
   }
@@ -145,9 +142,8 @@ Add to `.cursor/mcp.json` in your project:
       "command": "node",
       "args": ["./packages/mcp-proxy/dist/index.js"],
       "env": {
-        "MCP_SERVER_URL": "http://localhost:3000",
-        "WAAAH_API_KEY": "your-api-key",
-        "AGENT_ID": "cursor-agent-1"
+        "WAAAH_SERVER_URL": "http://localhost:3000",
+        "WAAAH_API_KEY": "your-api-key"
       }
     }
   }
@@ -175,7 +171,7 @@ Add to your Windsurf MCP config:
       "command": "node",
       "args": ["/path/to/WAAAH/packages/mcp-proxy/dist/index.js"],
       "env": {
-        "MCP_SERVER_URL": "http://localhost:3000",
+        "WAAAH_SERVER_URL": "http://localhost:3000",
         "WAAAH_API_KEY": "your-api-key"
       }
     }
@@ -206,9 +202,8 @@ waaah_server = MCPServerStdio(
     command="node",
     args=["/path/to/WAAAH/packages/mcp-proxy/dist/index.js"],
     env={
-        "MCP_SERVER_URL": "http://localhost:3000",
-        "WAAAH_API_KEY": "your-api-key",
-        "AGENT_ID": "openai-agent-1"
+        "WAAAH_SERVER_URL": "http://localhost:3000",
+        "WAAAH_API_KEY": "your-api-key"
     }
 )
 
@@ -243,7 +238,7 @@ async def start():
         command="node",
         args=["/path/to/WAAAH/packages/mcp-proxy/dist/index.js"],
         env={
-            "MCP_SERVER_URL": "http://localhost:3000",
+            "WAAAH_SERVER_URL": "http://localhost:3000",
             "WAAAH_API_KEY": "your-api-key"
         }
     )
@@ -296,9 +291,11 @@ The server runs on `http://localhost:3000` by default.
 
 ## Common Environment Variables
 
-| Variable | Description |
-|----------|-------------|
-| `MCP_SERVER_URL` | WAAAH server URL (default: `http://localhost:3000`) |
-| `WAAAH_API_KEY` | API key for authentication |
-| `AGENT_ID` | Unique agent identifier |
-| `AGENT_ROLE` | Role: `developer`, `full-stack-engineer`, `project-manager`, etc. |
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `WAAAH_SERVER_URL` | Yes | WAAAH server URL (default: `http://localhost:3000`) |
+| `WAAAH_API_KEY` | Production | API key for authentication |
+| `AGENT_ID` | No | Fallback agent ID (workflows override this) |
+| `AGENT_ROLE` | No | Fallback role (workflows override this) |
+
+> **Note:** `AGENT_ID` and `AGENT_ROLE` are optional fallback defaults. When using workflow prompts (e.g., `/waaah-fullstack`), the workflow explicitly registers the agent with the correct identity, overriding these environment variables.

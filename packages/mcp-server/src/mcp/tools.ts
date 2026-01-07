@@ -79,10 +79,14 @@ export class ToolHandler {
       const agent = this.registry.get(params.agentId);
       const role = agent?.role || 'developer';
 
-      // Update heartbeat on each wait call
+      // Update heartbeat on each wait call (start of long-poll)
       this.registry.heartbeat(params.agentId);
 
       const task = await this.queue.waitForTask(params.agentId, role, timeoutMs);
+
+      // Update heartbeat again after wait completes (maintains "recent" status
+      // during the gap before the agent calls wait_for_prompt again)
+      this.registry.heartbeat(params.agentId);
 
       if (!task) {
         return {
@@ -107,6 +111,11 @@ export class ToolHandler {
   async send_response(args: unknown) {
     try {
       const params = sendResponseSchema.parse(args);
+      // Get the task to find the agent and update heartbeat
+      const task = this.queue.getTask(params.taskId);
+      if (task?.to.agentId) {
+        this.registry.heartbeat(task.to.agentId);
+      }
       this.queue.updateStatus(params.taskId, params.status, {
         message: params.message,
         artifacts: params.artifacts,
@@ -123,6 +132,11 @@ export class ToolHandler {
     try {
       const params = assignTaskSchema.parse(args);
       const sourceAgent = params.sourceAgentId || 'unknown';
+
+      // Update heartbeat for the source agent
+      if (sourceAgent !== 'unknown') {
+        this.registry.heartbeat(sourceAgent);
+      }
 
       // Resolve target by displayName or agentId
       let targetAgent = this.registry.get(params.targetAgentId);
@@ -253,6 +267,8 @@ export class ToolHandler {
   async ack_task(args: unknown) {
     try {
       const params = ackTaskSchema.parse(args);
+      // Update heartbeat when agent acknowledges a task
+      this.registry.heartbeat(params.agentId);
       const result = this.queue.ackTask(params.taskId, params.agentId);
 
       if (!result.success) {

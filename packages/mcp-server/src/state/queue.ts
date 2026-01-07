@@ -326,4 +326,39 @@ export class TaskQueue extends EventEmitter {
       t.to.agentId === agentId
     );
   }
+
+  /** Query task history from database (includes COMPLETED/FAILED) */
+  getTaskHistory(options: {
+    status?: string;
+    agentId?: string;
+    limit?: number;
+    offset?: number;
+  } = {}): Task[] {
+    const { status, agentId, limit = 50, offset = 0 } = options;
+
+    let query = 'SELECT * FROM tasks WHERE 1=1';
+    const params: any = {};
+
+    if (status) {
+      query += ' AND status = @status';
+      params.status = status;
+    }
+    if (agentId) {
+      query += ' AND (toAgentId = @agentId OR fromAgentId = @agentId)';
+      params.agentId = agentId;
+    }
+
+    query += ' ORDER BY createdAt DESC LIMIT @limit OFFSET @offset';
+    params.limit = limit;
+    params.offset = offset;
+
+    const rows = db.prepare(query).all(params) as any[];
+    return rows.map(row => this.mapRowToTask(row));
+  }
+
+  /** Get a specific task from database (even if not in memory) */
+  getTaskFromDB(taskId: string): Task | undefined {
+    const row = db.prepare('SELECT * FROM tasks WHERE id = @id').get({ id: taskId }) as any;
+    return row ? this.mapRowToTask(row) : undefined;
+  }
 }

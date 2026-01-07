@@ -7,20 +7,22 @@ A bridge that connects a local autonomous agent (via `stdio`) to the remote MCP 
 1.  Starts as a local MCP server using Stdio transport.
 2.  Connects to your LLM client (e.g., Antigravity, Claude Desktop).
 3.  Proxies tool calls (`register_agent`, `wait_for_prompt`, etc.) to the central server.
-4.  Injects identity information (`AGENT_ID`, `AGENT_ROLE`) into requests.
+4.  Provides fallback identity if not specified in tool calls.
 
 ## Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `WAAAH_SERVER_URL` | `http://localhost:3000` | Server URL |
-| `AGENT_ID` | `unknown-agent` | This agent's unique ID |
-| `AGENT_ROLE` | `developer` | This agent's role |
+| `WAAAH_SERVER_URL` | `http://localhost:3000` | Server URL (required) |
 | `WAAAH_API_KEY` | (none) | API key for authentication |
+| `AGENT_ID` | `unknown-agent` | Fallback agent ID (optional) |
+| `AGENT_ROLE` | `developer` | Fallback agent role (optional) |
+
+> **Note:** `AGENT_ID` and `AGENT_ROLE` are **fallback defaults only**. When using workflow prompts (e.g., `/waaah-fullstack`), the workflow explicitly specifies the agent identity in `register_agent()` calls, overriding these environment variables.
 
 ## MCP Client Configuration
 
-Add to your MCP client settings (e.g., `~/.gemini/settings.json`):
+Add to your MCP client settings (e.g., `~/.gemini/antigravity/mcp_config.json`):
 
 ```json
 {
@@ -29,9 +31,7 @@ Add to your MCP client settings (e.g., `~/.gemini/settings.json`):
       "command": "node",
       "args": ["/path/to/WAAAH/packages/mcp-proxy/dist/index.js"],
       "env": {
-        "WAAAH_SERVER_URL": "https://yourdomain.com",
-        "AGENT_ID": "fullstack-1",
-        "AGENT_ROLE": "full-stack-engineer",
+        "WAAAH_SERVER_URL": "http://localhost:3000",
         "WAAAH_API_KEY": "your_api_key"
       }
     }
@@ -39,9 +39,15 @@ Add to your MCP client settings (e.g., `~/.gemini/settings.json`):
 }
 ```
 
+The agent identity is determined by the workflow you invoke:
+- `/waaah-fullstack` → registers as `fullstack-1` (Full Stack Engineer)
+- `/waaah-testeng` → registers as `test-1` (Test Engineer)
+- `/waaah-pm` → registers as `pm-1` (Project Manager)
+
 ## Local Development
 
 ```bash
 pnpm build
 node dist/index.js
 ```
+

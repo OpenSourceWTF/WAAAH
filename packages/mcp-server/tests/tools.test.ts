@@ -164,8 +164,8 @@ describe('ToolHandler', () => {
       const targetId = uid();
 
       // Register agents - developer role typically can't delegate
-      registry.register({ id: sourceId, role: 'developer' });
-      registry.register({ id: targetId, role: 'test-engineer' });
+      registry.register({ id: sourceId, role: 'developer', displayName: '@TestDev1', capabilities: [] });
+      registry.register({ id: targetId, role: 'test-engineer', displayName: '@TestEng1', capabilities: [] });
 
       const result = await tools.assign_task({
         targetAgentId: targetId,
@@ -218,7 +218,7 @@ describe('ToolHandler', () => {
 
     it('returns status for recently active agent', async () => {
       const agentId = uid();
-      registry.register({ id: agentId, role: 'developer', displayName: '@StatusTest' });
+      registry.register({ id: agentId, role: 'developer', displayName: '@StatusTest', capabilities: [] });
       registry.heartbeat(agentId);
 
       const result = await tools.get_agent_status({ agentId });

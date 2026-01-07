@@ -26,7 +26,7 @@ pnpm bot       # Foreground
 
 Connect your AI agent to an existing WAAAH server:
 
-1. **Add MCP config** (e.g., `~/.gemini/settings.json`):
+1. **Add MCP config** (e.g., `~/.gemini/antigravity/mcp_config.json`):
    ```json
    {
      "mcpServers": {
@@ -35,8 +35,6 @@ Connect your AI agent to an existing WAAAH server:
          "args": ["/path/to/WAAAH/packages/mcp-proxy/dist/index.js"],
          "env": {
            "WAAAH_SERVER_URL": "https://your-waaah-server.com",
-           "AGENT_ID": "fullstack-1",
-           "AGENT_ROLE": "full-stack-engineer",
            "WAAAH_API_KEY": "your_api_key"
          }
        }
@@ -44,10 +42,10 @@ Connect your AI agent to an existing WAAAH server:
    }
    ```
 
-2. **Initialize your agent** with a workflow command:
-   - `/waaah-fullstack` — Full Stack Engineer
-   - `/waaah-pm` — Project Manager  
-   - `/waaah-testeng` — Test Engineer
+2. **Initialize your agent** with a workflow command (this sets the agent identity):
+   - `/waaah-fullstack` → registers as `fullstack-1` (Full Stack Engineer)
+   - `/waaah-pm` → registers as `pm-1` (Project Manager)
+   - `/waaah-testeng` → registers as `test-1` (Test Engineer)
 
 3. **Start receiving tasks** — the agent enters an autonomous loop via `wait_for_prompt`.
 
@@ -169,7 +167,7 @@ WAAAH works with any AI system supporting the Model Context Protocol (MCP).
 
 ### Quick Setup (Antigravity)
 
-Add to `~/.gemini/settings.json`:
+Add to `~/.gemini/antigravity/mcp_config.json`:
 
 ```json
 {
@@ -179,14 +177,14 @@ Add to `~/.gemini/settings.json`:
       "args": ["/path/to/WAAAH/packages/mcp-proxy/dist/index.js"],
       "env": {
         "WAAAH_SERVER_URL": "https://yourdomain.com",
-        "AGENT_ID": "fullstack-1",
-        "AGENT_ROLE": "full-stack-engineer",
         "WAAAH_API_KEY": "your_api_key"
       }
     }
   }
 }
 ```
+
+> **Note:** Agent identity (`AGENT_ID`, `AGENT_ROLE`) is not required in the config. The workflow command (e.g., `/waaah-fullstack`) explicitly registers the agent with the correct identity.
 
 ### Step 2: Initialize Agent
 

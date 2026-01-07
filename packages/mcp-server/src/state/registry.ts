@@ -107,7 +107,8 @@ export class AgentRegistry {
   cleanup(timeoutMs: number = 5 * 60 * 1000): number {
     const cutoff = Date.now() - timeoutMs;
     try {
-      const result = db.prepare('DELETE FROM agents WHERE lastSeen < ?').run(cutoff);
+      // Clean up agents that are stale OR have never connected (NULL lastSeen)
+      const result = db.prepare('DELETE FROM agents WHERE lastSeen < ? OR lastSeen IS NULL').run(cutoff);
       if (result.changes > 0) {
         console.log(`[Registry] Cleaned up ${result.changes} offline agent(s)`);
       }
