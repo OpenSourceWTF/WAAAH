@@ -15,9 +15,18 @@
   "keywords": [
     "waaah",
     "mcp",
+    "model-context-protocol",
     "ai-agents",
+    "ai",
+    "agent",
+    "multi-agent",
     "proxy",
-    "stdio"
+    "stdio",
+    "claude",
+    "cursor",
+    "antigravity",
+    "gemini",
+    "openai"
   ],
   "main": "dist/index.js",
   "bin": {

@@ -15,9 +15,16 @@
   "keywords": [
     "waaah",
     "mcp",
+    "model-context-protocol",
     "ai-agents",
+    "ai",
+    "agent",
+    "multi-agent",
     "orchestration",
-    "types"
+    "types",
+    "typescript",
+    "zod",
+    "schema"
   ],
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

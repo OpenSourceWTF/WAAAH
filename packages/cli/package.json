@@ -14,9 +14,15 @@
   },
   "keywords": [
     "waaah",
+    "mcp",
     "cli",
     "ai-agents",
-    "orchestration"
+    "ai",
+    "agent",
+    "multi-agent",
+    "orchestration",
+    "command-line",
+    "devtools"
   ],
   "main": "dist/index.js",
   "bin": {

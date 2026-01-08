@@ -15,9 +15,16 @@
   "keywords": [
     "waaah",
     "mcp",
+    "model-context-protocol",
     "ai-agents",
+    "ai",
+    "agent",
+    "multi-agent",
     "orchestration",
-    "server"
+    "server",
+    "dashboard",
+    "scheduler",
+    "task-queue"
   ],
   "main": "dist/server.js",
   "files": [

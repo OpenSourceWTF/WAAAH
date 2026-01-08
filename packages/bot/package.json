@@ -14,10 +14,17 @@
   },
   "keywords": [
     "waaah",
+    "mcp",
     "discord",
     "slack",
     "bot",
-    "ai-agents"
+    "chatbot",
+    "ai-agents",
+    "ai",
+    "agent",
+    "multi-agent",
+    "orchestration",
+    "task-management"
   ],
   "main": "dist/index.js",
   "files": [
