@@ -28,7 +28,7 @@ WAAAH is an orchestration system for specialized AI agents. It uses the Model Co
 
 ## ✨ Key Features
 
-- **Multi-Agent Orchestration**: Coordinate specialized agents (PM, Full Stack, Test Engineer) via a central MCP server.
+- **Multi-Agent Orchestration**: Coordinate autonomous Orchestrator agents via a central MCP server.
 - **Admin Dashboard**: Real-time web UI for monitoring agents, tasks, and activity logs with a 3-way theme engine (WAAAH/LIGHT/DARK).
 - **Hybrid Task Scheduler**: Background scheduler that requeues stuck tasks, proactively assigns high-priority work, and recovers orphaned tasks.
 - **Persistent State**: SQLite-backed registry for agents, tasks, and security events.
@@ -37,7 +37,7 @@ WAAAH is an orchestration system for specialized AI agents. It uses the Model Co
 ---
 
 > [!NOTE]  
-> **Command Syntax**: Use **`@WAAAH`** mentions for Discord/Slack bot interactions (e.g., `@WAAAH status`). Use **`/waaah-*`** slash commands ONLY within your IDE for initializing local agent workflows.
+> **Command Syntax**: Use **`@WAAAH`** mentions for Discord/Slack bot interactions (e.g., `@WAAAH status`). Use **`/waaah-orc`** to initialize the Orchestrator agent.
 
 ---
 
@@ -85,7 +85,7 @@ curl -X POST https://waaah.example.com/admin/enqueue \
 ```
 
 #### 🎮 Hackathon Mode
-Spin up specialized agents in parallel (each needs its own AI client—multiple VS Code windows or Claude profiles):
+Spin up Orchestrator agents in parallel (each needs its own AI client—multiple VS Code windows or Claude profiles):
 1. Start Server: `pnpm serve`
 2. Connect agents via MCP config
 3. Coordinate via the Dashboard or `@WAAAH` bot
@@ -150,10 +150,10 @@ Run the orchestration server and bot for your team:
 
 5. **Start Your First Delegation (Antigravity)**
    1. Open your project in Antigravity
-   2. **Conversation 1**: Run `/waaah-fullstack` → Wait until it says "Waiting for prompt"
-   3. **Conversation 2**: Run `/waaah-boss` → Start with:
+   2. **Conversation 1**: Run `/waaah-orc` → Wait until it says "Waiting for prompt"
+   3. **Terminal**: Use the CLI to assign work:
       ```
-      Delegate the creation of this new feature: [your feature description]
+      waaah assign "Delegate feature X"
       ```
    4. Switch between conversations via the Agent Manager to monitor progress
 
@@ -201,10 +201,9 @@ Connect your AI agent to a WAAAH server:
 2. **Initialize your agent** with a workflow command:
    | Command | Role |
    |---------|------|
-   | `/waaah-fullstack` | Full Stack Engineer (autonomous loop) |
-   | `/waaah-pm` | Project Manager (autonomous loop) |
-   | `/waaah-tester` | Test Engineer (autonomous loop) |
-   | `/waaah-boss` | **Tech Lead** (orchestrator—pair with you) |
+   | Command | Role |
+   |---------|------|
+   | `/waaah-orc` | Orchestrator (autonomous loop) |
 
 3. **Start receiving tasks** — worker agents enter an autonomous loop via `wait_for_prompt`. The Boss stays interactive.
 

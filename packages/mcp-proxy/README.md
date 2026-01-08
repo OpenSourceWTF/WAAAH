@@ -28,7 +28,7 @@ npx @opensourcewtf/waaah-mcp-proxy
 | `AGENT_ID` | `unknown-agent` | Fallback agent ID (optional) |
 | `AGENT_ROLE` | `developer` | Fallback agent role (optional) |
 
-> **Note:** `AGENT_ID` and `AGENT_ROLE` are **fallback defaults only**. When using workflow prompts (e.g., `/waaah-fullstack`), the workflow explicitly specifies the agent identity in `register_agent()` calls, overriding these environment variables.
+> **Note:** `AGENT_ID` and `AGENT_ROLE` are **fallback defaults only**. When using workflow prompts (e.g., `/waaah-orc`), the workflow explicitly specifies the agent identity in `register_agent()` calls, overriding these environment variables.
 
 ## MCP Client Configuration
 
@@ -50,9 +50,7 @@ Add to your MCP client settings (e.g., `~/.gemini/antigravity/mcp_config.json`):
 ```
 
 The agent identity is determined by the workflow you invoke:
-- `/waaah-fullstack` → registers as `fullstack-1` (Full Stack Engineer)
-- `/waaah-testeng` → registers as `test-1` (Test Engineer)
-- `/waaah-pm` → registers as `pm-1` (Project Manager)
+- `/waaah-orc` → registers as `orchestrator-uuid` (Orchestrator)
 
 ## Local Development
 

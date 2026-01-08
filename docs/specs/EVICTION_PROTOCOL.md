@@ -31,7 +31,7 @@ Upon receiving an `EVICT` signal, the agent loop MUST:
     *   **SHUTDOWN**: `process.exit(1)` (or a code that indicates "do not restart" to the supervisor).
 
 ## 4. Prompt Updates
-Agent workflows (e.g., `waaah-fullstack.md`, `waaah-tester.md`) must be updated to handle this response type in their `wait_for_prompt` handling block.
+Agent workflows (e.g., `waaah-orc.md`) must be updated to handle this response type in their `wait_for_prompt` handling block.
 
 ### Before
 ```javascript

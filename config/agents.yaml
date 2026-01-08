@@ -1,27 +1,7 @@
 agents:
-  # Boss: Direct pair programming role (no registration loop)
-  boss:
-    displayName: "@Boss"
-    aliases: ["boss", "waaah", "lead", "principal"]
-    canDelegateTo: ["project-manager", "full-stack-engineer", "test-engineer"]
-
-  # PM: Creates ACCEPTANCE.md, coordinates agents
-  project-manager:
-    displayName: "@PM"
-    aliases: ["pm", "manager", "projectmanager"]
-    canDelegateTo: ["full-stack-engineer", "test-engineer"]
-    reportsTo: ["boss"]
-    
-  # FullStack: Implements features, delegates testing to TestEng
-  full-stack-engineer:
-    displayName: "@FullStack"
-    aliases: ["fullstack", "dev", "developer", "fs"]
-    canDelegateTo: ["test-engineer","project-manager"]
-    reportsTo: ["project-manager", "boss"]
-
-  # TestEng: Creates TESTING.md, implements tests
-  test-engineer:
-    displayName: "@TestEng"
-    aliases: ["test", "tester", "qa"]
-    canDelegateTo: ["project-manager"]
-    reportsTo: ["project-manager", "boss"]
+  orchestrator:
+    displayName: '@Orchestrator'
+    role: 'orchestrator'
+    aliases: ['orchestrator', 'orc']
+    canDelegateTo: ['orchestrator']
+    reportsTo: []

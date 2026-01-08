@@ -89,10 +89,10 @@ Add to your VS Code settings or `~/.gemini/antigravity/mcp_config.json`:
 
 ### Step 2: Use the Workflow
 
-Run the `/waaah-fullstack` workflow to initialize as a WAAAH agent:
+Run the `/waaah-orc` workflow to initialize as a WAAAH Orchestrator:
 
 ```
-/waaah-fullstack
+/waaah-orc
 ```
 
 This registers the agent and enters the task loop.
@@ -310,4 +310,4 @@ The server runs on `http://localhost:3000` by default.
 | `AGENT_ID` | No | Fallback agent ID (workflows override this) |
 | `AGENT_ROLE` | No | Fallback role (workflows override this) |
 
-> **Note:** `AGENT_ID` and `AGENT_ROLE` are optional fallback defaults. When using workflow prompts (e.g., `/waaah-fullstack`), the workflow explicitly registers the agent with the correct identity, overriding these environment variables.
+> **Note:** `AGENT_ID` and `AGENT_ROLE` are optional fallback defaults. When using workflow prompts (e.g., `/waaah-orc`), the workflow explicitly registers the agent with the correct identity, overriding these environment variables.
