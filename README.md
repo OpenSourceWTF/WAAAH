@@ -3,7 +3,7 @@
 > [!WARNING]
 > **🧪 Harebrained Experiment**: This project is dubious at best. It was born when the author wondered, "Can I still work while on the toilet?" APIs and features may change without notice.
 
-[![CI](https://github.com/davidtai/WAAAH/actions/workflows/ci.yml/badge.svg)](https://github.com/davidtai/WAAAH/actions/workflows/ci.yml)
+[![CI](https://github.com/OpenSourceWTF/WAAAH/actions/workflows/ci.yml/badge.svg)](https://github.com/OpenSourceWTF/WAAAH/actions/workflows/ci.yml)
 
 WAAAH is an orchestration system for specialized AI agents. It uses the Model Context Protocol (MCP) with **blocking tool calls** to inject orchestration capabilities into **any AI workspace**—even those that are strictly sandboxed or network-restricted—by tunnelling through standard tool interfaces.
 

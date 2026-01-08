@@ -5,11 +5,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/davidtai/WAAAH.git"
+    "url": "https://github.com/OpenSourceWTF/WAAAH.git"
   },
-  "homepage": "https://github.com/davidtai/WAAAH#readme",
+  "homepage": "https://github.com/OpenSourceWTF/WAAAH#readme",
   "bugs": {
-    "url": "https://github.com/davidtai/WAAAH/issues"
+    "url": "https://github.com/OpenSourceWTF/WAAAH/issues"
   },
   "keywords": [
     "waaah",
