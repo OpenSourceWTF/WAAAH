@@ -20,7 +20,6 @@ dotenv.config();
 
 const MCP_SERVER_URL = process.env.MCP_SERVER_URL || 'http://localhost:3000';
 const WAAAH_API_KEY = process.env.WAAAH_API_KEY;
-const CONFIG_PATH = process.env.AGENTS_CONFIG || path.resolve(__dirname, '../../../config/agents.yaml');
 const PLATFORM = process.env.PLATFORM || 'discord';
 const DELEGATION_CHANNEL_ID = process.env.DELEGATION_CHANNEL_ID;
 
@@ -43,7 +42,6 @@ async function startDiscordBot(): Promise<boolean> {
   const bot = new BotCore(adapter, {
     mcpServerUrl: MCP_SERVER_URL,
     apiKey: WAAAH_API_KEY,
-    configPath: CONFIG_PATH,
     delegationChannelId: DELEGATION_CHANNEL_ID
   });
 

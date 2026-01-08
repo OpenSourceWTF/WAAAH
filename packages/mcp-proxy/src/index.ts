@@ -4,6 +4,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
+  ListResourcesRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import axios from 'axios';
 
@@ -29,6 +30,7 @@ const server = new Server(
   {
     capabilities: {
       tools: {},
+      resources: {}, // Declare resources capability so handler is allowed
     },
   }
 );
@@ -36,12 +38,16 @@ const server = new Server(
 // List Tools
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
-    tools: MCP_TOOL_DEFINITIONS as any, // Cast to any to avoid strict type mismatch with SDK
+    tools: MCP_TOOL_DEFINITIONS as any,
   };
 });
 
-// Initial self-registration logic (optional, but good for auto-start)
-// But we want the agent to call it autonomously via prompt.
+// List Resources (empty - WAAAH doesn't use MCP resources)
+server.setRequestHandler(ListResourcesRequestSchema, async () => {
+  return {
+    resources: [],
+  };
+});
 
 // Call Tool
 server.setRequestHandler(CallToolRequestSchema, async (request) => {

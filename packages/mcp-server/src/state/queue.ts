@@ -1,59 +1,71 @@
-import { EventEmitter } from 'events';
 import {
   Task,
   TaskStatus,
   AgentRole
 } from '@opensourcewtf/waaah-types';
-import { db } from './db.js';
+import type { Database } from 'better-sqlite3';
 import type { ITaskQueue, AckResult, QueueStats, HistoryOptions, WaitResult } from './queue.interface.js';
+import { TypedEventEmitter } from './queue-events.js';
+import { TaskRepository, type ITaskRepository } from './task-repository.js';
 
-const ACK_TIMEOUT_MS = 60000;         // 60s to ACK a task before it's requeued
+const ACK_TIMEOUT_MS = 30000;         // 30s to ACK a task before it's requeued
 const SCHEDULER_INTERVAL_MS = 10000;  // Run scheduler every 10s
 const ORPHAN_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes offline = orphan
 
 /**
  * Manages the global task queue, handling task lifecycle, assignment, and persistence.
- * Emits 'task' events when new tasks are enqueued and 'completion' events when they finish.
+ * 
+ * Architecture:
+ * - Uses TaskRepository as SINGLE SOURCE OF TRUTH for task data
+ * - Uses TypedEventEmitter for type-safe events
+ * - In-memory state: only pendingAcks (ACK timeouts) and waitingAgents (polling)
+ * 
  * @implements {ITaskQueue}
  */
-export class TaskQueue extends EventEmitter implements ITaskQueue {
-  // In-memory cache for fast access, but source of truth is DB
-  private tasks: Map<string, Task> = new Map();
-  // Map<TaskId, { agentId, sentAt }>
-  private pendingAcks: Map<string, { taskId: string, agentId: string, sentAt: number }> = new Map();
-  // Track agents currently long-polling (WAITING state) - Maps AgentID -> Role
+export class TaskQueue extends TypedEventEmitter implements ITaskQueue {
+  /** Repository for task persistence operations */
+  private readonly repo: ITaskRepository;
+
+  /** Pending ACK tracking: taskId -> { agentId, sentAt } */
+  private pendingAcks: Map<string, { taskId: string; agentId: string; sentAt: number }> = new Map();
+
+  /** Agents currently waiting for tasks: agentId -> role */
   private waitingAgents: Map<string, AgentRole> = new Map();
 
   private schedulerInterval: NodeJS.Timeout | null = null;
 
-  constructor() {
+  /**
+   * Create a new TaskQueue instance.
+   * @param databaseOrRepo - Database instance or TaskRepository (REQUIRED - no default to prevent production leaks)
+   */
+  constructor(databaseOrRepo: Database | ITaskRepository) {
     super();
-    this.loadFromDB();
+
+    // Accept either a Database or a TaskRepository
+    if ('insert' in databaseOrRepo) {
+      this.repo = databaseOrRepo as ITaskRepository;
+    } else {
+      this.repo = new TaskRepository(databaseOrRepo as Database);
+    }
+
+    // Reset any PENDING_ACK tasks from previous run to QUEUED
+    this.resetStaleAcks();
     // Scheduler is started explicitly by server.ts
   }
 
-  private loadFromDB(): void {
-    // Load active tasks (QUEUED, PENDING_ACK, ASSIGNED, IN_PROGRESS)
-    // We might want COMPLETED for history, but for queue logic we need active.
-    const rows = db.prepare(`
-      SELECT * FROM tasks 
-      WHERE status IN ('QUEUED', 'PENDING_ACK', 'ASSIGNED', 'IN_PROGRESS')
-    `).all() as any[];
-
-    for (const row of rows) {
-      const task = this.mapRowToTask(row);
-      this.tasks.set(task.id, task);
-
-      if (task.status === 'PENDING_ACK') {
-        // If it was PENDING_ACK on restart, we should probably reset it to QUEUED
-        // because the agent connection is gone.
-        // OR we load it into pendingAcks and see if it times out immediately?
-        // Let's reset to QUEUED to be safe, as the agent is definitely disconnected.
+  /** Reset PENDING_ACK tasks to QUEUED (agent connections are gone after restart) */
+  private resetStaleAcks(): void {
+    try {
+      const stale = this.repo.getByStatus('PENDING_ACK');
+      for (const task of stale) {
         console.log(`[Queue] Resetting PENDING_ACK task ${task.id} to QUEUED on startup`);
-        this.updateStatus(task.id, 'QUEUED');
+        this.repo.updateStatus(task.id, 'QUEUED');
       }
+      console.log(`[Queue] Loaded ${this.repo.getActive().length} active tasks from DB`);
+    } catch {
+      // Database may not be initialized yet (tests)
+      console.log('[Queue] Database not ready, skipping stale ACK reset');
     }
-    console.log(`[Queue] Loaded ${this.tasks.size} active tasks from DB`);
   }
 
   /**
@@ -63,39 +75,72 @@ export class TaskQueue extends EventEmitter implements ITaskQueue {
    * @param task - The task object to enqueue.
    */
   enqueue(task: Task): void {
-    this.tasks.set(task.id, task);
+    // Check dependencies before enqueueing
+    if (task.dependencies && task.dependencies.length > 0) {
+      const allMet = task.dependencies.every(depId => {
+        const dep = this.getTask(depId) || this.getTaskFromDB(depId);
+        return dep && dep.status === 'COMPLETED';
+      });
+
+      if (!allMet) {
+        task.status = 'BLOCKED';
+        console.log(`[Queue] Task ${task.id} BLOCKED by dependencies: ${task.dependencies.join(', ')}`);
+      }
+    }
+
+
 
     try {
-      db.prepare(`
-        INSERT INTO tasks (
-          id, status, prompt, priority, 
-          fromAgentId, fromAgentName, 
-          toAgentId, toAgentRole, 
-          context, createdAt
-        ) VALUES (
-          @id, @status, @prompt, @priority, 
-          @fromAgentId, @fromAgentName, 
-          @toAgentId, @toAgentRole, 
-          @context, @createdAt
-        )
-      `).run({
-        id: task.id,
-        status: task.status,
-        prompt: task.prompt,
-        priority: task.priority,
-        fromAgentId: task.from.id,
-        fromAgentName: task.from.name,
-        toAgentId: task.to.agentId || null,
-        toAgentRole: task.to.role || null,
-        context: JSON.stringify(task.context || {}),
-        createdAt: task.createdAt
-      });
+      this.repo.insert(task);
       console.log(`[Queue] Enqueued task: ${task.id} (${task.status})`);
 
-      // Emit event for waiting agents
-      this.emit('task', task);
+      // ATOMIC ASSIGNMENT: Find and reserve agent synchronously
+      // Note: findAndReserveAgent emits the 'task' event internally when a match is found
+      const reservedAgentId = this.findAndReserveAgent(task);
+
+      if (reservedAgentId) {
+        console.log(`[Queue] ✓ Task ${task.id} reserved for agent ${reservedAgentId}`);
+        // Don't emit here - findAndReserveAgent already emitted to the agent
+      } else {
+        console.log(`[Queue] No waiting agents for task ${task.id}. Task remains QUEUED.`);
+        // Don't emit - scheduler will handle it later when agents connect
+      }
     } catch (e: any) {
       console.error(`[Queue] Failed to persist task ${task.id}: ${e.message}`);
+    }
+  }
+
+  /**
+   * Adds a message to a task thread.
+   */
+  addMessage(taskId: string, role: 'user' | 'agent' | 'system', content: string, metadata?: Record<string, unknown>): void {
+    const id = crypto.randomUUID();
+    const timestamp = Date.now();
+
+    try {
+      this.repo.addMessage(taskId, role, content, metadata);
+      console.log(`[Queue] Added message to task ${taskId} from ${role}`);
+
+      // Update in-memory task if present
+      const task = this.repo.getById(taskId);
+      if (task) {
+        if (!task.messages) task.messages = [];
+        task.messages.push({ id, taskId, role, content, timestamp, metadata });
+      }
+    } catch (e: any) {
+      console.error(`[Queue] Failed to add message to task ${taskId}: ${e.message}`);
+    }
+  }
+
+  /**
+   * Gets message history for a task.
+   */
+  getMessages(taskId: string): any[] {
+    try {
+      return this.repo.getMessages(taskId);
+    } catch (e: any) {
+      console.error(`[Queue] Failed to get messages for task ${taskId}: ${e.message}`);
+      return [];
     }
   }
 
@@ -106,9 +151,7 @@ export class TaskQueue extends EventEmitter implements ITaskQueue {
    */
   getStats(): { total: number, completed: number } {
     try {
-      const total = db.prepare('SELECT COUNT(*) as count FROM tasks').get() as { count: number };
-      const completed = db.prepare("SELECT COUNT(*) as count FROM tasks WHERE status = 'COMPLETED'").get() as { count: number };
-      return { total: total.count, completed: completed.count };
+      return this.repo.getStats();
     } catch (e) {
       console.error("Failed to get queue stats", e);
       return { total: 0, completed: 0 };
@@ -159,29 +202,30 @@ export class TaskQueue extends EventEmitter implements ITaskQueue {
         if (resolved) return;
         resolved = true;
 
-        // Cleanup
+        // Cleanup listeners and timeout
         this.off('task', onTask);
         this.off('eviction', onEviction);
         if (timeoutTimer) clearTimeout(timeoutTimer);
-        this.waitingAgents.delete(agentId);
 
-        if (result && 'id' in result) { // It's a Task
-          this.updateStatus(result.id, 'PENDING_ACK');
-          this.pendingAcks.set(result.id, {
-            taskId: result.id,
-            agentId,
-            sentAt: Date.now()
-          });
-        }
+        // IMPORTANT: Remove from waiting list
+        // If findAndReserveAgent() matched this agent, it already deleted it.
+        // But for timeout/eviction cases, we need to clean up here.
+        // The delete() is idempotent, so safe to call even if already removed.
+        this.waitingAgents.delete(agentId);
 
         resolve(result);
       };
 
-      const onTask = (task: Task) => {
-        // Check if this task is for this agent
-        if (task.status === 'QUEUED' && this.isTaskForAgent(task, agentId, role)) {
+      const onTask = (task: Task, intendedAgentId?: string) => {
+        // This handler receives events from findAndReserveAgent
+        // The task is already reserved (PENDING_ACK status, in pendingAcks map)
+        // We just need to resolve the promise if this event is for us
+
+        // Only process if this event is specifically targeted at this agent
+        if (intendedAgentId === agentId) {
           finish(task);
         }
+        // Ignore events targeted at other agents or broadcast events
       };
 
       const onEviction = (targetId: string) => {
@@ -208,6 +252,48 @@ export class TaskQueue extends EventEmitter implements ITaskQueue {
     return false;
   }
 
+  /**
+   * Finds and reserves a matching waiting agent for a task.
+   * Atomically removes agent from waiting list and transitions task to PENDING_ACK.
+   * 
+   * @param task - The task to assign
+   * @returns agentId if match found and reserved, null otherwise
+   */
+  private findAndReserveAgent(task: Task): string | null {
+    if (this.waitingAgents.size === 0) return null;
+
+    // Shuffle agents for fairness
+    const waitingList = Array.from(this.waitingAgents.entries());
+    const shuffled = waitingList
+      .map(value => ({ value, sort: Math.random() }))
+      .sort((a, b) => a.sort - b.sort)
+      .map(({ value }) => value);
+
+    for (const [agentId, role] of shuffled) {
+      console.log(`[Queue] Checking ${agentId} with role='${role}' against task.to.role='${task.to.role}'`);
+      if (this.isTaskForAgent(task, agentId, role)) {
+        // Atomic reservation in 3 steps:
+        // 1. Transition task to PENDING_ACK and record in pendingAcks
+        this.updateStatus(task.id, 'PENDING_ACK');
+        this.pendingAcks.set(task.id, {
+          taskId: task.id,
+          agentId,
+          sentAt: Date.now()
+        });
+
+        // 2. Emit notification to agent's listener (BEFORE removing from waitingAgents!)
+        console.log(`[Queue] Reserved task ${task.id} for agent ${agentId}, notifying...`);
+        this.emit('task', task, agentId);
+
+        // 3. Remove agent from waiting list (agent's finish() will also try, but delete is idempotent)
+        this.waitingAgents.delete(agentId);
+
+        return agentId;
+      }
+    }
+    return null;
+  }
+
   // Acknowledge task receipt - transitions PENDING_ACK -> ASSIGNED
   /**
    * Acknowledges receipt of a task by an agent.
@@ -218,7 +304,7 @@ export class TaskQueue extends EventEmitter implements ITaskQueue {
    * @returns Object indicating success or failure.
    */
   ackTask(taskId: string, agentId: string): { success: boolean, error?: string } {
-    const task = this.tasks.get(taskId);
+    const task = this.repo.getById(taskId);
     if (!task) {
       return { success: false, error: 'Task not found' };
     }
@@ -239,9 +325,20 @@ export class TaskQueue extends EventEmitter implements ITaskQueue {
       return { success: false, error: `Task was sent to ${pending.agentId}, not ${agentId}` };
     }
 
-    // Transition to ASSIGNED
+    // Transition to ASSIGNED and persist assignedTo
     task.assignedTo = agentId;
-    this.updateStatus(taskId, 'ASSIGNED');
+    task.status = 'ASSIGNED';
+
+    // Record History Event
+    if (!task.history) task.history = [];
+    task.history.push({
+      timestamp: Date.now(),
+      status: 'ASSIGNED',
+      agentId: agentId,
+      message: `Task assigned to ${agentId}`
+    });
+
+    this.persistUpdate(task);
     this.pendingAcks.delete(taskId);
     console.log(`[Queue] Task ${taskId} ACKed by ${agentId}, now ASSIGNED`);
 
@@ -296,13 +393,22 @@ export class TaskQueue extends EventEmitter implements ITaskQueue {
   }
 
   updateStatus(taskId: string, status: TaskStatus, response?: any): void {
-    const task = this.tasks.get(taskId);
+    const task = this.repo.getById(taskId);
     if (task) {
       task.status = status;
       if (response) {
         task.response = response;
         task.completedAt = Date.now(); // or failedAt
       }
+
+      // Record History Event
+      if (!task.history) task.history = [];
+      task.history.push({
+        timestamp: Date.now(),
+        status,
+        agentId: task.assignedTo, // Best guess context
+        message: response ? 'Status updated with response' : `Status changed to ${status}`
+      });
 
       this.persistUpdate(task);
 
@@ -321,12 +427,7 @@ export class TaskQueue extends EventEmitter implements ITaskQueue {
    * @returns Object indicating success or failure.
    */
   cancelTask(taskId: string): { success: boolean, error?: string } {
-    let task = this.tasks.get(taskId);
-
-    // If not in memory, check DB
-    if (!task) {
-      task = this.getTaskFromDB(taskId);
-    }
+    const task = this.getTask(taskId);
 
     if (!task) {
       return { success: false, error: 'Task not found' };
@@ -338,8 +439,8 @@ export class TaskQueue extends EventEmitter implements ITaskQueue {
     }
 
     // Force load into memory if it wasn't there (so updateStatus works)
-    if (!this.tasks.has(taskId)) {
-      this.tasks.set(taskId, task);
+    if (!this.repo.getById(taskId)) {
+
     }
 
     // Update status
@@ -363,12 +464,7 @@ export class TaskQueue extends EventEmitter implements ITaskQueue {
    * @returns Object indicating success or failure.
    */
   forceRetry(taskId: string): { success: boolean, error?: string } {
-    let task = this.tasks.get(taskId);
-
-    // If not in memory, check DB
-    if (!task) {
-      task = this.getTaskFromDB(taskId);
-    }
+    const task = this.getTask(taskId);
 
     if (!task) {
       return { success: false, error: 'Task not found' };
@@ -381,19 +477,23 @@ export class TaskQueue extends EventEmitter implements ITaskQueue {
       return { success: false, error: `Task status ${task.status} is not retryable (must be active, cancelled, or failed)` };
     }
 
-    // Force load into memory if it wasn't there
-    if (!this.tasks.has(taskId)) {
-      this.tasks.set(taskId, task);
-    }
-
-    // Reset assignment
+    // Reset assignment and response (clean slate)
     task.assignedTo = undefined;
-    // Clear response/completedAt if they exist (clean slate)
     task.response = undefined;
     task.completedAt = undefined;
+    task.status = 'QUEUED';
 
-    // Update status to QUEUED
-    this.updateStatus(taskId, 'QUEUED');
+    // Record History Event
+    if (!task.history) task.history = [];
+    task.history.push({
+      timestamp: Date.now(),
+      status: 'QUEUED',
+      agentId: undefined,
+      message: 'Force-retried by admin'
+    });
+
+    // Persist directly to preserve assignedTo = undefined
+    this.persistUpdate(task);
 
     // If it was waiting for ACK, remove from pendingAcks
     if (this.pendingAcks.has(taskId)) {
@@ -421,8 +521,13 @@ export class TaskQueue extends EventEmitter implements ITaskQueue {
       params.completedAt = task.completedAt;
     }
 
+    // Always persist history and dependencies
+    updates.push('dependencies = @dependencies', 'history = @history');
+    params.dependencies = JSON.stringify(task.dependencies || []);
+    params.history = JSON.stringify(task.history || []);
+
     try {
-      db.prepare(`UPDATE tasks SET ${updates.join(', ')} WHERE id = @id`).run(params);
+      this.repo.update(task);
     } catch (e: any) {
       console.error(`[Queue] Failed to update task ${task.id}: ${e.message}`);
     }
@@ -430,7 +535,7 @@ export class TaskQueue extends EventEmitter implements ITaskQueue {
 
   // Re-queue tasks that timed out
   private requeueTask(taskId: string): void {
-    const task = this.tasks.get(taskId);
+    const task = this.repo.getById(taskId);
     if (task) {
       this.updateStatus(taskId, 'QUEUED');
       this.pendingAcks.delete(taskId);
@@ -460,7 +565,8 @@ export class TaskQueue extends EventEmitter implements ITaskQueue {
   private runSchedulerCycle(): void {
     try {
       this.requeueStuckTasks();
-      this.assignHighPriorityTasks();
+      this.checkBlockedTasks();
+      this.assignPendingTasks();
       this.rebalanceOrphanedTasks();
     } catch (e: any) {
       console.error(`[Scheduler] Cycle error: ${e.message}`);
@@ -472,31 +578,76 @@ export class TaskQueue extends EventEmitter implements ITaskQueue {
     const now = Date.now();
     for (const [taskId, pending] of this.pendingAcks.entries()) {
       if (now - pending.sentAt > ACK_TIMEOUT_MS) {
-        console.log(`[Scheduler] Task ${taskId} stuck in PENDING_ACK for >60s. Requeuing...`);
+        console.log(`[Scheduler] Task ${taskId} stuck in PENDING_ACK for >30s. Requeuing...`);
         this.forceRetry(taskId); // Reuse forceRetry logic (resets to QUEUED, cleansup)
       }
     }
   }
 
-  /** 2. Proactively assign High/Critical tasks to waiting agents */
-  private assignHighPriorityTasks(): void {
-    // Find high priority tasks that are QUEUED
-    const criticalTasks = Array.from(this.tasks.values()).filter(t =>
-      t.status === 'QUEUED' && (t.priority === 'high' || t.priority === 'critical')
-    );
+  /** 1.5. Check BLOCKED tasks for satisfied dependencies */
+  private checkBlockedTasks(): void {
+    // Get all BLOCKED tasks (they are in memory because we load them in loadFromDB)
+    const blockedTasks = this.repo.getByStatus('BLOCKED');
 
-    if (criticalTasks.length === 0) return;
+    for (const task of blockedTasks) {
+      if (!task.dependencies || task.dependencies.length === 0) {
+        // Safe guard: No deps should not be blocked
+        console.warn(`[Queue] Task ${task.id} was BLOCKED but has no dependencies. Unblocking.`);
+        this.updateStatus(task.id, 'QUEUED');
+        continue;
+      }
 
-    for (const task of criticalTasks) {
-      // Find a suitable waiting agent
-      for (const [agentId, role] of this.waitingAgents.entries()) {
-        if (this.isTaskForAgent(task, agentId, role)) {
-          console.log(`[Scheduler] Proactively assigning high-priority task ${task.id} to waiting agent ${agentId}`);
-          // Emit task event again to wake up the specific agent's waitForTask promise
-          this.emit('task', task);
-          // Note: The actual assignment (status update) happens inside waitForTask listener
-          break; // Assigned one, move to next task
-        }
+      const allMet = task.dependencies.every(depId => {
+        const dep = this.getTask(depId) || this.getTaskFromDB(depId);
+        return dep && dep.status === 'COMPLETED';
+      });
+
+      if (allMet) {
+        console.log(`[Queue] Task ${task.id} dependencies met. Unblocking -> QUEUED`);
+        this.updateStatus(task.id, 'QUEUED');
+      }
+    }
+  }
+
+  /** 2. Proactively assign ALL QUEUED tasks to waiting agents */
+  private assignPendingTasks(): void {
+    // Find all QUEUED tasks, sorted by priority and age
+    // We process ALL tasks here because if an agent is waiting, we should give them work immediately
+    const queuedTasks = this.repo.getByStatuses(['QUEUED', 'APPROVED'])
+      .sort((a: Task, b: Task) => {
+        const pScores: Record<string, number> = { critical: 3, high: 2, normal: 1 };
+        const scoreA = pScores[a.priority] || 1;
+        const scoreB = pScores[b.priority] || 1;
+        if (scoreA !== scoreB) return scoreB - scoreA; // Higher priority first
+        return a.createdAt - b.createdAt; // Older first
+      });
+
+    if (queuedTasks.length === 0) return;
+
+    // Shuffle waiting agents ONCE per cycle (or per task? per task is fairer)
+    // Actually per task is better to avoid one agent getting all "easy" tasks in a batch
+
+    console.log(`[Scheduler] assignPendingTasks: ${queuedTasks.length} queued, ${this.waitingAgents.size} waiting`);
+    if (this.waitingAgents.size > 0) {
+      const agents = Array.from(this.waitingAgents.entries()).map(([id, role]) => `${id}(${role})`).join(', ');
+      console.log(`[Scheduler] Waiting agents: ${agents}`);
+    }
+
+    for (const task of queuedTasks) {
+      if (this.waitingAgents.size === 0) {
+        console.log(`[Scheduler] No waiting agents remaining. Stopping.`);
+        break;
+      }
+
+      // Use atomic reservation to prevent race conditions
+      // NOTE: findAndReserveAgent already emits 'task' event and notifies the agent
+      const reservedAgentId = this.findAndReserveAgent(task);
+
+      if (reservedAgentId) {
+        console.log(`[Scheduler] ✓ Assigned task ${task.id} to agent ${reservedAgentId}`);
+        // Agent already notified by findAndReserveAgent - no duplicate emit needed
+      } else {
+        console.log(`[Scheduler] ✗ No matching agent for task ${task.id} (to=${JSON.stringify(task.to)})`);
       }
     }
   }
@@ -510,7 +661,7 @@ export class TaskQueue extends EventEmitter implements ITaskQueue {
     // Check their last seen status from DB
     // We do a single query for all relevant agents
     const placeholders = busyAgentIds.map(() => '?').join(',');
-    const rows = db.prepare(`SELECT id, lastSeen FROM agents WHERE id IN (${placeholders})`).all(busyAgentIds) as any[];
+    const rows = (this.repo as TaskRepository).database.prepare(`SELECT id, lastSeen FROM agents WHERE id IN (${placeholders})`).all(busyAgentIds) as any[];
 
     const now = Date.now();
     const offlineAgents = new Set<string>();
@@ -538,10 +689,10 @@ export class TaskQueue extends EventEmitter implements ITaskQueue {
     // Sort by priority (critical > high > normal) and age (oldest first)
 
     // Naive iteration for now
-    const candidates = Array.from(this.tasks.values()).filter(t => t.status === 'QUEUED');
+    const candidates = this.repo.getByStatuses(['QUEUED', 'APPROVED']);
 
     // Sort candidates
-    candidates.sort((a, b) => {
+    candidates.sort((a: Task, b: Task) => {
       const pScores: Record<string, number> = { critical: 3, high: 2, normal: 1 };
       const scoreA = pScores[a.priority] || 1;
       const scoreB = pScores[b.priority] || 1;
@@ -561,11 +712,11 @@ export class TaskQueue extends EventEmitter implements ITaskQueue {
   }
 
   getTask(taskId: string): Task | undefined {
-    return this.tasks.get(taskId);
+    return this.repo.getById(taskId) ?? undefined;
   }
 
   getAll(): Task[] {
-    return Array.from(this.tasks.values());
+    return this.repo.getActive();
   }
 
   /**
@@ -573,10 +724,10 @@ export class TaskQueue extends EventEmitter implements ITaskQueue {
    * Use with caution.
    */
   clear(): void {
-    this.tasks.clear();
+
     this.pendingAcks.clear();
     try {
-      db.prepare('DELETE FROM tasks').run();
+      this.repo.clearAll();
       console.log('[Queue] Cleared all tasks');
     } catch (e: any) {
       console.error(`[Queue] Failed to clear tasks: ${e.message}`);
@@ -603,7 +754,9 @@ export class TaskQueue extends EventEmitter implements ITaskQueue {
       response: row.response ? JSON.parse(row.response) : undefined,
       createdAt: row.createdAt,
       completedAt: row.completedAt,
-      assignedTo: row.assignedTo
+      assignedTo: row.assignedTo,
+      dependencies: row.dependencies ? JSON.parse(row.dependencies) : undefined,
+      history: row.history ? JSON.parse(row.history) : []
     };
   }
 
@@ -624,7 +777,7 @@ export class TaskQueue extends EventEmitter implements ITaskQueue {
     const busyStatus: TaskStatus[] = ['ASSIGNED', 'IN_PROGRESS', 'PENDING_ACK'];
     const busyAgents = new Set<string>();
 
-    for (const task of this.tasks.values()) {
+    for (const task of this.repo.getActive()) {
       // If task is active and assigned to a specific agent
       if (busyStatus.includes(task.status) && task.to.agentId) {
         busyAgents.add(task.to.agentId);
@@ -635,10 +788,7 @@ export class TaskQueue extends EventEmitter implements ITaskQueue {
 
   /** Get tasks assigned to or in-progress for an agent */
   getAssignedTasksForAgent(agentId: string): Task[] {
-    return Array.from(this.tasks.values()).filter(t =>
-      (t.status === 'ASSIGNED' || t.status === 'IN_PROGRESS' || t.status === 'PENDING_ACK') &&
-      (t.assignedTo === agentId || (!t.assignedTo && t.to.agentId === agentId))
-    );
+    return this.repo.getByAssignedTo(agentId);
   }
 
   /**
@@ -694,14 +844,12 @@ export class TaskQueue extends EventEmitter implements ITaskQueue {
     params.limit = limit;
     params.offset = offset;
 
-    const rows = db.prepare(query).all(params) as any[];
-    return rows.map(row => this.mapRowToTask(row));
+    return this.repo.getHistory({ status: status as TaskStatus | undefined, limit, offset, agentId });
   }
 
   /** Get a specific task from database (even if not in memory) */
   getTaskFromDB(taskId: string): Task | undefined {
-    const row = db.prepare('SELECT * FROM tasks WHERE id = @id').get({ id: taskId }) as any;
-    return row ? this.mapRowToTask(row) : undefined;
+    return this.repo.getById(taskId) || undefined;
   }
 
   // ===== Eviction Logic =====
@@ -748,7 +896,7 @@ export class TaskQueue extends EventEmitter implements ITaskQueue {
    * Returns them in CHRONOLOGICAL order (Oldest -> Newest).
    */
   getLogs(limit: number = 100): any[] {
-    const logs = db.prepare('SELECT * FROM logs ORDER BY timestamp DESC LIMIT ?').all(limit) as any[];
+    const logs = (this.repo as TaskRepository).database.prepare('SELECT * FROM logs ORDER BY timestamp DESC LIMIT ?').all(limit) as any[];
     // Reverse to get chronological order (for feed display)
     return logs.reverse().map(l => ({
       ...l,

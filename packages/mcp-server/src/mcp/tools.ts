@@ -249,16 +249,18 @@ export class ToolHandler {
       let targetRole: string | undefined; // AgentRole type
       let targetDisplayName: string | undefined;
 
-      // 1. Try ID
-      const byId = this.registry.get(params.targetAgentId);
-      if (byId) {
-        targetAgentId = byId.id;
-        targetRole = byId.role;
-        targetDisplayName = byId.displayName;
+      // 1. Try ID (if targetAgentId is provided)
+      if (params.targetAgentId) {
+        const byId = this.registry.get(params.targetAgentId);
+        if (byId) {
+          targetAgentId = byId.id;
+          targetRole = byId.role;
+          targetDisplayName = byId.displayName;
+        }
       }
 
-      // 2. Try Display Name
-      if (!targetAgentId) {
+      // 2. Try Display Name (if targetAgentId is provided but not found as ID)
+      if (!targetAgentId && params.targetAgentId) {
         const byName = this.registry.getByDisplayName(params.targetAgentId);
         if (byName) {
           targetAgentId = byName.id;
@@ -267,15 +269,19 @@ export class ToolHandler {
         }
       }
 
-      // 3. Try Role (Broadcast Mode)
+      // 3. Try Role (Broadcast Mode) - either from explicit targetRole or from targetAgentId string
       if (!targetAgentId) {
-        // Check if the input string itself is a valid role that exists in the DB
-        // getByRole returns the most recent agent, proving the role exists.
-        const byRoleSample = this.registry.getByRole(params.targetAgentId);
-        if (byRoleSample) {
-          targetRole = byRoleSample.role; // Use the canonical role from DB
-          targetDisplayName = `Role: ${targetRole}`;
-          // keeping targetAgentId undefined = BROADCAST to all agents of this role
+        // First try explicit targetRole from params
+        const roleToTry = params.targetRole || params.targetAgentId;
+        if (roleToTry) {
+          // Check if the input string itself is a valid role that exists in the DB
+          // getByRole returns the most recent agent, proving the role exists.
+          const byRoleSample = this.registry.getByRole(roleToTry);
+          if (byRoleSample) {
+            targetRole = byRoleSample.role; // Use the canonical role from DB
+            targetDisplayName = `Role: ${targetRole}`;
+            // keeping targetAgentId undefined = BROADCAST to all agents of this role
+          }
         }
       }
 

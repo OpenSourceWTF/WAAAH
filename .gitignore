@@ -35,3 +35,6 @@ Thumbs.db
 .waaah-responses
 *.db
 data/
+.worktrees/
+nginx/
+certbot/

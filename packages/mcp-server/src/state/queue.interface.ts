@@ -58,6 +58,12 @@ export interface ITaskQueue {
   /** Force retry a task */
   forceRetry(taskId: string): AckResult;
 
+  /** Add a message to a task thread */
+  addMessage(taskId: string, role: 'user' | 'agent' | 'system', content: string, metadata?: Record<string, unknown>): void;
+
+  /** Get task message history */
+  getMessages(taskId: string): any[];
+
   // ===== Agent Waiting / Long-Polling =====
 
   /** Wait for a task suitable for the agent */

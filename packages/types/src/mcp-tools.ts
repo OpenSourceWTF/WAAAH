@@ -44,7 +44,7 @@ export const MCP_TOOL_DEFINITIONS = [
         taskId: { type: 'string', description: 'The ID of the task being responded to' },
         status: {
           type: 'string',
-          enum: ['QUEUED', 'PENDING_ACK', 'ASSIGNED', 'PENDING', 'IN_PROGRESS', 'COMPLETED', 'FAILED', 'BLOCKED', 'CANCELLED'],
+          enum: ['QUEUED', 'PENDING_ACK', 'ASSIGNED', 'IN_PROGRESS', 'IN_REVIEW', 'APPROVED', 'COMPLETED', 'FAILED', 'BLOCKED', 'CANCELLED'],
           description: 'The final status of the task'
         },
         message: { type: 'string', description: 'A textual response or summary of the result' },
@@ -125,6 +125,60 @@ export const MCP_TOOL_DEFINITIONS = [
         metadata: { type: 'object', description: 'Update metadata key-values' }
       },
       required: ['agentId']
+    }
+  },
+  {
+    name: 'block_task',
+    description: 'Block the current task due to missing information or dependencies',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        taskId: { type: 'string', description: 'The ID of the task to block' },
+        reason: { type: 'string', enum: ['clarification', 'dependency', 'decision'], description: 'Category of the blocker' },
+        question: { type: 'string', description: 'The question or issue that needs resolution' },
+        summary: { type: 'string', description: 'Summary of work done so far' },
+        notes: { type: 'string', description: 'Private notes/state to help resumption' },
+        files: { type: 'array', items: { type: 'string' }, description: 'Files modified or relevant to the task' }
+      },
+      required: ['taskId', 'reason', 'question', 'summary']
+    }
+  },
+  {
+    name: 'answer_task',
+    description: 'Provide an answer to a blocked task (unblock it)',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        taskId: { type: 'string', description: 'The ID of the blocked task' },
+        answer: { type: 'string', description: 'The answer or resolution to the blocker' }
+      },
+      required: ['taskId', 'answer']
+    }
+  },
+  {
+    name: 'get_task_context',
+    description: 'Get full context for a task (prompt, history, notes)',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        taskId: { type: 'string', description: 'The ID of the task' }
+      },
+      required: ['taskId']
+    }
+  },
+  {
+    name: 'update_progress',
+    description: 'Report step-by-step progress during task execution',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        taskId: { type: 'string', description: 'ID of the task to update' },
+        agentId: { type: 'string', description: 'ID of the agent reporting progress' },
+        phase: { type: 'string', description: 'Current phase (e.g., PLANNING, BUILDING, TESTING)' },
+        message: { type: 'string', description: 'Progress observation/message' },
+        percentage: { type: 'number', description: 'Optional completion percentage (0-100)' }
+      },
+      required: ['taskId', 'agentId', 'message']
     }
   }
 ] as const;

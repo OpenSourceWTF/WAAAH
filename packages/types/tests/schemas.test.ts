@@ -29,7 +29,7 @@ describe('AgentRole', () => {
 
 describe('TaskStatus', () => {
   it('accepts all valid statuses', () => {
-    const statuses = ['QUEUED', 'PENDING_ACK', 'ASSIGNED', 'PENDING', 'IN_PROGRESS', 'COMPLETED', 'FAILED', 'BLOCKED', 'CANCELLED'];
+    const statuses = ['QUEUED', 'PENDING_ACK', 'ASSIGNED', 'IN_PROGRESS', 'IN_REVIEW', 'APPROVED', 'COMPLETED', 'FAILED', 'BLOCKED', 'CANCELLED'];
     statuses.forEach(s => expect(TaskStatus.parse(s)).toBe(s));
   });
 

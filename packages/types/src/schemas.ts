@@ -14,7 +14,8 @@ export const AgentRole = z.enum([
   'ops-engineer',
   'designer',
   'developer',
-  'code-monk'
+  'code-monk',
+  'orchestrator'
 ]);
 export type AgentRole = z.infer<typeof AgentRole>;
 
@@ -26,8 +27,9 @@ export const TaskStatus = z.enum([
   'QUEUED',
   'PENDING_ACK',
   'ASSIGNED',
-  'PENDING', // Deprecated?
   'IN_PROGRESS',
+  'IN_REVIEW',
+  'APPROVED',
   'COMPLETED',
   'FAILED',
   'BLOCKED',
@@ -91,13 +93,25 @@ export const waitForPromptSchema = createWaitForPromptSchema();
 export type WaitForPromptArgs = z.infer<typeof waitForPromptSchema>;
 
 /**
+ * Schema for workspace context - where an agent is working.
+ */
+export const workspaceContextSchema = z.object({
+  type: z.enum(['local', 'github']).describe("Workspace type"),
+  repoId: z.string().describe("Repository identifier (e.g., 'OpenSourceWTF/WAAAH')"),
+  branch: z.string().optional().describe("Current branch name"),
+  path: z.string().optional().describe("Local filesystem path")
+});
+export type WorkspaceContext = z.infer<typeof workspaceContextSchema>;
+
+/**
  * Schema for register_agent tool arguments.
  */
 export const registerAgentSchema = z.object({
   agentId: z.string().min(1).describe("Unique identifier for the agent"),
   role: AgentRole.describe("The role of the agent"),
-  displayName: z.string().optional().describe("Human-readable name for the agent"),
-  capabilities: z.array(z.string()).optional().describe("List of capabilities/tools the agent has")
+  displayName: z.string().optional().describe("Human-readable name for the agent (auto-generated if not provided)"),
+  capabilities: z.array(z.string()).optional().describe("List of capabilities/tools the agent has"),
+  workspaceContext: workspaceContextSchema.optional().describe("Workspace the agent is working in")
 });
 export type RegisterAgentArgs = z.infer<typeof registerAgentSchema>;
 
@@ -126,11 +140,15 @@ export type SendResponseArgs = z.infer<typeof sendResponseSchema>;
  * Schema for assign_task tool arguments.
  */
 export const assignTaskSchema = z.object({
-  targetAgentId: z.string().min(1).describe("The ID of the agent to assign the task to"),
-  sourceAgentId: z.string().min(1).describe("The ID of the agent assigning the task"),
+  targetAgentId: z.string().min(1).optional().describe("The ID of the agent to assign the task to (optional if role provided)"),
+  targetRole: z.string().min(1).optional().describe("The role to target (optional if agentId provided)"),
+  sourceAgentId: z.string().min(1).optional().default('Da Boss').describe("The ID of the agent assigning the task (defaults to 'Da Boss')"),
   prompt: z.string().min(1).describe("The task description/prompt"),
   context: z.record(z.unknown()).optional().describe("Additional context data for the task"),
-  priority: z.enum(['high', 'normal', 'critical']).optional().default('normal').describe("Task priority")
+  priority: z.enum(['high', 'normal', 'critical']).optional().default('normal').describe("Task priority"),
+  dependencies: z.array(z.string()).optional().describe("List of Task IDs that must complete before this task starts")
+}).refine(data => data.targetAgentId || data.targetRole, {
+  message: "Either targetAgentId or targetRole must be provided"
 });
 export type AssignTaskArgs = z.infer<typeof assignTaskSchema>;
 
@@ -168,3 +186,64 @@ export const adminUpdateAgentSchema = z.object({
   metadata: z.record(z.unknown()).optional().describe("Update metadata key-values")
 });
 export type AdminUpdateAgentArgs = z.infer<typeof adminUpdateAgentSchema>;
+
+/**
+ * Schema for block_task tool arguments.
+ */
+export const blockTaskSchema = z.object({
+  taskId: z.string().min(1).describe("The ID of the task to block"),
+  reason: z.enum(['clarification', 'dependency', 'decision']).describe("Category of the blocker"),
+  question: z.string().min(1).describe("The question or issue that needs resolution"),
+  summary: z.string().min(1).describe("Summary of work done so far"),
+  notes: z.string().optional().describe("Private notes/state to help resumption"),
+  files: z.array(z.string()).optional().describe("Files modified or relevant to the task")
+});
+export type BlockTaskArgs = z.infer<typeof blockTaskSchema>;
+
+/**
+ * Schema for answer_task tool arguments.
+ */
+export const answerTaskSchema = z.object({
+  taskId: z.string().min(1).describe("The ID of the blocked task"),
+  answer: z.string().min(1).describe("The answer or resolution to the blocker")
+});
+export type AnswerTaskArgs = z.infer<typeof answerTaskSchema>;
+
+/**
+ * Schema for get_task_context tool arguments.
+ */
+export const getTaskContextSchema = z.object({
+  taskId: z.string().min(1).describe("The ID of the task")
+});
+export type GetTaskContextArgs = z.infer<typeof getTaskContextSchema>;
+
+
+// Worktree Tools
+
+
+
+
+export const scaffoldPlanSchema = z.object({
+  taskId: z.string().min(1).describe("The Task ID context for the plan")
+});
+export type ScaffoldPlanArgs = z.infer<typeof scaffoldPlanSchema>;
+
+export const submitReviewSchema = z.object({
+  taskId: z.string().min(1).describe("The Task ID being submitted"),
+  message: z.string().min(1).describe("Commit message and review description"),
+  runTests: z.boolean().optional().default(true).describe("Whether to enforce test execution")
+});
+export type SubmitReviewArgs = z.infer<typeof submitReviewSchema>;
+
+/**
+ * Schema for update_progress tool arguments.
+ * Allows agents to report step-by-step observations during task execution.
+ */
+export const updateProgressSchema = z.object({
+  taskId: z.string().min(1).describe("ID of the task to update"),
+  agentId: z.string().min(1).describe("ID of the agent reporting progress"),
+  phase: z.string().optional().describe("Current phase (e.g., PLANNING, BUILDING, TESTING)"),
+  message: z.string().min(1).describe("Progress observation/message"),
+  percentage: z.number().min(0).max(100).optional().describe("Optional completion percentage")
+});
+export type UpdateProgressArgs = z.infer<typeof updateProgressSchema>;

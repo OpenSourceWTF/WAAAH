@@ -84,12 +84,13 @@ vi.mock('../src/state/db.js', () => {
 });
 
 import { AgentRegistry } from '../src/state/registry.js';
+import { db } from '../src/state/db.js';
 
 describe('AgentRegistry', () => {
   let registry: AgentRegistry;
 
   beforeEach(() => {
-    registry = new AgentRegistry();
+    registry = new AgentRegistry(db);
   });
 
   describe('register', () => {

@@ -1,24 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-
-// Mock the database before importing queue
-vi.mock('../src/state/db.js', () => {
-  const mockPrepare = vi.fn().mockReturnValue({
-    run: vi.fn(),
-    get: vi.fn(),
-    all: vi.fn().mockReturnValue([])
-  });
-
-  return {
-    db: {
-      prepare: mockPrepare,
-      exec: vi.fn()
-    }
-  };
-});
-
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { TaskQueue } from '../src/state/queue.js';
 import { Task } from '@opensourcewtf/waaah-types';
-import { db } from '../src/state/db.js';
+import { createTestContext, TestContext } from './harness.js';
 
 // Helper to create mock tasks
 function mockTask(overrides: Partial<Task> = {}): Task {
@@ -36,10 +19,16 @@ function mockTask(overrides: Partial<Task> = {}): Task {
 }
 
 describe('TaskQueue', () => {
+  let ctx: TestContext;
   let queue: TaskQueue;
 
   beforeEach(() => {
-    queue = new TaskQueue();
+    ctx = createTestContext();
+    queue = ctx.queue;
+  });
+
+  afterEach(() => {
+    ctx.cleanup();
   });
 
   describe('enqueue', () => {
@@ -49,15 +38,23 @@ describe('TaskQueue', () => {
       expect(queue.getTask('enqueue-test-1')).toBeDefined();
     });
 
-    it('emits task event on enqueue', async () => {
-      const task = mockTask({ id: 'emit-test-1' });
-      const eventPromise = new Promise<Task>((resolve) => {
-        queue.once('task', resolve);
-      });
+    it('emits task event when waiting agent matches', async () => {
+      const task = mockTask({ id: 'emit-test-1', to: { role: 'developer' } });
 
+      // Start waiting for a task first (like an agent would)
+      const waitPromise = queue.waitForTask('test-agent', 'developer', 1000);
+
+      // Give the listener time to register
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      // Now enqueue - should trigger event to waiting agent
       queue.enqueue(task);
-      const emittedTask = await eventPromise;
-      expect(emittedTask.id).toBe('emit-test-1');
+
+      const receivedTask = await waitPromise;
+      expect(receivedTask).not.toBeNull();
+      if (receivedTask && 'id' in receivedTask) {
+        expect(receivedTask.id).toBe('emit-test-1');
+      }
     });
 
     it('sets status to QUEUED', () => {
@@ -415,38 +412,16 @@ describe('TaskQueue', () => {
       it('returns correct counts with mixed status tasks', () => {
         // Mock db.prepare.get to return dynamic values based on query
         // This is tricky with current mock setup in beforeEach/top-level
-        // Re-configuring the mock for this specific test
-        const mockGet = vi.fn()
-          .mockReturnValueOnce({ count: 5 })  // First call: total
-          .mockReturnValueOnce({ count: 2 }); // Second call: completed
+        // Create some tasks and complete one
+        const task1 = mockTask({ id: 'stats-task-1' });
+        const task2 = mockTask({ id: 'stats-task-2' });
+        queue.enqueue(task1);
+        queue.enqueue(task2);
+        queue.updateStatus('stats-task-1', 'COMPLETED');
 
-        // Access the mock from the imported module to override implementation
-        const keys = Object.keys(db); // Just to verify connection, but we need to access the spy
-        // Since we mocked via vi.mock at top, we need to grab the mock function handles if exposed
-        // Or rely on the fact that queue.getStats calls db.prepare().get()
-
-        // We know from top level mock:
-        // prepare returns { run, get, all }
-        // We need to customize 'get' return value
-
-        // Let's spy on the db.prepare that is actually used
-        // The mock at the top returns a specific object structure.
-        // We can't easily change the return values of the *inner* methods of that mock from here without improved mocking setup.
-        // However, the top mock sets 'get' to vi.fn().
-
-        // Let's try to update the implementation of the mockPrepare's returned object's get method?
-        // Actually the mock is defined in the factory. We need a way to control it.
-        // In the top mock: const mockPrepare = vi.fn().mockReturnValue({ run: ..., get: vi.fn(), ... })
-
-        // Since we can't easily reach into the closure of the factory, let's skip complex mocking for now
-        // and just verify it calls the DB correctly, or use a workaround if possible.
-        // Actually we CANNOT easily test the return values without exporting the mocks from the mock factory.
-
-        // ALTERNATIVE: checking that it CALLS db.prepare with correct SQL.
-
-        // Let's just verify it calls prepared statements.
-        queue.getStats();
-        expect(db.prepare).toHaveBeenCalledWith(expect.stringContaining('SELECT COUNT(*)'));
+        const stats = queue.getStats();
+        expect(stats.total).toBe(2);
+        expect(stats.completed).toBe(1);
       });
     });
   });

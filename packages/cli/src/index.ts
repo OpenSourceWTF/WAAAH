@@ -15,6 +15,7 @@ import {
   formatSingleAgentStatus
 } from './utils/index.js';
 import { restartCommand } from './commands/restart.js';
+import { assignCommand } from './commands/assign.js';
 
 const program = new Command();
 
@@ -24,6 +25,7 @@ program
   .version('0.0.1');
 
 program.addCommand(restartCommand);
+program.addCommand(assignCommand);
 
 let activeRl: readline.Interface | null = null;
 
@@ -82,6 +84,25 @@ program
       if (options.wait) {
         await pollTaskResponse(response.taskId);
       }
+    } catch (error) {
+      handleError(error);
+    }
+  });
+
+// Answer a blocked task
+program
+  .command('answer <taskId> <answer...>')
+  .description('Provide an answer to a blocked task')
+  .action(async (taskId: string, answerParts: string[]) => {
+    const answer = answerParts.join(' ');
+    try {
+      const response = await apiCall<any>('post', '/mcp/tools/answer_task', {
+        taskId,
+        answer
+      });
+      // The tool returns content array
+      const text = response.content?.[0]?.text || 'Answer recorded.';
+      console.log(`✅ ${text}`);
     } catch (error) {
       handleError(error);
     }

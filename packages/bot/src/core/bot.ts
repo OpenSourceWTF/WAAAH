@@ -2,22 +2,12 @@
  * Bot Core - Shared logic for all platforms
  */
 import axios from 'axios';
-import fs from 'fs';
-import yaml from 'js-yaml';
 import { PlatformAdapter, MessageContext, TaskResponse } from '../adapters/interface.js';
 
 export interface BotCoreConfig {
   mcpServerUrl: string;
   apiKey?: string;
-  configPath?: string;
   delegationChannelId?: string;
-}
-
-interface AgentsYaml {
-  agents: Record<string, {
-    displayName?: string;
-    aliases?: string[];
-  }>;
 }
 
 export class BotCore {
@@ -31,41 +21,26 @@ export class BotCore {
     if (config.apiKey) {
       axios.defaults.headers.common['X-API-Key'] = config.apiKey;
     }
-
-    // Load role aliases
-    if (config.configPath) {
-      this.loadRoleAliases(config.configPath);
-    }
   }
 
-  private loadRoleAliases(configPath: string): void {
+  private async loadDynamicAliases(): Promise<void> {
     try {
-      const content = fs.readFileSync(configPath, 'utf8');
-      const config = yaml.load(content) as AgentsYaml;
-
-      if (config?.agents) {
-        for (const [roleName, agentConfig] of Object.entries(config.agents)) {
-          // Add displayName as alias (e.g., @fullstack -> full-stack-engineer)
-          if (agentConfig.displayName) {
-            const displayLower = agentConfig.displayName.toLowerCase();
-            this.roleAliases[displayLower] = roleName;
-            // Also without @ prefix
+      const resp = await axios.get(`${this.config.mcpServerUrl}/admin/agents/status`);
+      if (Array.isArray(resp.data)) {
+        for (const agent of resp.data) {
+          if (agent.displayName && agent.role) {
+            const displayLower = agent.displayName.toLowerCase();
+            this.roleAliases[displayLower] = agent.role;
+            // Also map without @ prefix
             if (displayLower.startsWith('@')) {
-              this.roleAliases[displayLower.slice(1)] = roleName;
-            }
-          }
-          // Add configured aliases
-          if (agentConfig.aliases) {
-            for (const alias of agentConfig.aliases) {
-              this.roleAliases[`@${alias.toLowerCase()}`] = roleName;
-              this.roleAliases[alias.toLowerCase()] = roleName;
+              this.roleAliases[displayLower.slice(1)] = agent.role;
             }
           }
         }
+        console.log(`[Bot] Loaded ${Object.keys(this.roleAliases).length} dynamic role aliases from MCP`);
       }
-      console.log(`[Bot] Loaded ${Object.keys(this.roleAliases).length} role aliases`);
     } catch (e: any) {
-      console.error(`[Bot] Failed to load config: ${e.message}`);
+      console.warn(`[Bot] Failed to load dynamic aliases: ${e.message}`);
     }
   }
 
@@ -74,6 +49,7 @@ export class BotCore {
     this.adapter.onMessage(this.handleMessage.bind(this));
 
     // Connect to platform
+    await this.loadDynamicAliases();
     await this.adapter.connect();
     console.log(`[Bot] Connected to ${this.adapter.platform}`);
     console.log(`[Bot] MCP Server: ${this.config.mcpServerUrl}`);
@@ -92,6 +68,11 @@ export class BotCore {
     // Handle admin commands
     if (command.startsWith('update')) {
       await this.handleUpdateCommand(normalized, context);
+      return;
+    }
+
+    if (command.startsWith('answer')) {
+      await this.handleAnswerCommand(normalized, context);
       return;
     }
 
@@ -238,6 +219,28 @@ export class BotCore {
       await this.adapter.reply(context, '✅ Queue cleared.');
     } catch {
       await this.adapter.reply(context, '❌ Failed to clear queue.');
+    }
+  }
+
+  private async handleAnswerCommand(content: string, context: MessageContext): Promise<void> {
+    // Format: answer <taskId> <answer text>
+    const args = content.split(' ');
+    const taskId = args[1];
+    const answer = args.slice(2).join(' ');
+
+    if (!taskId || !answer) {
+      await this.adapter.reply(context, '❌ Usage: `answer <taskId> <answer text>`');
+      return;
+    }
+
+    try {
+      await axios.post(`${this.config.mcpServerUrl}/mcp/tools/answer_task`, {
+        taskId,
+        answer
+      });
+      await this.adapter.reply(context, `✅ Answered task ${taskId}`);
+    } catch (e: any) {
+      await this.adapter.reply(context, `❌ Failed to answer task: ${e.response?.data?.error || e.message}`);
     }
   }
 

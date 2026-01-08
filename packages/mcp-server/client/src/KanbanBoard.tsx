@@ -31,7 +31,8 @@ interface KanbanBoardProps {
 const COLUMNS = [
   { id: 'TODO', label: 'TODO', statuses: ['QUEUED', 'PENDING_ACK'] },
   { id: 'IN_PROGRESS', label: 'IN PROGRESS', statuses: ['ASSIGNED', 'IN_PROGRESS', 'PROCESSING'] },
-  { id: 'REVIEW', label: 'IN REVIEW', statuses: ['BLOCKED', 'PENDING_RES', 'REVIEW', 'IN_REVIEW', 'PENDING'] },
+  { id: 'REVIEW', label: 'IN REVIEW', statuses: ['BLOCKED', 'PENDING_RES', 'REVIEW', 'IN_REVIEW'] },
+  { id: 'APPROVED', label: 'APPROVED', statuses: ['APPROVED'] },
   { id: 'DONE', label: 'DONE', statuses: ['COMPLETED'] },
   { id: 'CANCELLED', label: 'CANCELLED', statuses: ['CANCELLED', 'FAILED'] }
 ];
@@ -44,6 +45,7 @@ export function KanbanBoard({ tasks, completedTasks, cancelledTasks, onCancelTas
       TODO: [],
       IN_PROGRESS: [],
       REVIEW: [],
+      APPROVED: [],
       DONE: [...completedTasks], // Pre-fill with passed completed tasks
       CANCELLED: [...cancelledTasks]
     };
@@ -87,9 +89,10 @@ export function KanbanBoard({ tasks, completedTasks, cancelledTasks, onCancelTas
       case 'PENDING_ACK':
       case 'WAITING': return `${base} bg-yellow-500 text-black border-yellow-700`;
       case 'BLOCKED':
-      case 'PENDING':
       case 'PENDING_RES':
-      case 'REVIEW': return `${base} bg-white text-black border-gray-400`;
+      case 'REVIEW':
+      case 'IN_REVIEW': return `${base} bg-white text-black border-gray-400`;
+      case 'APPROVED': return `${base} bg-green-400 text-black border-green-600`;
       default: return `${base} bg-gray-600 text-white`;
     }
   };

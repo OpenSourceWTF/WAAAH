@@ -1,35 +1,29 @@
-import { describe, it, expect, beforeEach, afterAll } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { ToolHandler } from '../src/mcp/tools.js';
 import { AgentRegistry } from '../src/state/registry.js';
 import { TaskQueue } from '../src/state/queue.js';
-import { db } from '../src/state/db.js';
+import { createTestContext, TestContext } from './harness.js';
 
 describe('ToolHandler', () => {
+  let ctx: TestContext;
   let registry: AgentRegistry;
   let queue: TaskQueue;
   let tools: ToolHandler;
-  const createdAgentIds: string[] = [];
 
   // Generate unique IDs to avoid conflicts with persistent data
   const uid = () => {
-    const id = `tooltest-${Date.now()}-${Math.random().toString(36).substring(7)}`;
-    createdAgentIds.push(id);
-    return id;
+    return `tooltest-${Date.now()}-${Math.random().toString(36).substring(7)}`;
   };
 
   beforeEach(() => {
-    registry = new AgentRegistry();
-    queue = new TaskQueue();
+    ctx = createTestContext();
+    registry = ctx.registry;  // Use the harness registry (isolated DB)
+    queue = ctx.queue;
     tools = new ToolHandler(registry, queue);
-    queue.clear();
   });
 
-  afterAll(() => {
-    // Clean up test agents after all tests complete
-    for (const id of createdAgentIds) {
-      db.prepare("DELETE FROM agents WHERE id = ?").run(id);
-    }
-    db.prepare("DELETE FROM agents WHERE id LIKE 'tooltest-%'").run();
+  afterEach(() => {
+    ctx.cleanup();
   });
 
   describe('register_agent', () => {
@@ -296,22 +290,7 @@ describe('ToolHandler', () => {
     });
   });
 
-  describe('list_connected_agents', () => {
-    it('returns agents with status info', async () => {
-      const id1 = uid();
-      registry.register({ id: id1, role: 'developer', displayName: '@Dev1' });
-      registry.heartbeat(id1);
 
-      const result = await tools.list_connected_agents({});
-      const agents = JSON.parse(result.content[0].text);
-
-      expect(Array.isArray(agents)).toBe(true);
-      if (agents.length > 0) {
-        expect(agents[0]).toHaveProperty('status');
-        expect(agents[0]).toHaveProperty('agentId');
-      }
-    });
-  });
 
   describe('handleError', () => {
     it('formats error messages', async () => {

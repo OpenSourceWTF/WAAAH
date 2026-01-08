@@ -20,16 +20,16 @@ export WAAAH_API_KEY=your_key
 pnpm cli
 
 # Send a task
-pnpm cli send fullstack-1 "Implement the login page"
+pnpm cli send orchestrator-1 "Implement the login page"
 
 # Send with priority
-pnpm cli send fullstack-1 "Fix critical bug" --priority high
+pnpm cli send orchestrator-1 "Fix critical bug" --priority high
 
 # List agents
 pnpm cli list-agents
 
 # Check agent status
-pnpm cli status fullstack-1
+pnpm cli status orchestrator-1
 
 # Debug server state
 pnpm cli debug

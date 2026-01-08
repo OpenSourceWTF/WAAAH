@@ -8,6 +8,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { AgentRegistry } from './state/registry.js';
 import { TaskQueue } from './state/queue.js';
+import { db } from './state/db.js';
 import { ToolHandler } from './mcp/tools.js';
 import { scanPrompt, getSecurityContext } from './security/prompt-scanner.js';
 import { eventBus, emitActivity } from './state/events.js';
@@ -24,8 +25,8 @@ const PORT = process.env.WAAAH_PORT || process.env.PORT || 3000;
 const API_KEY = process.env.WAAAH_API_KEY;
 const WORKSPACE_ROOT = process.env.WORKSPACE_ROOT || process.cwd();
 
-const registry = new AgentRegistry();
-const queue = new TaskQueue();
+const registry = new AgentRegistry(db);
+const queue = new TaskQueue(db);
 queue.startScheduler();
 
 // Track active bot connections (SSE streams)
@@ -275,33 +276,26 @@ app.get('/admin/tasks/:taskId/diff', async (req, res) => {
   }
 });
 
-// POST Approve
+// POST Approve - Server only updates status; agent performs merge
 app.post('/admin/tasks/:taskId/approve', async (req, res) => {
   const { taskId } = req.params;
-  const branchName = `feature-${taskId}`;
-  const worktreePath = path.join(WORKSPACE_ROOT, '.worktrees', branchName);
 
   try {
-    console.log(`[Review] Approving task ${taskId} (Merging ${branchName})...`);
+    console.log(`[Review] Approving task ${taskId}...`);
 
-    // 1. Merge (Assuming Fast-Forward or Squash)
-    // We need to run this in the ROOT, not the worktree
-    await execAsync(`git checkout main && git merge ${branchName}`, { cwd: WORKSPACE_ROOT });
-
-    // 2. Cleanup Worktree
-    await execAsync(`git worktree remove ${worktreePath} --force`, { cwd: WORKSPACE_ROOT }).catch(() => { });
-
-    // 3. Delete Branch
-    await execAsync(`git branch -d ${branchName}`, { cwd: WORKSPACE_ROOT }).catch(() => { });
-
-    // 4. Update Task Status
     const task = queue.getTask(taskId);
-    if (task) {
-      queue.updateStatus(taskId, 'COMPLETED');
-      // updateStatus handles persistence
+    if (!task) {
+      res.status(404).json({ error: 'Task not found' });
+      return;
     }
 
-    res.json({ success: true, message: 'Task approved and merged' });
+    // Add approval comment
+    queue.addMessage(taskId, 'system', 'Task approved. Agent should merge to main and cleanup.');
+
+    // Transition to APPROVED - agent will handle merge and mark COMPLETED
+    queue.updateStatus(taskId, 'APPROVED');
+
+    res.json({ success: true, message: 'Task approved. Awaiting agent merge.' });
   } catch (e: any) {
     console.error(`Approve failed for ${taskId}:`, e.message);
     res.status(500).json({ error: 'Failed to approve task', details: e.message });
@@ -311,26 +305,30 @@ app.post('/admin/tasks/:taskId/approve', async (req, res) => {
 // POST Reject
 app.post('/admin/tasks/:taskId/reject', async (req, res) => {
   const { taskId } = req.params;
-  const { reason } = req.body;
+  const { feedback } = req.body;
+
+  if (!feedback) {
+    res.status(400).json({ error: 'Feedback is required for rejection' });
+    return;
+  }
 
   try {
     console.log(`[Review] Rejecting task ${taskId}...`);
 
-    // Update Status -> QUEUED (Send back to pool)
-    // Append rejection note to prompt or context? 
-    // Ideally append to contexts/messages.
-    const task = queue.getTask(taskId);
-    if (task) {
-      queue.updateStatus(taskId, 'QUEUED');
-      // Add rejection message
-      queue.addMessage(taskId, 'system', `[REVIEW REJECTION] ${reason || 'Changes requested.'}`);
-    }
+    // 1. Add Feedback Comment
+    queue.addMessage(taskId, 'user', `Task Rejected: ${feedback}`);
 
-    res.json({ success: true, message: 'Task rejected and requeued' });
+    // 2. Update Status -> IN_PROGRESS (Allows Agent to Resume)
+    // Do NOT delete worktree - Agent will resume work there
+    queue.updateStatus(taskId, 'IN_PROGRESS');
+
+    res.json({ success: true, message: 'Task rejected and returned to agent' });
   } catch (e: any) {
-    res.status(500).json({ error: 'Failed to reject task' });
+    console.error(`Reject failed for ${taskId}:`, e.message);
+    res.status(500).json({ error: 'Failed to reject task', details: e.message });
   }
 });
+
 
 // Long-polling endpoint for task completion events
 // TODO: Implement proper EventEmitter-based long-polling (see implementation_plan.md)

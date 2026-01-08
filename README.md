@@ -150,7 +150,7 @@ Run the orchestration server and bot for your team:
 
 5. **Start Your First Delegation (Antigravity)**
    1. Open your project in Antigravity
-   2. **Conversation 1**: Run `/waaah-fullstack` → Wait until it says "Waiting for prompt"
+   2. **Conversation 1**: Run `/waaah-orchestrator` → Wait until it says "Waiting for prompt"
    3. **Conversation 2**: Run `/waaah-boss` → Start with:
       ```
       Delegate the creation of this new feature: [your feature description]
@@ -201,12 +201,10 @@ Connect your AI agent to a WAAAH server:
 2. **Initialize your agent** with a workflow command:
    | Command | Role |
    |---------|------|
-   | `/waaah-fullstack` | Full Stack Engineer (autonomous loop) |
-   | `/waaah-pm` | Project Manager (autonomous loop) |
-   | `/waaah-tester` | Test Engineer (autonomous loop) |
-   | `/waaah-boss` | **Tech Lead** (orchestrator—pair with you) |
+   | `/waaah-orchestrator` | **Orchestrator** (Unified PM/Dev/Test Loop) |
+   | `/waaah-boss` | **Tech Lead** (Pair Programming Co-pilot) |
 
-3. **Start receiving tasks** — worker agents enter an autonomous loop via `wait_for_prompt`. The Boss stays interactive.
+3. **Start receiving tasks** — The Orchestrator enters an autonomous loop via `wait_for_prompt`. The Boss stays interactive.
 
 > [!TIP]
 > **Copy workflows to your project** for `/waaah-*` commands:

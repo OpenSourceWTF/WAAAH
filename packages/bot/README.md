@@ -62,18 +62,16 @@ All commands require mentioning the bot first (`@WAAAH` in Discord, `@waaah` in 
 | Command | Example | Description |
 |---------|---------|-------------|
 | `<prompt>` | `@WAAAH Build a login page` | Enqueue task for any available agent |
-| `@<role> <prompt>` | `@WAAAH @FullStack Add OAuth` | Route to specific role |
-| `update <agent> [name=X] [color=#HEX]` | `@WAAAH update pm-1 color=#FF5733` | Update agent display settings |
+| `@<role> <prompt>` | `@WAAAH @Orchestrator Add OAuth` | Route to specific role |
+| `update <agent> [name=X] [color=#HEX]` | `@WAAAH update orchestrator-1 color=#FF5733` | Update agent display settings |
 | `clear` | `@WAAAH clear` | Clear the task queue |
 
 ### Role Aliases
 
 Target agents using their display name or role:
-- `@FullStack` → `full-stack-engineer`
+- `@Orchestrator` → `orchestrator`
 - `@PM` → `project-manager`
-- `@TestEng` → `test-engineer`
-- `@Ops` → `ops-engineer`
-- `@Designer` → `designer`
+- `@FullStack` → `full-stack-engineer`
 
 ### Priority
 
