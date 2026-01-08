@@ -149,8 +149,10 @@ Run the orchestration server and bot for your team:
    http://localhost:3000/admin
    ```
 
-4. **Start Your First Delegation (Antigravity)**
-   1. Open the MCP Server project in Antigravity
+4. **Set Up MCP** — Follow the [Connecting Agents](#-connecting-agents) section to add the WAAAH MCP proxy to your Antigravity config.
+
+5. **Start Your First Delegation (Antigravity)**
+   1. Open your project in Antigravity
    2. **Conversation 1**: Run `/waaah-fullstack` → Wait until it says "Waiting for prompt"
    3. **Conversation 2**: Run `/waaah-boss` → Start with:
       ```
