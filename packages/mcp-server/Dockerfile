@@ -13,6 +13,8 @@ RUN pnpm --filter @opensourcewtf/waaah-mcp-server deploy --prod --legacy /prod/m
 
 FROM base AS mcp-server
 COPY --from=build /prod/mcp-server /app
+# Copy the built admin dashboard to expected path (server.ts expects /app/packages/mcp-server/public)
+COPY --from=build /usr/src/app/packages/mcp-server/public /app/packages/mcp-server/public
 WORKDIR /app
 EXPOSE 3000
 CMD [ "node", "dist/server.js" ]
