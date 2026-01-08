@@ -41,15 +41,17 @@ export class AgentRegistry {
     }
 
     // Upsert agent with finalId
+    const now = Date.now();
     const stmt = db.prepare(`
-      INSERT INTO agents (id, role, displayName, lastSeen, capabilities)
-      VALUES (@id, @role, @displayName, @lastSeen, @capabilities)
+      INSERT INTO agents (id, role, displayName, lastSeen, capabilities, createdAt)
+      VALUES (@id, @role, @displayName, @lastSeen, @capabilities, @createdAt)
       ON CONFLICT(id) DO UPDATE SET
         lastSeen = @lastSeen,
         capabilities = @capabilities
         -- Note: We generally don't overwrite displayName or role on re-register 
         -- to preserve user renames, unless explicit logic is added.
         -- But capabilities/heartbeat should update.
+        -- createdAt is preserved on conflict (not in UPDATE SET)
     `);
 
     // Check if we need to preserve an existing manual rename?
@@ -63,8 +65,9 @@ export class AgentRegistry {
         id: finalId,
         role: agent.role,
         displayName: agent.displayName,
-        lastSeen: Date.now(),
-        capabilities: JSON.stringify(agent.capabilities || [])
+        lastSeen: now,
+        capabilities: JSON.stringify(agent.capabilities || []),
+        createdAt: now // For new agents; preserved on conflict
       });
 
       // Also ensure aliases exist for this agent ID (like its displayName)
@@ -266,7 +269,7 @@ export class AgentRegistry {
     }
   }
 
-  private mapRowToIdentity(row: any): AgentIdentity & { id: string; color?: string; lastSeen?: number } {
+  private mapRowToIdentity(row: any): AgentIdentity & { id: string; color?: string; lastSeen?: number; createdAt?: number } {
     return {
       id: row.id,
       role: row.role as AgentRole,
@@ -274,7 +277,8 @@ export class AgentRegistry {
       capabilities: JSON.parse(row.capabilities || '[]'),
       // Add extra props that might not be in the strict AgentIdentity type yet
       color: row.color,
-      lastSeen: row.lastSeen
+      lastSeen: row.lastSeen,
+      createdAt: row.createdAt
     };
   }
 

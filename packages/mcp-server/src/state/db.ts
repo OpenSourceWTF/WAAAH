@@ -29,6 +29,7 @@ db.exec(`
     color TEXT,
     capabilities TEXT, -- JSON array
     lastSeen INTEGER,
+    createdAt INTEGER, -- When agent first registered
     eviction_requested BOOLEAN DEFAULT 0,
     eviction_reason TEXT,
     canDelegateTo TEXT -- JSON array
@@ -118,7 +119,17 @@ if (!agentColumns.some(c => c.name === 'eviction_reason')) {
     }
   }
 }
-
+if (!agentColumns.some(c => c.name === 'createdAt')) {
+  console.log('[DB] Migrating: Adding createdAt column to agents table');
+  try {
+    db.prepare('ALTER TABLE agents ADD COLUMN createdAt INTEGER').run();
+    console.log('Migrated agents table: added createdAt column');
+  } catch (e: any) {
+    if (!e.message.includes('duplicate column name')) {
+      console.error('Migration failed (createdAt):', e);
+    }
+  }
+}
 interface AgentConfig {
   displayName?: string;
   aliases?: string[];

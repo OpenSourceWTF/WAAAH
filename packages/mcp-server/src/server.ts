@@ -402,7 +402,7 @@ app.post('/admin/evict', (req, res) => {
   res.json({ success: true, message: `Eviction queued for ${agentId}` });
 });
 
-// Get all agents with their connection status
+// Get all agents with their connection status (full metadata for Dashboard)
 app.get('/admin/agents/status', async (req, res) => {
   const agents = registry.getAll();
   const waitingAgents = queue.getWaitingAgents();
@@ -421,12 +421,16 @@ app.get('/admin/agents/status', async (req, res) => {
     }
 
     return {
-      agentId: agent.id,
+      id: agent.id,
       displayName: agent.displayName,
       role: agent.role,
       status,
       lastSeen,
-      currentTasks: assignedTasks.map(t => t.id)
+      currentTasks: assignedTasks.map(t => t.id),
+      // Extended metadata for expandable agent cards
+      capabilities: agent.capabilities || [],
+      createdAt: agent.createdAt,
+      color: agent.color
     };
   });
 
