@@ -172,6 +172,9 @@ On startup, WAAAH creates `data/waaah.db`, runs migrations, and seeds agents fro
 
 2. **Edit `.env` to set your tokens** — see [`.env.example`](.env.example) for the full list of environment variables.
 
+> [!TIP]
+> **API Key is optional for local development.** If `WAAAH_API_KEY` is not set, the server runs in dev mode with auth disabled.
+
 ---
 
 ## 🤝 Connecting Agents
