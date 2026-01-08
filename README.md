@@ -288,6 +288,8 @@ This is a monorepo managed with `pnpm workspaces`.
 
 ### Docker Commands
 
+#### Production (with SSL)
+
 | Script | Description |
 |--------|-------------|
 | `pnpm docker:build` | Build all Docker images |
@@ -295,39 +297,44 @@ This is a monorepo managed with `pnpm workspaces`.
 | `pnpm docker:down` | Stop all containers |
 | `pnpm docker:logs` | Follow container logs |
 | `pnpm docker:restart` | Restart containers (no rebuild) |
-| `pnpm docker:reload` | Stop, rebuild, and restart (use after code changes) |
+| `pnpm docker:reload` | Stop, rebuild, and restart |
 | `pnpm docker:ps` | Show container status |
 
-#### Docker Quick Start
+#### Local Development (no SSL)
+
+| Script | Description |
+|--------|-------------|
+| `pnpm docker:local:up` | Start local stack |
+| `pnpm docker:local:down` | Stop local stack |
+| `pnpm docker:local:build` | Build containers |
+| `pnpm docker:local:logs` | View logs |
+| `pnpm docker:local:reload` | Full rebuild and restart |
+
+#### Docker Quick Start (Local)
 
 ```bash
 # First time setup
 cp .env.example .env
 # Edit .env with your tokens
 
-# Build and start
-pnpm docker:build
-pnpm docker:up
+# Build and start (local, no SSL)
+pnpm docker:local:build
+pnpm docker:local:up
 
 # View logs
-pnpm docker:logs
+pnpm docker:local:logs
 
 # After code changes
-pnpm docker:reload
+pnpm docker:local:reload
 ```
 
-#### Docker Services
+#### Access Points (Local)
 
-| Service | Port | Description |
-|---------|------|-------------|
-| `waaah-server` | 3000 | MCP Server + Admin Dashboard |
-| `waaah-bot` | - | Discord/Slack Bot |
-| `nginx` | 80, 443 | Reverse proxy with SSL (production) |
-| `certbot` | - | SSL certificate management |
-
-> [!NOTE]
-> **Local Development**: Access the server directly at `http://localhost:3000`. 
-> The nginx container requires SSL certificates (see Production Deployment).
+| URL | Description |
+|-----|-------------|
+| `http://localhost:80` | Through nginx proxy |
+| `http://localhost:80/admin` | Admin Dashboard |
+| `http://localhost:3000` | Direct server access |
 
 ---
 
