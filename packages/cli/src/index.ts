@@ -15,6 +15,8 @@ import {
   formatSingleAgentStatus
 } from './utils/index.js';
 import { restartCommand } from './commands/restart.js';
+import { assignCommand } from './commands/assign.js';
+import { initCommand } from './commands/init.js';
 
 const program = new Command();
 
@@ -24,6 +26,8 @@ program
   .version('0.0.1');
 
 program.addCommand(restartCommand);
+program.addCommand(assignCommand);
+program.addCommand(initCommand);
 
 let activeRl: readline.Interface | null = null;
 
