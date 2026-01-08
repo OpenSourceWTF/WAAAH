@@ -25,7 +25,7 @@ interface Task {
   text?: string; // For history items
   toAgentId?: string;
   toAgentRole?: string;
-  response?: any;
+  response?: Record<string, unknown>;
 }
 
 function TaskSkeleton() {
@@ -160,10 +160,12 @@ export function Dashboard() {
     setHistoryOffset(0);
     setHistoryHasMore(true);
     fetchHistory(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedSearch, statusFilter]);
 
   // Intersection Observer
   useEffect(() => {
+    const currentTarget = observerTarget.current;
     const observer = new IntersectionObserver(
       entries => {
         if (entries[0].isIntersecting && historyHasMore) {
@@ -173,13 +175,13 @@ export function Dashboard() {
       { threshold: 0.1 }
     );
 
-    if (observerTarget.current) {
-      observer.observe(observerTarget.current);
+    if (currentTarget) {
+      observer.observe(currentTarget);
     }
 
     return () => {
-      if (observerTarget.current) {
-        observer.unobserve(observerTarget.current);
+      if (currentTarget) {
+        observer.unobserve(currentTarget);
       }
     };
   }, [fetchHistory, historyHasMore]);
@@ -237,7 +239,7 @@ export function Dashboard() {
     }
   };
 
-  const formatResponse = (response: any): string => {
+  const formatResponse = (response: Record<string, unknown> | string | null | undefined): string => {
     if (!response) return '';
     if (typeof response === 'string') return response;
 

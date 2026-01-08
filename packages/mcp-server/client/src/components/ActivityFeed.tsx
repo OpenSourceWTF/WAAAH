@@ -10,7 +10,7 @@ interface ActivityEvent {
   timestamp: number;
   category: 'AGENT' | 'TASK' | 'SYSTEM' | 'ERROR';
   message: string;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }
 
 export function ActivityFeed() {
