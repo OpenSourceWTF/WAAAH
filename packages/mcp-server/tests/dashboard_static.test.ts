@@ -7,26 +7,30 @@ const dashboardPath = path.resolve(__dirname, '../client/src/Dashboard.tsx');
 const dashboardContent = fs.readFileSync(dashboardPath, 'utf-8');
 
 describe('Dashboard Historic View (Static Analysis)', () => {
-  it('should construct correct history API URL', () => {
-    // Check for URL construction with status filters
-    const urlPattern = /tasksUrl\s*=\s*`\$\{API_BASE\}\/tasks\/history\?status=COMPLETED,FAILED,CANCELLED&limit=50&offset=\$\{offset\}`/;
-    expect(dashboardContent).toMatch(urlPattern);
+  it('should have history fetch logic', () => {
+    // Check for fetchHistory function
+    expect(dashboardContent).toContain('const fetchHistory = useCallback');
+    // Check for history state
+    expect(dashboardContent).toContain('const [history, setHistory] = useState');
   });
 
-  it('should reset state on tab switch', () => {
-    // Check effect dependency on activeTab
-    expect(dashboardContent).toMatch(/if \(activeTab === 'history'\) \{[\s\S]*?setTasks\(\[\]\)[\s\S]*?setOffset\(0\)[\s\S]*?setHasMore\(true\)/);
+  it('should reset state on filter change', () => {
+    // Check effect refetches when filters change
+    expect(dashboardContent).toContain('setHistory([])');
+    expect(dashboardContent).toContain('setHistoryOffset(0)');
+    expect(dashboardContent).toContain('setHistoryHasMore(true)');
   });
 
-  it('should implement load more logic', () => {
-    // Check offset increment
-    expect(dashboardContent).toMatch(/setOffset\(prev => prev \+ 50\)/);
+  it('should implement infinite scroll', () => {
+    // Check for intersection observer
+    expect(dashboardContent).toContain('IntersectionObserver');
+    expect(dashboardContent).toContain('observerTarget');
   });
 
-  it('should render Load More button conditionally', () => {
+  it('should render history end indicator', () => {
     // Check condition
-    expect(dashboardContent).toMatch(/\{isHistory && hasMore && \(/);
-    // Check button text
-    expect(dashboardContent).toMatch(/Load More History/);
+    expect(dashboardContent).toContain('!historyHasMore && history.length > 0');
+    // Check text
+    expect(dashboardContent).toContain('END OF SCRIBBLINGS');
   });
 });

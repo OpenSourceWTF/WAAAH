@@ -310,54 +310,35 @@ app.post('/admin/agents/:agentId/evict', (req, res) => {
   }
 });
 
-// Tool Routing
+// Tool Routing - Dynamic dispatch to ToolHandler methods
+const VALID_TOOLS = [
+  'register_agent', 'wait_for_prompt', 'send_response', 'assign_task',
+  'list_agents', 'get_agent_status', 'ack_task', 'admin_update_agent',
+  'list_connected_agents', 'wait_for_task', 'admin_evict_agent'
+] as const;
+
+type ToolName = typeof VALID_TOOLS[number];
+
 app.post('/mcp/tools/:toolName', async (req, res) => {
   const { toolName } = req.params;
   const args = req.body;
 
   console.log(`[RPC] Call ${toolName}`);
 
-  let result;
-  switch (toolName) {
-    case 'register_agent':
-      result = await tools.register_agent(args);
-      break;
-    case 'wait_for_prompt':
-      // This will block the HTTP request until timeout or task
-      result = await tools.wait_for_prompt(args);
-      break;
-    case 'send_response':
-      result = await tools.send_response(args);
-      break;
-    case 'assign_task':
-      result = await tools.assign_task(args);
-      break;
-    case 'list_agents':
-      result = await tools.list_agents(args);
-      break;
-    case 'get_agent_status':
-      result = await tools.get_agent_status(args);
-      break;
-    case 'ack_task':
-      result = await tools.ack_task(args);
-      break;
-    case 'admin_update_agent':
-      result = await tools.admin_update_agent(args);
-      break;
-    case 'list_connected_agents':
-      result = await tools.list_connected_agents(args);
-      break;
-    case 'wait_for_task':
-      result = await tools.wait_for_task(args);
-      break;
-    case 'admin_evict_agent':
-      result = await tools.admin_evict_agent(args);
-      break;
-    default:
-      res.status(404).json({ error: `Tool ${toolName} not found` });
-      return;
+  // Validate tool name
+  if (!VALID_TOOLS.includes(toolName as ToolName)) {
+    res.status(404).json({ error: `Tool ${toolName} not found` });
+    return;
   }
 
+  // Dynamic dispatch to the appropriate method
+  const method = tools[toolName as keyof typeof tools];
+  if (typeof method !== 'function') {
+    res.status(500).json({ error: `Tool ${toolName} not implemented` });
+    return;
+  }
+
+  const result = await method.call(tools, args);
   res.json(result);
 });
 

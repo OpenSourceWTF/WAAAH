@@ -1,12 +1,13 @@
 {
   "mcpServers": {
     "waaah": {
-      "command": "node",
+      "command": "npx",
       "args": [
-        "${HOME}/projects/WAAAH/packages/mcp-proxy/dist/index.js"
+        "@opensourcewtf/waaah-mcp-proxy"
       ],
       "env": {
-        "WAAAH_SERVER_URL": "http://localhost:3000"
+        "WAAAH_SERVER_URL": "http://localhost:3000",
+        "WAAAH_API_KEY": "your-api-key"
       }
     }
   }

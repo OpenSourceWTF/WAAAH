@@ -110,6 +110,14 @@ pnpm build
 PLATFORM=discord pnpm start
 ```
 
+## Testing
+
+```bash
+pnpm test
+```
+
+> **Note**: The Discord adapter has limited automated test coverage. While `BotCore` and `SlackAdapter` have good unit test coverage, `DiscordAdapter` relies primarily on manual testing. Contributions to improve Discord test coverage are welcome!
+
 ## Docker
 
 ```bash

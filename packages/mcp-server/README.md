@@ -1,4 +1,4 @@
-# @waaah/mcp-server
+# @opensourcewtf/waaah-mcp-server
 
 The core orchestration engine for the WAAAH system. Manages agent registration, task queuing, and tool execution.
 

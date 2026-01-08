@@ -1,18 +1,41 @@
 {
-  "name": "@waaah/mcp-server",
+  "name": "@opensourcewtf/waaah-mcp-server",
   "version": "0.1.0",
-  "private": true,
+  "description": "Central MCP orchestration server for WAAAH with Admin Dashboard",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/davidtai/WAAAH.git",
+    "directory": "packages/mcp-server"
+  },
+  "homepage": "https://github.com/davidtai/WAAAH#readme",
+  "bugs": {
+    "url": "https://github.com/davidtai/WAAAH/issues"
+  },
+  "keywords": [
+    "waaah",
+    "mcp",
+    "ai-agents",
+    "orchestration",
+    "server"
+  ],
+  "main": "dist/server.js",
+  "files": [
+    "dist",
+    "public"
+  ],
   "scripts": {
-    "build": "npm run build:client && tsc",
-    "build:client": "cd client && npm run build",
+    "build": "pnpm run build:client && tsc",
+    "build:client": "cd client && pnpm run build",
     "start": "node dist/server.js",
     "dev": "tsc -w",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^0.6.0",
-    "@waaah/types": "workspace:*",
+    "@opensourcewtf/waaah-types": "workspace:*",
     "better-sqlite3": "^12.5.0",
     "body-parser": "^1.20.2",
     "cors": "^2.8.5",
@@ -32,5 +55,8 @@
     "@types/supertest": "^6.0.3",
     "supertest": "^7.2.2",
     "typescript": "^5.3.3"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

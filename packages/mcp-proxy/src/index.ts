@@ -7,6 +7,8 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import axios from 'axios';
 
+import { MCP_TOOL_DEFINITIONS } from '@opensourcewtf/waaah-types';
+
 const SERVER_URL = process.env.WAAAH_SERVER_URL || 'http://localhost:3000';
 const AGENT_ID = process.env.AGENT_ID || 'unknown-agent';
 const AGENT_ROLE = process.env.AGENT_ROLE || 'developer';
@@ -18,111 +20,6 @@ if (WAAAH_API_KEY) {
 }
 
 console.error(`[WAAAH Proxy] Starting for agent ${AGENT_ID} (${AGENT_ROLE}) -> ${SERVER_URL}`);
-
-// Define the tools we expose to Antigravity
-const PROXY_TOOLS = [
-  {
-    name: 'register_agent',
-    description: 'Register this agent with the WAAAH system',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        agentId: { type: 'string' },
-        role: { type: 'string' },
-        displayName: { type: 'string' },
-        capabilities: { type: 'array', items: { type: 'string' } },
-      },
-      required: ['agentId', 'role'],
-    },
-  },
-  {
-    name: 'wait_for_prompt',
-    description: 'Wait for a task to be assigned (Long Polling)',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        agentId: { type: 'string' },
-        timeout: { type: 'number' },
-      },
-      required: ['agentId'],
-    },
-  },
-  {
-    name: 'send_response',
-    description: 'Send task response/status update',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        taskId: { type: 'string' },
-        status: { type: 'string', enum: ['COMPLETED', 'FAILED', 'BLOCKED', 'IN_PROGRESS'] },
-        message: { type: 'string' },
-        artifacts: { type: 'array', items: { type: 'string' } },
-        blockedReason: { type: 'string' },
-      },
-      required: ['taskId', 'status', 'message'],
-    },
-  },
-  {
-    name: 'assign_task',
-    description: 'Delegate a task to another agent',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        targetAgentId: { type: 'string' },
-        prompt: { type: 'string' },
-        priority: { type: 'string', enum: ['normal', 'high', 'critical'] },
-        context: { type: 'object' },
-        sourceAgentId: { type: 'string', description: 'Your agent ID (the delegating agent)' }
-      },
-      required: ['targetAgentId', 'prompt']
-    }
-  },
-  {
-    name: 'list_agents',
-    description: 'List all registered agents',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        role: { type: 'string' }
-      }
-    }
-  },
-  {
-    name: 'get_agent_status',
-    description: 'Get status of a specific agent',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        agentId: { type: 'string' }
-      },
-      required: ['agentId']
-    }
-  },
-  {
-    name: 'ack_task',
-    description: 'Acknowledge receipt of a task (required after wait_for_prompt)',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        taskId: { type: 'string' },
-        agentId: { type: 'string' }
-      },
-      required: ['taskId', 'agentId']
-    }
-  },
-  {
-    name: 'wait_for_task',
-    description: 'Wait for a specific task to complete (for dependency coordination)',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        taskId: { type: 'string', description: 'Task ID to wait for completion' },
-        timeout: { type: 'number', description: 'Timeout in seconds (default 300)' }
-      },
-      required: ['taskId']
-    }
-  }
-];
 
 const server = new Server(
   {
@@ -139,7 +36,7 @@ const server = new Server(
 // List Tools
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
-    tools: PROXY_TOOLS,
+    tools: MCP_TOOL_DEFINITIONS as any, // Cast to any to avoid strict type mismatch with SDK
   };
 });
 

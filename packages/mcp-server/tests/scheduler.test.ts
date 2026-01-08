@@ -17,7 +17,7 @@ vi.mock('../src/state/db.js', () => {
 });
 
 import { TaskQueue } from '../src/state/queue.js';
-import { Task } from '@waaah/types';
+import { Task } from '@opensourcewtf/waaah-types';
 import { db } from '../src/state/db.js';
 
 function mockTask(overrides: Partial<Task> = {}): Task {

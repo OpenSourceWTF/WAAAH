@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mocked } from 'vitest';
 import axios from 'axios';
 import fs from 'fs';
 import yaml from 'js-yaml';
@@ -7,17 +7,17 @@ import { PlatformAdapter, MessageContext } from '../adapters/interface';
 
 // Mock axios
 vi.mock('axios');
-const mockedAxios = axios as jest.Mocked<typeof axios>;
+const mockedAxios = axios as Mocked<typeof axios>;
 
 // Mock fs and yaml
 vi.mock('fs');
 vi.mock('js-yaml');
-const mockedFs = fs as jest.Mocked<typeof fs>;
-const mockedYaml = yaml as jest.Mocked<typeof yaml>;
+const mockedFs = fs as Mocked<typeof fs>;
+const mockedYaml = yaml as Mocked<typeof yaml>;
 
 // Mock PlatformAdapter
-const mockAdapter: PlatformAdapter = {
-  platform: 'test-platform',
+const mockAdapter = {
+  platform: 'discord',
   connect: vi.fn(),
   disconnect: vi.fn(),
   onMessage: vi.fn(),
@@ -25,7 +25,7 @@ const mockAdapter: PlatformAdapter = {
   editReply: vi.fn(),
   react: vi.fn(),
   sendEmbed: vi.fn(),
-};
+} as unknown as Mocked<PlatformAdapter>;
 
 describe('BotCore', () => {
   let bot: BotCore;
@@ -69,7 +69,7 @@ describe('BotCore', () => {
 
   describe('handleMessage (Commands)', () => {
     const context: MessageContext = {
-      platform: 'test',
+      platform: 'discord',
       channelId: 'C123',
       serverId: 'S123',
       messageId: 'M123',

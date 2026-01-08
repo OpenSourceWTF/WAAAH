@@ -14,27 +14,18 @@ describe('Dashboard Expandable Cards (Static Analysis)', () => {
     expect(dashboardContent).toContain('onClick={() => toggleTask(task.id)}');
   });
 
-  it('should show Active Task Details on expansion', () => {
-    // We look for the Active Tasks section (TabsContent value="tasks")
-    // But since checking structure via regex is hard, we look for unique strings used in that section.
-    // "Mission Prompt" is used in Active task expansion
-    expect(dashboardContent).toContain('Mission Prompt');
-
-    // "From" and "To"
-    expect(dashboardContent).toContain('<span className="block opacity-50 text-[10px] uppercase">From</span>');
-    expect(dashboardContent).toContain('<span className="block opacity-50 text-[10px] uppercase">To</span>');
-
-    // Result Report
-    expect(dashboardContent).toContain('Result Report');
+  it('should show Task Details on expansion', () => {
+    // Check for expanded content
+    expect(dashboardContent).toContain('FULL PROMPT:');
+    expect(dashboardContent).toContain('ASSIGNED TO:');
+    expect(dashboardContent).toContain('RESPONSE PAYLOAD:');
   });
 
-  it('should show History Task Details on expansion', () => {
-    // History uses ":: RESULT ::" instead of "Result Report"?
-    // Let's check line 395 in the view: ":: RESULT ::"
-    expect(dashboardContent).toContain(':: RESULT ::');
-
-    // It shows prompt
-    // It shows timestamp
-    expect(dashboardContent).toContain('new Date((task as any).completedAt).toLocaleString()');
+  it('should have action buttons', () => {
+    // Check for Cancel and Retry buttons
+    expect(dashboardContent).toContain('Cancel Task');
+    expect(dashboardContent).toContain('Retry');
+    expect(dashboardContent).toContain('handleCancelTask');
+    expect(dashboardContent).toContain('handleRetryTask');
   });
 });

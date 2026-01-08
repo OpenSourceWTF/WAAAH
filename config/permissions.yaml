@@ -7,5 +7,6 @@ roles:
     canAssignTo: []
 
 users:
-  "123456789":
-    canAssignTo: ["*"]
+  # Example: Add your Discord/Slack user IDs with permissions
+  # "123456789012345678":
+  #   canAssignTo: ["*"]

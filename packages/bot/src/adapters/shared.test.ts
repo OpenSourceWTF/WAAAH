@@ -178,4 +178,4 @@ describe('EmbedFormatter - toSlackBlocks', () => {
   });
 });
 
-// === Scenario 4 Removed: Belonged to @waaah/types package ===
+// === Scenario 4 Removed: Belonged to @opensourcewtf/waaah-types package ===

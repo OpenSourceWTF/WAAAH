@@ -1,16 +1,19 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
-import axios from 'axios';
 import * as readline from 'readline';
-
-const SERVER_URL = process.env.WAAAH_SERVER_URL || 'http://localhost:3000';
-const WAAAH_API_KEY = process.env.WAAAH_API_KEY;
-
-// Configure axios to send API key with all requests
-if (WAAAH_API_KEY) {
-  axios.defaults.headers.common['X-API-Key'] = WAAAH_API_KEY;
-}
-
+import {
+  SERVER_URL,
+  apiCall,
+  parseMCPResponse,
+  handleError,
+  ensureServerRunning
+} from './utils/index.js';
+import {
+  AgentInfo,
+  formatAgentListItem,
+  formatAgentStatus,
+  formatSingleAgentStatus
+} from './utils/index.js';
 import { restartCommand } from './commands/restart.js';
 
 const program = new Command();
@@ -22,32 +25,13 @@ program
 
 program.addCommand(restartCommand);
 
-async function checkServerConnection(): Promise<boolean> {
-  try {
-    await axios.get(`${SERVER_URL}/debug/state`, { timeout: 3000 });
-    return true;
-  } catch (e) {
-    return false;
-  }
-}
-
-async function ensureServerRunning() {
-  const isRunning = await checkServerConnection();
-  if (!isRunning) {
-    console.error('❌ Cannot connect to WAAAH server at', SERVER_URL);
-    console.error('   Hint: Start the server with `pnpm server` in another terminal.');
-    process.exit(1);
-  }
-}
-
 let activeRl: readline.Interface | null = null;
 
 function logInjected(message: string) {
   if (activeRl) {
-    // Clear current line to avoid prompt corruption
     process.stdout.write('\r\x1b[K');
     console.log(message);
-    activeRl.prompt(true); // Redraw prompt
+    activeRl.prompt(true);
   } else {
     console.log(message);
   }
@@ -56,9 +40,7 @@ function logInjected(message: string) {
 async function startEventListener() {
   while (true) {
     try {
-      const response = await axios.get(`${SERVER_URL}/admin/events`, { timeout: 60000 });
-      const data = response.data;
-
+      const data = await apiCall<any>('get', '/admin/events');
       if (data.status === 'TIMEOUT') continue;
 
       if (data.type === 'task_update') {
@@ -76,8 +58,7 @@ async function startEventListener() {
           logInjected(`\n⏳ [${t.to.agentId || t.to.role}] Assigned task: ${t.id}`);
         }
       }
-    } catch (e: any) {
-      // Quietly retry on connection errors
+    } catch {
       await new Promise(r => setTimeout(r, 5000));
     }
   }
@@ -92,18 +73,17 @@ program
   .action(async (target: string, promptParts: string[], options: { priority: string, wait: boolean }) => {
     const prompt = promptParts.join(' ');
     try {
-      const response = await axios.post(`${SERVER_URL}/admin/enqueue`, {
+      const response = await apiCall<{ taskId: string }>('post', '/admin/enqueue', {
         prompt,
         agentId: target,
         priority: options.priority
       });
-      console.log(`✅ Task enqueued: ${response.data.taskId}`);
+      console.log(`✅ Task enqueued: ${response.taskId}`);
       if (options.wait) {
-        await pollTaskResponse(response.data.taskId);
+        await pollTaskResponse(response.taskId);
       }
-    } catch (error: any) {
-      console.error(`❌ Failed: ${error.message}`);
-      process.exit(1);
+    } catch (error) {
+      handleError(error);
     }
   });
 
@@ -113,15 +93,13 @@ program
   .description('List all registered agents')
   .action(async () => {
     try {
-      const response = await axios.post(`${SERVER_URL}/mcp/tools/list_agents`, {});
-      const content = response.data.content?.[0]?.text;
-      if (content) {
-        const agents = JSON.parse(content);
-        agents.forEach((agent: any) => console.log(`  - ${agent.displayName} (${agent.id}) [${agent.role}]`));
+      const response = await apiCall<any>('post', '/mcp/tools/list_agents', {});
+      const agents = parseMCPResponse<AgentInfo[]>(response);
+      if (agents) {
+        agents.forEach(agent => console.log(formatAgentListItem(agent)));
       }
-    } catch (error: any) {
-      console.error(`❌ Failed: ${error.message}`);
-      process.exit(1);
+    } catch (error) {
+      handleError(error);
     }
   });
 
@@ -132,34 +110,22 @@ program
   .action(async (agentId?: string) => {
     try {
       if (agentId) {
-        const response = await axios.post(`${SERVER_URL}/mcp/tools/get_agent_status`, { agentId });
-        const content = response.data.content?.[0]?.text;
-        if (content) {
-          const status = JSON.parse(content);
-          const icon = status.status === 'WAITING' ? '🟢' : status.status === 'PROCESSING' ? '🔵' : '⚪';
-          console.log(`${icon} ${status.displayName || status.agentId} [${status.role}]: ${status.status}`);
-          if (status.currentTasks?.length) {
-            console.log(`   Tasks: ${status.currentTasks.join(', ')}`);
-          }
+        const response = await apiCall<any>('post', '/mcp/tools/get_agent_status', { agentId });
+        const status = parseMCPResponse<AgentInfo>(response);
+        if (status) {
+          console.log(formatSingleAgentStatus(status));
         }
       } else {
-        // Show all agents with status
-        const response = await axios.get(`${SERVER_URL}/admin/agents/status`);
-        const agents = response.data;
+        const agents = await apiCall<AgentInfo[]>('get', '/admin/agents/status');
         if (agents.length === 0) {
           console.log('No agents registered.');
         } else {
           console.log('Agent Status:');
-          agents.forEach((a: any) => {
-            const icon = a.status === 'WAITING' ? '🟢' : a.status === 'PROCESSING' ? '🔵' : '⚪';
-            const tasks = a.currentTasks?.length ? ` (${a.currentTasks.length} task(s))` : '';
-            console.log(`  ${icon} ${a.displayName} (${a.agentId}) [${a.role}]: ${a.status}${tasks}`);
-          });
+          agents.forEach(a => console.log(`  ${formatAgentStatus(a)}`));
         }
       }
-    } catch (error: any) {
-      console.error(`❌ Failed: ${error.message}`);
-      process.exit(1);
+    } catch (error) {
+      handleError(error);
     }
   });
 
@@ -169,11 +135,10 @@ program
   .description('Show server debug state')
   .action(async () => {
     try {
-      const response = await axios.get(`${SERVER_URL}/debug/state`);
-      console.log(JSON.stringify(response.data, null, 2));
-    } catch (error: any) {
-      console.error(`❌ Failed: ${error.message}`);
-      process.exit(1);
+      const data = await apiCall<any>('get', '/debug/state');
+      console.log(JSON.stringify(data, null, 2));
+    } catch (error) {
+      handleError(error);
     }
   });
 
@@ -182,15 +147,14 @@ async function pollTaskResponse(taskId: string) {
   const timeout = 60000;
   while (Date.now() - start < timeout) {
     try {
-      const resp = await axios.get(`${SERVER_URL}/admin/tasks/${taskId}`);
-      const task = resp.data;
+      const task = await apiCall<any>('get', `/admin/tasks/${taskId}`);
       if (['COMPLETED', 'FAILED', 'BLOCKED'].includes(task.status)) {
         console.log(`\nResult for ${taskId}: ${task.status}`);
         console.log(`   ${task.response?.message}`);
         return;
       }
       await new Promise(r => setTimeout(r, 2000));
-    } catch (e) { break; }
+    } catch { break; }
   }
 }
 
@@ -206,9 +170,7 @@ async function interactiveMode() {
     prompt: 'waaah> '
   });
 
-  // Start background listener
   startEventListener();
-
   activeRl.prompt();
 
   activeRl.on('line', async (line) => {
@@ -220,58 +182,46 @@ async function interactiveMode() {
         console.log('Goodbye!');
         process.exit(0);
       } else if (cmd === 'list' || cmd === 'agents') {
-        const response = await axios.post(`${SERVER_URL}/mcp/tools/list_agents`, {});
-        const content = response.data.content?.[0]?.text;
-        if (content) {
-          const agents = JSON.parse(content);
-          agents.forEach((agent: any) => console.log(`  ${agent.displayName} (${agent.id}) [${agent.role}]`));
+        const response = await apiCall<any>('post', '/mcp/tools/list_agents', {});
+        const agents = parseMCPResponse<AgentInfo[]>(response);
+        if (agents) {
+          agents.forEach(agent => console.log(formatAgentListItem(agent)));
         }
       } else if (cmd === 'send' && args.length >= 3) {
         const target = args[1];
         const prompt = args.slice(2).join(' ');
-        const response = await axios.post(`${SERVER_URL}/admin/enqueue`, {
+        const response = await apiCall<{ taskId: string }>('post', '/admin/enqueue', {
           prompt,
           agentId: target,
           priority: 'normal'
         });
-        console.log(`✅ Task enqueued: ${response.data.taskId}`);
-        // No blocking here!
+        console.log(`✅ Task enqueued: ${response.taskId}`);
       } else if (cmd === 'status') {
         if (args[1]) {
-          const response = await axios.post(`${SERVER_URL}/mcp/tools/get_agent_status`, { agentId: args[1] });
-          const content = response.data.content?.[0]?.text;
-          if (content) {
-            const status = JSON.parse(content);
-            const icon = status.status === 'WAITING' ? '🟢' : status.status === 'PROCESSING' ? '🔵' : '⚪';
-            console.log(`${icon} ${status.displayName || status.agentId} [${status.role}]: ${status.status}`);
-            if (status.currentTasks?.length) {
-              console.log(`   Tasks: ${status.currentTasks.join(', ')}`);
-            }
+          const response = await apiCall<any>('post', '/mcp/tools/get_agent_status', { agentId: args[1] });
+          const status = parseMCPResponse<AgentInfo>(response);
+          if (status) {
+            console.log(formatSingleAgentStatus(status));
           }
         } else {
-          const response = await axios.get(`${SERVER_URL}/admin/agents/status`);
-          const agents = response.data;
+          const agents = await apiCall<AgentInfo[]>('get', '/admin/agents/status');
           if (agents.length === 0) {
             console.log('No agents registered.');
           } else {
             console.log('Agent Status:');
-            agents.forEach((a: any) => {
-              const icon = a.status === 'WAITING' ? '🟢' : a.status === 'PROCESSING' ? '🔵' : '⚪';
-              const tasks = a.currentTasks?.length ? ` (${a.currentTasks.length} task(s))` : '';
-              console.log(`  ${icon} ${a.displayName} (${a.agentId}) [${a.role}]: ${a.status}${tasks}`);
-            });
+            agents.forEach(a => console.log(`  ${formatAgentStatus(a)}`));
           }
         }
       } else if (cmd === 'debug') {
-        const response = await axios.get(`${SERVER_URL}/debug/state`);
-        console.log(JSON.stringify(response.data, null, 2));
+        const data = await apiCall<any>('get', '/debug/state');
+        console.log(JSON.stringify(data, null, 2));
       } else if (cmd === 'help') {
         console.log('Commands: send <agent> <prompt>, list, status [agent], debug, exit');
       } else if (cmd) {
         console.log('Unknown command. Type "help" for available commands.');
       }
-    } catch (error: any) {
-      console.error(`❌ ${error.message}`);
+    } catch (error) {
+      handleError(error, false);
     }
 
     activeRl?.prompt();

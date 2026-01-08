@@ -1,6 +1,23 @@
 {
-  "name": "waaah-monorepo",
-  "version": "0.0.0",
+  "name": "@opensourcewtf/waaah",
+  "version": "0.1.0",
+  "description": "Work Anywhere Autonomous Agent Hub - Multi-agent orchestration via MCP",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/davidtai/WAAAH.git"
+  },
+  "homepage": "https://github.com/davidtai/WAAAH#readme",
+  "bugs": {
+    "url": "https://github.com/davidtai/WAAAH/issues"
+  },
+  "keywords": [
+    "waaah",
+    "mcp",
+    "ai-agents",
+    "orchestration",
+    "multi-agent"
+  ],
   "private": true,
   "scripts": {
     "build": "pnpm -r run build",
@@ -11,7 +28,8 @@
     "cli": "tsx packages/cli/src/index.ts",
     "bot": "tsx --watch packages/bot/src/index.ts",
     "bot:prod": "node packages/bot/dist/index.js",
-    "proxy": "node packages/mcp-proxy/dist/index.js"
+    "proxy": "node packages/mcp-proxy/dist/index.js",
+    "publish:all": "pnpm -r publish --access public"
   },
   "devDependencies": {
     "@types/node": "^20.10.5",
@@ -25,5 +43,8 @@
       "better-sqlite3",
       "esbuild"
     ]
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }

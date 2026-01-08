@@ -1,7 +1,7 @@
 import {
   AgentIdentity,
   AgentRole
-} from '@waaah/types';
+} from '@opensourcewtf/waaah-types';
 import { db } from './db.js';
 
 /**

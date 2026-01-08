@@ -3,37 +3,25 @@ agents:
   boss:
     displayName: "@Boss"
     aliases: ["boss", "waaah", "lead", "principal"]
-    canDelegateTo: ["project-manager", "full-stack-engineer", "test-engineer", "ops-engineer", "designer"]
+    canDelegateTo: ["project-manager", "full-stack-engineer", "test-engineer"]
 
   # PM: Creates ACCEPTANCE.md, coordinates agents
   project-manager:
     displayName: "@PM"
     aliases: ["pm", "manager", "projectmanager"]
-    canDelegateTo: ["full-stack-engineer", "test-engineer", "ops-engineer", "designer"]
+    canDelegateTo: ["full-stack-engineer", "test-engineer"]
     reportsTo: ["boss"]
     
   # FullStack: Implements features, delegates testing to TestEng
   full-stack-engineer:
     displayName: "@FullStack"
     aliases: ["fullstack", "dev", "developer", "fs"]
-    canDelegateTo: ["test-engineer"]
+    canDelegateTo: ["test-engineer","project-manager"]
     reportsTo: ["project-manager", "boss"]
 
   # TestEng: Creates TESTING.md, implements tests
   test-engineer:
     displayName: "@TestEng"
     aliases: ["test", "tester", "qa"]
-    canDelegateTo: []
+    canDelegateTo: ["project-manager"]
     reportsTo: ["project-manager", "boss"]
-
-  ops-engineer:
-    displayName: "@Ops"
-    aliases: ["ops", "devops", "infra"]
-    canDelegateTo: []
-    reportsTo: ["project-manager"]
-
-  designer:
-    displayName: "@Designer"
-    aliases: ["design", "ui", "ux"]
-    canDelegateTo: []
-    reportsTo: ["project-manager"]

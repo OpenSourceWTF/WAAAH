@@ -1,20 +1,45 @@
 {
-  "name": "@waaah/types",
+  "name": "@opensourcewtf/waaah-types",
   "version": "0.1.0",
-  "private": true,
+  "description": "Shared TypeScript definitions and Zod schemas for WAAAH",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/davidtai/WAAAH.git",
+    "directory": "packages/types"
+  },
+  "homepage": "https://github.com/davidtai/WAAAH#readme",
+  "bugs": {
+    "url": "https://github.com/davidtai/WAAAH/issues"
+  },
+  "keywords": [
+    "waaah",
+    "mcp",
+    "ai-agents",
+    "orchestration",
+    "types"
+  ],
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsc -w",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "zod": "^3.22.4"
+    "zod": "^3.22.4",
+    "zod-to-json-schema": "^3.25.1"
   },
   "devDependencies": {
     "typescript": "^5.3.3",
     "vitest": "^4.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

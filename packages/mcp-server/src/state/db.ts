@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
 import yaml from 'js-yaml';
-import { AgentRole } from '@waaah/types';
+import { AgentRole } from '@opensourcewtf/waaah-types';
 
 const DB_PATH = process.env.DB_PATH || path.resolve(__dirname, '../../data/waaah.db');
 const CONFIG_PATH = process.env.AGENTS_CONFIG || path.resolve(__dirname, '../../../../config/agents.yaml');

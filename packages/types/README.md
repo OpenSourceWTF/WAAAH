@@ -1,4 +1,4 @@
-# @waaah/types
+# @opensourcewtf/waaah-types
 
 Shared TypeScript definitions, schemas, and interfaces for the WAAAH system.
 
@@ -11,5 +11,5 @@ Shared TypeScript definitions, schemas, and interfaces for the WAAAH system.
 ## Usage
 
 ```typescript
-import { Task, AgentRole } from '@waaah/types';
+import { Task, AgentRole } from '@opensourcewtf/waaah-types';
 ```

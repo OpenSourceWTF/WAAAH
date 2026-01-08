@@ -3,8 +3,9 @@ import {
   Task,
   TaskStatus,
   AgentRole
-} from '@waaah/types';
+} from '@opensourcewtf/waaah-types';
 import { db } from './db.js';
+import type { ITaskQueue, AckResult, QueueStats, HistoryOptions, WaitResult } from './queue.interface.js';
 
 const ACK_TIMEOUT_MS = 60000;         // 60s to ACK a task before it's requeued
 const SCHEDULER_INTERVAL_MS = 10000;  // Run scheduler every 10s
@@ -13,8 +14,9 @@ const ORPHAN_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes offline = orphan
 /**
  * Manages the global task queue, handling task lifecycle, assignment, and persistence.
  * Emits 'task' events when new tasks are enqueued and 'completion' events when they finish.
+ * @implements {ITaskQueue}
  */
-export class TaskQueue extends EventEmitter {
+export class TaskQueue extends EventEmitter implements ITaskQueue {
   // In-memory cache for fast access, but source of truth is DB
   private tasks: Map<string, Task> = new Map();
   // Map<TaskId, { agentId, sentAt }>

@@ -1,4 +1,4 @@
-# @waaah/cli
+# @opensourcewtf/waaah-cli
 
 Command-line interface for local testing and interaction with the WAAAH system.
 

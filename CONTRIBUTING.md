@@ -26,7 +26,7 @@ We welcome contributions! Please follow these guidelines to ensure smooth collab
 
 - Use **TypeScript** for all logic.
 - Follow the existing linting rules (standard TS config).
-- Ensure strictly typed interfaces in `@waaah/types`.
+- Ensure strictly typed interfaces in `@opensourcewtf/waaah-types`.
 
 ## 🧪 Testing
 

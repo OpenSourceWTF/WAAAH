@@ -1,6 +1,16 @@
-# @waaah/mcp-proxy
+# @opensourcewtf/waaah-mcp-proxy
 
-A bridge that connects a local autonomous agent (via `stdio`) to the remote MCP server (via HTTP).
+A bridge that connects a local autonomous agent (via `stdio`) to the remote WAAAH MCP server (via HTTP).
+
+## Installation
+
+```bash
+# Global install
+npm install -g @opensourcewtf/waaah-mcp-proxy
+
+# Or use directly with npx
+npx @opensourcewtf/waaah-mcp-proxy
+```
 
 ## How it Works
 
@@ -28,8 +38,8 @@ Add to your MCP client settings (e.g., `~/.gemini/antigravity/mcp_config.json`):
 {
   "mcpServers": {
     "waaah": {
-      "command": "node",
-      "args": ["/path/to/WAAAH/packages/mcp-proxy/dist/index.js"],
+      "command": "npx",
+      "args": ["@opensourcewtf/waaah-mcp-proxy"],
       "env": {
         "WAAAH_SERVER_URL": "http://localhost:3000",
         "WAAAH_API_KEY": "your_api_key"
@@ -50,4 +60,3 @@ The agent identity is determined by the workflow you invoke:
 pnpm build
 node dist/index.js
 ```
-

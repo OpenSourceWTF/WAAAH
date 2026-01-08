@@ -2,6 +2,17 @@
 
 Connect WAAAH to AI systems that support the Model Context Protocol (MCP).
 
+## Quick Start
+
+Install the WAAAH MCP proxy globally:
+```bash
+npm install -g @opensourcewtf/waaah-mcp-proxy
+```
+
+Or use directly with npx in your MCP config.
+
+---
+
 ## Supported Platforms
 
 | Platform | Type | MCP Support |
@@ -25,8 +36,6 @@ Connect WAAAH to AI systems that support the Model Context Protocol (MCP).
 
 ```bash
 npm install -g @anthropic-ai/gemini-cli
-# or
-npx @anthropic-ai/gemini-cli
 ```
 
 ### Step 2: Configure MCP Server
@@ -37,8 +46,8 @@ Add to `~/.gemini/settings.json`:
 {
   "mcpServers": {
     "waaah": {
-      "command": "node",
-      "args": ["/path/to/WAAAH/packages/mcp-proxy/dist/index.js"],
+      "command": "npx",
+      "args": ["@opensourcewtf/waaah-mcp-proxy"],
       "env": {
         "WAAAH_SERVER_URL": "http://localhost:3000",
         "WAAAH_API_KEY": "your-api-key"
@@ -67,8 +76,8 @@ Add to your VS Code settings or `~/.gemini/antigravity/mcp_config.json`:
 {
   "mcpServers": {
     "waaah": {
-      "command": "node",
-      "args": ["/path/to/WAAAH/packages/mcp-proxy/dist/index.js"],
+      "command": "npx",
+      "args": ["@opensourcewtf/waaah-mcp-proxy"],
       "env": {
         "WAAAH_SERVER_URL": "http://localhost:3000",
         "WAAAH_API_KEY": "your-api-key"
@@ -102,8 +111,8 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) o
 {
   "mcpServers": {
     "waaah": {
-      "command": "node",
-      "args": ["/path/to/WAAAH/packages/mcp-proxy/dist/index.js"],
+      "command": "npx",
+      "args": ["@opensourcewtf/waaah-mcp-proxy"],
       "env": {
         "WAAAH_SERVER_URL": "http://localhost:3000",
         "WAAAH_API_KEY": "your-api-key"
@@ -139,8 +148,8 @@ Add to `.cursor/mcp.json` in your project:
 {
   "mcpServers": {
     "waaah": {
-      "command": "node",
-      "args": ["./packages/mcp-proxy/dist/index.js"],
+      "command": "npx",
+      "args": ["@opensourcewtf/waaah-mcp-proxy"],
       "env": {
         "WAAAH_SERVER_URL": "http://localhost:3000",
         "WAAAH_API_KEY": "your-api-key"
@@ -168,8 +177,8 @@ Add to your Windsurf MCP config:
 {
   "mcpServers": {
     "waaah": {
-      "command": "node",
-      "args": ["/path/to/WAAAH/packages/mcp-proxy/dist/index.js"],
+      "command": "npx",
+      "args": ["@opensourcewtf/waaah-mcp-proxy"],
       "env": {
         "WAAAH_SERVER_URL": "http://localhost:3000",
         "WAAAH_API_KEY": "your-api-key"
@@ -199,8 +208,8 @@ from agents.mcp import MCPServerStdio
 
 # Start WAAAH MCP proxy
 waaah_server = MCPServerStdio(
-    command="node",
-    args=["/path/to/WAAAH/packages/mcp-proxy/dist/index.js"],
+    command="npx",
+    args=["@opensourcewtf/waaah-mcp-proxy"],
     env={
         "WAAAH_SERVER_URL": "http://localhost:3000",
         "WAAAH_API_KEY": "your-api-key"
@@ -235,8 +244,8 @@ from mcp.client.stdio import stdio_client
 @cl.on_chat_start
 async def start():
     server_params = StdioServerParameters(
-        command="node",
-        args=["/path/to/WAAAH/packages/mcp-proxy/dist/index.js"],
+        command="npx",
+        args=["@opensourcewtf/waaah-mcp-proxy"],
         env={
             "WAAAH_SERVER_URL": "http://localhost:3000",
             "WAAAH_API_KEY": "your-api-key"
@@ -261,9 +270,9 @@ Cherry Studio is a desktop client supporting multiple LLM providers and MCP.
 In Cherry Studio settings, add an MCP server:
 
 - **Name:** WAAAH
-- **Command:** `node /path/to/WAAAH/packages/mcp-proxy/dist/index.js`
+- **Command:** `npx @opensourcewtf/waaah-mcp-proxy`
 - **Environment:**
-  - `MCP_SERVER_URL=http://localhost:3000`
+  - `WAAAH_SERVER_URL=http://localhost:3000`
   - `WAAAH_API_KEY=your-api-key`
 
 ---
@@ -273,10 +282,13 @@ In Cherry Studio settings, add an MCP server:
 Before any integration, start the WAAAH MCP server:
 
 ```bash
+# Using npm packages (recommended)
+npm install -g @opensourcewtf/waaah-mcp-server
+waaah-server
+
+# Or from source
 cd /path/to/WAAAH
-pnpm install
-pnpm build
-pnpm serve
+pnpm install && pnpm build && pnpm serve
 ```
 
 Or with Docker:

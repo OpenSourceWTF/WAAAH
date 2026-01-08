@@ -16,8 +16,9 @@ import {
   adminUpdateAgentSchema,
   createWaitForPromptSchema,
   DEFAULT_PROMPT_TIMEOUT,
-  MAX_PROMPT_TIMEOUT
-} from '@waaah/types';
+  MAX_PROMPT_TIMEOUT,
+  toMCPError
+} from '@opensourcewtf/waaah-types';
 
 // Parse timeout from env (default to types default)
 const PROMPT_TIMEOUT = process.env.WAAAH_PROMPT_TIMEOUT
@@ -50,10 +51,7 @@ export class ToolHandler {
 
   async handleError(error: unknown) {
     console.error('[ToolError]', error);
-    return {
-      content: [{ type: 'text', text: `Error: ${error instanceof Error ? error.message : String(error)}` }],
-      isError: true
-    };
+    return toMCPError(error);
   }
 
   /**

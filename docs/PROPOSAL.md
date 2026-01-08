@@ -338,12 +338,11 @@ You are a Full Stack Engineer. Your identity:
 {
   "mcpServers": {
     "waaah": {
-      "command": "node",
-      "args": ["./packages/mcp-proxy/dist/index.js"],
+      "command": "npx",
+      "args": ["@opensourcewtf/waaah-mcp-proxy"],
       "env": {
         "WAAAH_SERVER_URL": "http://localhost:3000",
-        "AGENT_ID": "fullstack-1",
-        "AGENT_ROLE": "full-stack-engineer"
+        "WAAAH_API_KEY": "your-api-key"
       }
     },
     "github": {

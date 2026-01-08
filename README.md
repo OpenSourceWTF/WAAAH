@@ -1,38 +1,192 @@
 # WAAAH: Work Anywhere Autonomous Agent Hub
 
-WAAAH is a system for orchestrating autonomous AI agents (who may also be orchestrating other agents/Orc of Orcs) to collaborate on complex software engineering tasks. It utilizes the Model Context Protocol (MCP) to establish a communication layer between an orchestration server, a proxy, and various client interfaces (CLI, Discord, VS Code).
+> [!WARNING]
+> **🧪 Harebrained Experiment**: This project is dubious at best. It was born when the author wondered, "Can I still work while on the toilet?" APIs and features may change without notice.
+
+[![CI](https://github.com/davidtai/WAAAH/actions/workflows/ci.yml/badge.svg)](https://github.com/davidtai/WAAAH/actions/workflows/ci.yml)
+
+<p align="center">
+  <img src="docs/assets/orc-logo.svg" alt="WAAAH Orc Logo" width="120"/>
+</p>
+
+WAAAH is an orchestration system for specialized AI agents. It uses the Model Context Protocol (MCP) with **blocking tool calls** to inject orchestration capabilities into **any AI workspace**—even those that are strictly sandboxed or network-restricted—by tunnelling through standard tool interfaces.
 
 ![WAAAH Banner](docs/assets/banner.png)
 
-## � Starting The WAAAH
+## 📑 Index
+
+- [Key Features](#-key-features)
+- [WAAAH Anywhere](#-waaah-anywhere) (Clients & Use Cases)
+- [Admin Dashboard](#-admin-dashboard)
+- [WAAAH vs Single-Agent AI](#-waaah-vs-single-agent-ai)
+- [Prerequisites](#️-prerequisites)
+- [Starting The WAAAH](#-starting-the-waaah)
+- [Configuration](#️-configuration)
+- [Connecting Agents](#-connecting-agents)
+- [Production Deployment](#-production-deployment)
+- [Architecture](#️-architecture)
+- [Packages](#-packages)
+- [Available Scripts](#-available-scripts)
+- [Troubleshooting](#-troubleshooting)
+- [Contributing](#-contributing)
+
+## ✨ Key Features
+
+- **Multi-Agent Orchestration**: Coordinate specialized agents (PM, Full Stack, Test Engineer) via a central MCP server.
+- **Admin Dashboard**: Real-time web UI for monitoring agents, tasks, and activity logs with a 3-way theme engine (WAAAH/LIGHT/DARK).
+- **Hybrid Task Scheduler**: Background scheduler that requeues stuck tasks, proactively assigns high-priority work, and recovers orphaned tasks.
+- **Persistent State**: SQLite-backed registry for agents, tasks, and security events.
+- **Bot Integration**: Unified Discord/Slack bot for task submission and team monitoring.
+
+---
+
+> [!NOTE]  
+> **Command Syntax**: Use **`@WAAAH`** mentions for Discord/Slack bot interactions (e.g., `@WAAAH status`). Use **`/waaah-*`** slash commands ONLY within your IDE for initializing local agent workflows.
+
+---
+
+## 🌍 WAAAH Anywhere
+
+### Client Interfaces
+
+| Client | Description | Best For |
+|--------|-------------|----------|
+| **CLI** | Command-line interface for local testing and scripting | Developers, CI/CD pipelines |
+| **Admin Dashboard** | Real-time web UI at `/admin` | Monitoring, manual task management |
+| **Discord Bot** | Chat-based task submission and team notifications | Distributed teams, async collaboration |
+| **Slack Bot** | Enterprise chat integration | Corporate environments |
+| **MCP Proxy** | JSON-RPC bridge for AI agents | Autonomous agents (Antigravity, Claude, Cursor) |
+| **HTTP API** | RESTful endpoints for custom integrations | Webhooks, custom dashboards, automation |
+
+### Use Cases
+
+#### 🧑‍💻 Solo Developer: Unchained Freedom
+You're no longer tethered to your desk. Start a long-running feature implementation from your laptop, then head to the kitchen. Monitor progress, answer clarification questions, and review final PRs from your phone via Discord:
+```
+@WAAAH status  → View all active agents
+@WAAAH @FullStack "Deploy to staging"
+```
+
+#### 📉 Token Optimization: Multi-Tenancy
+Pool your team's API credits. Connect developers to a shared WAAAH pool where the hybrid scheduler prioritizes urgent tasks while filling gaps with background work. Agents self-evict when out of tokens (manual rejoin required).
+
+#### 🤖 Agent-of-Agents: Swarm Orchestration
+Antigravity orchestrates tools internally; WAAAH orchestrates **the orchestrators**. Connect multiple AI instances—same or different repos—to a central manager:
+```
+Boss (You) → assign_task("backend-agent", "Deploy API")
+           → assign_task("mobile-agent", "Update iOS SDK")
+           → wait_for_task("task-abc") # Sync point
+```
+**Heterogeneous Models**: Mix Claude, OpenAI o1, and Gemini—they all speak MCP.
+
+#### 🔄 CI/CD Pipeline Integration
+Trigger agents from GitHub Actions or Jenkins:
+```bash
+curl -X POST https://waaah.example.com/admin/tasks \
+  -H "Authorization: Bearer $WAAAH_API_KEY" \
+  -d '{"target": "fullstack-1", "prompt": "Fix failing tests"}'
+```
+
+#### 🎮 Hackathon Mode
+Spin up specialized agents in parallel (each needs its own AI client—multiple VS Code windows or Claude profiles):
+1. Start Server: `pnpm serve`
+2. Connect agents via MCP config
+3. Coordinate via the Dashboard or `@WAAAH` bot
+
+---
+
+## 🎨 Admin Dashboard
+
+Real-time visibility into your WAAAH system:
+- **Agents**: Status, eviction controls
+- **Tasks**: Active monitoring, history, cancel/retry
+- **Activity Feed**: Live event log
+- **Themes**: WAAAH (Green), LIGHT, DARK
+
+---
+
+## ⚡ WAAAH vs Single-Agent AI
+
+| Feature | WAAAH | Single Agent |
+|---------|-------|-------------------------------|
+| **Agents** | Multiple specialized | One per session |
+| **Persistence** | SQLite (tasks, agents, logs) | Conversation only |
+| **Remote Control** | Chat bots → HTTP | Local only |
+| **Task Recovery** | Auto-retry via scheduler | Manual |
+
+**WAAAH**: Team of agents on larger projects. **Single agent**: Interactive pair programming.
+
+---
+
+## 🛠️ Prerequisites
+
+- **Node.js**: v18+
+- **PNPM**: All dependencies are managed via pnpm.
+- **Docker** (optional): For containerized deployment.
+
+---
+
+## 🚀 Starting The WAAAH
 
 Run the orchestration server and bot for your team:
 
-```bash
-# 1. Configure environment
-cp .env.example .env
-# Edit .env with your tokens (WAAAH_API_KEY, DISCORD_TOKEN or SLACK_* tokens)
+### Option A: Local Development
 
-# 2. Start with Docker
-docker compose up -d waaah-server bot
+1. **Install & Build**
+   ```bash
+   cp .env.example .env  # Configure your tokens first!
+   pnpm install && pnpm build
+   ```
 
-# Or without Docker
-pnpm install && pnpm build
-pnpm serve &  # Background
-pnpm bot       # Foreground
-```
+2. **Start Services**
+   ```bash
+   pnpm serve &  # Server in background
+   pnpm bot      # Bot in foreground
+   ```
 
-## 🤝 Joining The WAAAH
+3. **Access the Dashboard**
+   ```
+   http://localhost:3000/admin
+   ```
 
-Connect your AI agent to an existing WAAAH server:
+4. **Send a Task via Discord**
+   ```bash
+   @WAAAH @FullStack "Create a login page"
+   ```
+   *(Or use the Dashboard UI)*
+
+### First Run
+On startup, WAAAH creates `data/waaah.db`, runs migrations, and seeds agents from `agents.yaml`.
+
+---
+
+## ⚙️ Configuration
+
+1. **Verify Environment**: Ensure `.env` is created.
+   ```bash
+   # Generate a secure API key if needed
+   openssl rand -hex 32
+   ```
+
+2. **Edit `.env` to set your tokens**:
+   - **`WAAAH_API_KEY`**: Shared secret for server authentication (Required).
+   - **`DISCORD_TOKEN`**: Required for the Discord bot.
+   - **`APPROVED_USERS`**: Restrict bot access to specific Discord user IDs.
+   - **`DOMAIN_NAME`**: Required for Docker/SSL production setup.
+
+---
+
+## 🤝 Connecting Agents
+
+Connect your AI agent to a WAAAH server:
 
 1. **Add MCP config** (e.g., `~/.gemini/antigravity/mcp_config.json`):
    ```json
    {
      "mcpServers": {
        "waaah": {
-         "command": "node",
-         "args": ["/path/to/WAAAH/packages/mcp-proxy/dist/index.js"],
+         "command": "npx",
+         "args": ["@opensourcewtf/waaah-mcp-proxy"],
          "env": {
            "WAAAH_SERVER_URL": "https://your-waaah-server.com",
            "WAAAH_API_KEY": "your_api_key"
@@ -41,195 +195,140 @@ Connect your AI agent to an existing WAAAH server:
      }
    }
    ```
+   *> Or install globally: `npm i -g @opensourcewtf/waaah-mcp-proxy`*
 
-2. **Initialize your agent** with a workflow command (this sets the agent identity):
-   - `/waaah-fullstack` → registers as `fullstack-1` (Full Stack Engineer)
-   - `/waaah-pm` → registers as `pm-1` (Project Manager)
-   - `/waaah-testeng` → registers as `test-1` (Test Engineer)
+2. **Initialize your agent** with a workflow command:
+   | Command | Role |
+   |---------|------|
+   | `/waaah-fullstack` | Full Stack Engineer (autonomous loop) |
+   | `/waaah-pm` | Project Manager (autonomous loop) |
+   | `/waaah-tester` | Test Engineer (autonomous loop) |
+   | `/waaah-boss` | **Tech Lead** (orchestrator—pair with you) |
 
-3. **Start receiving tasks** — the agent enters an autonomous loop via `wait_for_prompt`.
+3. **Start receiving tasks** — worker agents enter an autonomous loop via `wait_for_prompt`. The Boss stays interactive.
 
-## �🚀 Architecture
+> [!TIP]
+> **Copy workflows to your project** for `/waaah-*` commands:
+> ```bash
+> cp -r /path/to/WAAAH/.agent . && echo ".agent/" >> .gitignore
+> ```
+
+**📖 Guides:**
+- [Antigravity Setup Guide](docs/ANTIGRAVITY_SETUP.md) - Multi-agent setup with VS Code
+- [Full MCP Integration Guide](docs/MCP_INTEGRATION.md) - Claude Desktop, Cursor, OpenAI SDK
+
+---
+
+## 🚀 Production Deployment
+
+1. **Configure Environment**: Set `DOMAIN_NAME` and tokens in `.env`.
+
+2. **Initialize SSL Certificates**:
+   ```bash
+   chmod +x init-letsencrypt.sh && ./init-letsencrypt.sh
+   # (Requires Docker)
+   ```
+
+3. **Start Services**:
+   ```bash
+   docker compose up -d --build
+   ```
+   - Server: `https://yourdomain.com`
+   - Dashboard: `https://yourdomain.com/admin`
+
+---
+
+## 🏗️ Architecture
 
 ```mermaid
 graph TD
-    User((User/Admin)) -->|Enqueues Tasks| DiscordBot[Discord Bot]
-    DiscordBot -->|HTTP| MB[Message Bus / MCP Server]
+    User(("User/Admin")) -->|"Enqueues Tasks"| DiscordBot["Discord/Slack Bot"]
+    User -->|"Monitors"| Dashboard["Admin Dashboard"]
+    DiscordBot -->|"HTTP"| MB["MCP Server"]
+    Dashboard -->|"HTTP/SSE"| MB
     
     subgraph "Core System"
-        MB[MCP Server]
-        MB -->|State| DB[(Agent Registry & Task Queue)]
+        MB["MCP Server"]
+        MB -->|"State"| DB[("SQLite: Agents, Tasks, Logs")]
+        MB -->|"Scheduler"| Scheduler["Hybrid Scheduler"]
     end
     
     subgraph "Agent Runtime"
-        Proxy[MCP Proxy] -->|Long Polling / Tools| MB
-        Agent[Autonomous Agent] -->|Stdio / JSON-RPC| Proxy
+        Proxy["MCP Proxy"] -->|"Long Polling / Tools"| MB
+        Agent["Autonomous Agent"] -->|"Stdio / JSON-RPC"| Proxy
     end
 ```
+
+---
 
 ## 📦 Packages
 
 This is a monorepo managed with `pnpm workspaces`.
 
-- **[`packages/mcp-server`](packages/mcp-server)**: The central orchestration server. Handles agent registration, task queuing, and communication.
-- **[`packages/mcp-proxy`](packages/mcp-proxy)**: A bridge that runs locally with the agent, exposing MCP tools via `stdio` and communicating with the server via HTTP.
-- **[`packages/bot`](packages/bot)**: Unified Discord/Slack bot for task submission and monitoring.
-- **[`packages/types`](packages/types)**: Shared TypeScript definitions and Zod schemas.
-
-## ⚡ WAAAH vs Single-Agent AI
-
-| Feature | WAAAH | Single Agent (e.g., Antigravity) |
-|---------|-------|----------------------------------|
-| **Agents** | Multiple specialized agents | One agent per session |
-| **Delegation** | PM → FullStack → TestEng | N/A |
-| **Persistence** | SQLite (tasks, agents, heartbeats) | Conversation only |
-| **Integration** | Discord, Slack, CLI | Direct IDE |
-| **Remote Control** | Yes (chat bots → HTTP) | Local only |
-
-**Use WAAAH when:** You need a squad of agents collaborating on larger projects.
-**Use single agent when:** Interactive pair programming in your IDE.
-
-## 🛠️ Prerequisites
-
-- **Node.js**: v18+
-- **PNPM**: All dependencies are managed via pnpm.
-- **Docker** (for containerized deployment): [Install Docker](https://docs.docker.com/engine/install/)
-
-## 🏃 Quick Start
-
-1.  **Install & Build**
-    ```bash
-    pnpm install && pnpm build
-    ```
-
-2.  **Start the Server**
-    ```bash
-    pnpm serve
-    ```
-
-3.  **Send a Task via CLI**
-    ```bash
-    pnpm cli send fullstack-1 "Create a login page"
-    pnpm cli list-agents
-    ```
-
-## ⚙️ Configuration
-
-1.  Copy the example environment file:
-    ```bash
-    cp .env.example .env
-    ```
-2.  Generate an API key:
-    ```bash
-    openssl rand -hex 32
-    ```
-3.  Edit `.env` to set your tokens:
-    - **`WAAAH_API_KEY`**: Shared secret for server authentication (required for production).
-    - **`DISCORD_TOKEN`**: Required for the Discord bot.
-    - **`APPROVED_USERS`**: Restrict bot access to specific Discord user IDs.
-    - **`DOMAIN_NAME`**: Required for Docker/SSL production setup.
+| Package | Description |
+|---------|-------------|
+| [`packages/mcp-server`](packages/mcp-server) | Central orchestration server with Admin Dashboard |
+| [`packages/mcp-proxy`](packages/mcp-proxy) | Stdio↔HTTP bridge for agents |
+| [`packages/bot`](packages/bot) | Unified Discord/Slack bot |
+| [`packages/cli`](packages/cli) | Command-line interface for local testing |
+| [`packages/types`](packages/types) | Shared TypeScript definitions and Zod schemas |
 
 ---
 
-## 🚀 Production Deployment (Docker + SSL)
-
-To deploy WAAAH with a persistent database, Nginx reverse proxy, and Let's Encrypt SSL:
-
-1.  **Configure Environment**:
-    Make sure `.env` is set up with your `DOMAIN_NAME` and `DISCORD_TOKEN`.
-
-2.  **Initialize SSL Certificates**:
-    Run the helper script to generate Let's Encrypt certificates (requires Docker).
-    ```bash
-    chmod +x init-letsencrypt.sh
-    ./init-letsencrypt.sh
-    ```
-
-3.  **Start Services**:
-    ```bash
-    docker compose up -d --build
-    ```
-    - Server: `https://yourdomain.com`
-    - Database: Persisted in `./data`
-
----
-
-## 🤖 MCP Integration
-
-WAAAH works with any AI system supporting the Model Context Protocol (MCP).
-
-**[📖 Full MCP Integration Guide](docs/MCP_INTEGRATION.md)** - Covers:
-- Antigravity (VS Code)
-- Claude Desktop
-- Cursor / Windsurf
-- OpenAI Agents SDK
-- Chainlit / Cherry Studio
-
-### Quick Setup (Antigravity)
-
-Add to `~/.gemini/antigravity/mcp_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "waaah": {
-      "command": "node",
-      "args": ["/path/to/WAAAH/packages/mcp-proxy/dist/index.js"],
-      "env": {
-        "WAAAH_SERVER_URL": "https://yourdomain.com",
-        "WAAAH_API_KEY": "your_api_key"
-      }
-    }
-  }
-}
-```
-
-> **Note:** Agent identity (`AGENT_ID`, `AGENT_ROLE`) is not required in the config. The workflow command (e.g., `/waaah-fullstack`) explicitly registers the agent with the correct identity.
-
-### Step 2: Initialize Agent
-
-In Antigravity, use one of these workflows:
-
-| Command | Role |
-|---------|------|
-| `/waaah-fullstack` | Full Stack Engineer |
-| `/waaah-pm` | Project Manager |
-| `/waaah-testeng` | Test Engineer |
-
-This loads the system prompt and starts the autonomous agent loop.
-
-### Step 3: Send Tasks
-
-From another terminal:
-```bash
-pnpm cli send fullstack-1 "Implement user authentication"
-```
-
-The agent will receive the task via `wait_for_prompt` and execute autonomously.
-
----
-
-## 📦 Available Scripts
+## � Available Scripts
 
 | Script | Description |
 |--------|-------------|
-| `pnpm serve` | Start MCP orchestration server (Local) |
+| `pnpm serve` | Start MCP orchestration server |
 | `pnpm cli <command>` | CLI for local testing |
-| `pnpm bot` | Start Discord bot |
-| `docker compose up` | Start full stack (Server + Nginx + DB) |
-| `./init-letsencrypt.sh` | Initialize SSL certificates for Docker |
+| `pnpm bot` | Start Discord/Slack bot |
 | `pnpm proxy` | Start MCP proxy instance |
 | `pnpm build` | Build all packages |
+| `pnpm test` | Run all tests |
+| `docker compose up` | Start full stack (Server + Bot + Nginx) |
 
 ---
 
-## 📂 Packages
+## ❓ Troubleshooting
 
-- **[`packages/mcp-server`](packages/mcp-server)**: Central orchestration server
-- **[`packages/mcp-proxy`](packages/mcp-proxy)**: Stdio↔HTTP bridge for agents
-- **[`packages/cli`](packages/cli)**: Command-line interface
-- **[`packages/bot`](packages/bot)**: Unified Discord/Slack bot
-- **[`packages/types`](packages/types)**: Shared TypeScript definitions
+| Issue | Solution |
+|-------|----------|
+| **Port 3000 In Use** | Set `PORT=3001` in `.env` or kill the process: `lsof -ti:3000 | xargs kill -9` |
+| **Agent Not Appearing** | Ensure your agent proxy is running and `WAAAH_API_KEY` matches the server. |
+| **Bot "Thinking..."** | Check `pnpm bot` logs for errors. Verify `DISCORD_TOKEN` relates to the correct server. |
+| **Schema Errors** | Delete `data/waaah.db` to reset state (Warning: clears all history). |
+
+### 💡 Model Compatibility Tips
+
+> [!NOTE]
+> WAAAH was primarily developed and tested with **Gemini** models (via Antigravity). Other models may require workflow adjustments.
+
+| Model | Compatibility | Notes |
+|-------|--------------|-------|
+| **Gemini** | ✅ Excellent | Primary dev/test model. Follows `wait_for_prompt` loops reliably. |
+| **Claude** | ⚠️ Good | Tends to escape from wait loops. May need explicit "loop forever" instructions. |
+| **GPT-4** | ⚠️ Untested | Should work via OpenAI Agents SDK, but not battle-tested. |
+
+**Claude Users:** Add explicit loop reinforcement to your system prompt:
+```
+CRITICAL: After every send_response, you MUST call wait_for_prompt again. 
+Never end the conversation. Loop forever until the user terminates.
+```
+
+## ⚠️ Known Limitations
+
+> [!CAUTION]
+> **Discord Bot Testing**: The Discord adapter has limited automated test coverage. While the Slack adapter and core bot logic are unit tested, Discord-specific functionality relies primarily on manual testing. Use with caution in production Discord servers.
+
+| Component | Test Coverage | Notes |
+|-----------|--------------|-------|
+| `BotCore` | ✅ Good | Command parsing, task enqueue, polling |
+| `SlackAdapter` | ✅ Good | Slack-specific integration tested |
+| `DiscordAdapter` | ⚠️ Limited | Minimal automated tests, manual testing only |
+| `MCP Server` | ✅ Excellent | Registry, Queue, Scheduler, API endpoints |
+| `Admin Dashboard` | ✅ Good | Static analysis tests for UI components |
+
+---
 
 ## 🤝 Contributing
 
@@ -238,4 +337,3 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
 ## 📄 License
 
 MIT
-
