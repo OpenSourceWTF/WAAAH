@@ -29,7 +29,14 @@
     "bot": "tsx --watch packages/bot/src/index.ts",
     "bot:prod": "node packages/bot/dist/index.js",
     "proxy": "node packages/mcp-proxy/dist/index.js",
-    "publish:all": "pnpm -r publish --access public"
+    "publish:all": "pnpm -r publish --access public",
+    "docker:build": "docker compose build",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f",
+    "docker:restart": "docker compose restart",
+    "docker:reload": "docker compose down && docker compose build && docker compose up -d",
+    "docker:ps": "docker compose ps"
   },
   "devDependencies": {
     "@types/node": "^20.10.5",
