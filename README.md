@@ -149,11 +149,14 @@ Run the orchestration server and bot for your team:
    http://localhost:3000/admin
    ```
 
-4. **Send a Task via Discord**
-   ```bash
-   @WAAAH @FullStack "Create a login page"
-   ```
-   *(Or use the Dashboard UI)*
+4. **Start Your First Delegation (Antigravity)**
+   1. Open the MCP Server project in Antigravity
+   2. **Conversation 1**: Run `/waaah-fullstack` → Wait until it says "Waiting for prompt"
+   3. **Conversation 2**: Run `/waaah-boss` → Start with:
+      ```
+      Delegate the creation of this new feature: [your feature description]
+      ```
+   4. Switch between conversations via the Agent Manager to monitor progress
 
 ### First Run
 On startup, WAAAH creates `data/waaah.db`, runs migrations, and seeds agents from `agents.yaml`.
