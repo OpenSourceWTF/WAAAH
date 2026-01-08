@@ -33,3 +33,5 @@ Thumbs.db
 
 # WAAAH Specific
 .waaah-responses
+*.db
+data/
