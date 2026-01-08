@@ -285,7 +285,49 @@ This is a monorepo managed with `pnpm workspaces`.
 | `pnpm proxy` | Start MCP proxy instance |
 | `pnpm build` | Build all packages |
 | `pnpm test` | Run all tests |
-| `docker compose up` | Start full stack (Server + Bot + Nginx) |
+
+### Docker Commands
+
+| Script | Description |
+|--------|-------------|
+| `pnpm docker:build` | Build all Docker images |
+| `pnpm docker:up` | Start all containers (detached) |
+| `pnpm docker:down` | Stop all containers |
+| `pnpm docker:logs` | Follow container logs |
+| `pnpm docker:restart` | Restart containers (no rebuild) |
+| `pnpm docker:reload` | Stop, rebuild, and restart (use after code changes) |
+| `pnpm docker:ps` | Show container status |
+
+#### Docker Quick Start
+
+```bash
+# First time setup
+cp .env.example .env
+# Edit .env with your tokens
+
+# Build and start
+pnpm docker:build
+pnpm docker:up
+
+# View logs
+pnpm docker:logs
+
+# After code changes
+pnpm docker:reload
+```
+
+#### Docker Services
+
+| Service | Port | Description |
+|---------|------|-------------|
+| `waaah-server` | 3000 | MCP Server + Admin Dashboard |
+| `waaah-bot` | - | Discord/Slack Bot |
+| `nginx` | 80, 443 | Reverse proxy with SSL (production) |
+| `certbot` | - | SSL certificate management |
+
+> [!NOTE]
+> **Local Development**: Access the server directly at `http://localhost:3000`. 
+> The nginx container requires SSL certificates (see Production Deployment).
 
 ---
 
