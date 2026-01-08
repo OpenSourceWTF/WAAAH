@@ -82,9 +82,10 @@ Boss (You) → assign_task("backend-agent", "Deploy API")
 #### 🔄 CI/CD Pipeline Integration
 Trigger agents from GitHub Actions or Jenkins:
 ```bash
-curl -X POST https://waaah.example.com/admin/tasks \
-  -H "Authorization: Bearer $WAAAH_API_KEY" \
-  -d '{"target": "fullstack-1", "prompt": "Fix failing tests"}'
+curl -X POST https://waaah.example.com/admin/enqueue \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $WAAAH_API_KEY" \
+  -d '{"agentId": "fullstack-1", "prompt": "Fix failing tests"}'
 ```
 
 #### 🎮 Hackathon Mode
@@ -211,7 +212,8 @@ Connect your AI agent to a WAAAH server:
 > [!TIP]
 > **Copy workflows to your project** for `/waaah-*` commands:
 > ```bash
-> cp -r /path/to/WAAAH/.agent . && echo ".agent/" >> .gitignore
+> # From the WAAAH repo directory:
+> cp -r .agent /path/to/your-project/ && echo ".agent/" >> /path/to/your-project/.gitignore
 > ```
 
 **📖 Guides:**
