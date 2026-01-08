@@ -391,6 +391,16 @@ export function Dashboard() {
     return `${secs}s`;
   };
 
+  // Format task title: task.title || truncated prompt || command
+  const formatTaskTitle = (task: Task) => {
+    if (task.title) return task.title;
+    if (task.prompt) {
+      const firstLine = task.prompt.split('\n')[0].trim();
+      return firstLine.length > 80 ? firstLine.substring(0, 77) + '...' : firstLine;
+    }
+    return task.command || 'Untitled Task';
+  };
+
   // Toggle Task Expansion
   const toggleTask = (taskId: string) => {
     setExpandedTasks(prev => {
@@ -426,7 +436,7 @@ export function Dashboard() {
           </div>
         </CardHeader>
         <CardContent className="p-4 pt-4 text-sm font-mono text-primary/80">
-          <p className="font-bold border-l-4 border-primary pl-2 mb-2 text-foreground">{task.command}</p>
+          <p className="font-bold border-l-4 border-primary pl-2 mb-2 text-foreground">{formatTaskTitle(task)}</p>
 
           <div className="flex justify-between items-center text-[10px] text-primary/50 mb-2 font-mono">
             {task.createdAt && <span>Created: {formatDate(task.createdAt)}</span>}

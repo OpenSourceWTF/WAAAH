@@ -2,6 +2,12 @@ import { AgentRegistry } from '../state/registry.js';
 import { TaskQueue } from '../state/queue.js';
 import { scanPrompt, getSecurityContext } from '../security/prompt-scanner.js';
 import { emitDelegation, emitActivity } from '../state/events.js';
+import { exec } from 'child_process';
+import util from 'util';
+import path from 'path';
+import fs from 'fs';
+
+const execAsync = util.promisify(exec);
 
 // Import shared schemas from types package
 import {
@@ -14,10 +20,17 @@ import {
   getAgentStatusSchema,
   ackTaskSchema,
   adminUpdateAgentSchema,
+  blockTaskSchema,
+  answerTaskSchema,
+  getTaskContextSchema,
   createWaitForPromptSchema,
   DEFAULT_PROMPT_TIMEOUT,
   MAX_PROMPT_TIMEOUT,
-  toMCPError
+  toMCPError,
+
+  updateProgressSchema,
+  scaffoldPlanSchema,
+  submitReviewSchema
 } from '@opensourcewtf/waaah-types';
 
 // Parse timeout from env (default to types default)
@@ -36,7 +49,8 @@ export {
   listAgentsSchema,
   getAgentStatusSchema,
   ackTaskSchema,
-  adminUpdateAgentSchema
+  adminUpdateAgentSchema,
+
 };
 
 /**
@@ -297,10 +311,15 @@ export class ToolHandler {
 
       const taskId = `task-${Date.now()}-${Math.random().toString(36).substring(7)}`;
 
+      // Auto-generate title from first line of prompt (max 80 chars)
+      const firstLine = params.prompt.split('\n')[0].trim();
+      const title = firstLine.length > 80 ? firstLine.substring(0, 77) + '...' : firstLine;
+
       this.queue.enqueue({
         id: taskId,
         command: 'execute_prompt',
         prompt: params.prompt,
+        title, // Auto-generated from first line
         from: { type: 'agent', id: sourceAgent, name: sourceAgentObj?.displayName || sourceAgent },
         to: {
           agentId: targetAgentId, // If undefined, this is a broadcase
@@ -313,7 +332,8 @@ export class ToolHandler {
           ...params.context,
           isDelegation: true,
           security: getSecurityContext(process.env.WORKSPACE_ROOT || process.cwd())
-        }
+        },
+        dependencies: params.dependencies
       });
 
       const logTarget = targetAgentId ? `${targetDisplayName}` : `Role: ${targetRole} (Broadcast)`;
@@ -458,9 +478,7 @@ export class ToolHandler {
   }
 
   /**
-   * Updates an agent's metadata (displayName, color, status) via Admin API.
-   * 
-   * @param args - The arguments for admin_update_agent tool (adminUpdateAgentSchema).
+   * @param args - The arguments for admin_update_agent tool(adminUpdateAgentSchema).
    * @returns MCP Tool content confirming update.
    */
   async admin_update_agent(args: unknown) {
@@ -487,12 +505,103 @@ export class ToolHandler {
   }
 
   /**
+   * Blocks the current task due to missing information or dependencies.
+   */
+  async block_task(args: unknown) {
+    try {
+      const params = blockTaskSchema.parse(args);
+
+      // Add system message with block details
+      this.queue.addMessage(params.taskId, 'system', `Task BLOCKED: ${params.reason.toUpperCase()} - ${params.question}`, {
+        type: 'block_event',
+        reason: params.reason,
+        question: params.question,
+        summary: params.summary,
+        notes: params.notes,
+        files: params.files
+      });
+
+      // Update task status to BLOCKED with the reason
+      this.queue.updateStatus(params.taskId, 'BLOCKED', { blockedReason: params.question });
+
+      return {
+        content: [{ type: 'text', text: `Task ${params.taskId} blocked. WAAAH Bot will notify the user.` }]
+      };
+    } catch (e) { return this.handleError(e); }
+  }
+
+  /**
+   * Provides an answer to a blocked task (unblocks it).
+   */
+  async answer_task(args: unknown) {
+    try {
+      const params = answerTaskSchema.parse(args);
+
+      // Add user message with the answer
+      this.queue.addMessage(params.taskId, 'user', params.answer);
+
+      // Unblock: Set status back to QUEUED
+      this.queue.updateStatus(params.taskId, 'QUEUED');
+
+      return {
+        content: [{ type: 'text', text: `Task ${params.taskId} unblocked and requeued.` }]
+      };
+    } catch (e) { return this.handleError(e); }
+  }
+
+  /**
+   * Gets full context for a task including message history.
+   */
+  async get_task_context(args: unknown) {
+    try {
+      const params = getTaskContextSchema.parse(args);
+
+      const task = this.queue.getTask(params.taskId);
+      if (!task) {
+        return {
+          content: [{ type: 'text', text: 'Task not found' }],
+          isError: true
+        };
+      }
+
+      const messages = this.queue.getMessages(params.taskId);
+
+      // Context Injection: Auto-hydrate dependencies
+      const dependencyOutputs: Record<string, any> = {};
+      if (task.dependencies && Array.isArray(task.dependencies)) {
+        for (const depId of task.dependencies) {
+          const depTask = this.queue.getTask(depId);
+          if (depTask) {
+            dependencyOutputs[depId] = {
+              status: depTask.status,
+              output: depTask.response, // Injected output
+              completedAt: depTask.completedAt
+            };
+          }
+        }
+      }
+
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            taskId: task.id,
+            prompt: task.prompt,
+            status: task.status,
+            messages,
+            context: task.context,
+            dependencyOutputs // New Field
+          })
+        }]
+      };
+    } catch (e) { return this.handleError(e); }
+  }
+
+  /**
    * Triggers an eviction for a specific agent.
    */
   async admin_evict_agent(args: unknown) {
     try {
-      // Manual parsing or use a schema if defined in types
-      // const params = adminEvictAgentSchema.parse(args); 
       // Reuse the partial schema or define one. For now manual check for simple args.
       const params = args as any;
       if (!params.agentId || !params.reason) {
@@ -509,37 +618,125 @@ export class ToolHandler {
     } catch (e) { return this.handleError(e); }
   }
 
-  /** List all agents with their connection status (WAITING/PROCESSING/OFFLINE) */
-  async list_connected_agents(_args: unknown) {
+  /**
+   * Generates a standard implementation plan template.
+   */
+  async scaffold_plan(args: unknown) {
     try {
-      const agents = this.registry.getAll();
-      const waitingAgents = this.queue.getWaitingAgents();
+      const params = scaffoldPlanSchema.parse(args);
+      const template = `# Implementation Plan - ${params.taskId}
 
-      const result = agents.map(agent => {
-        const assignedTasks = this.queue.getAssignedTasksForAgent(agent.id);
-        const lastSeen = this.registry.getLastSeen(agent.id);
-        const isRecent = lastSeen && (Date.now() - lastSeen) < 5 * 60 * 1000;
-        const isWaiting = waitingAgents.includes(agent.id);
+## Goal Description
+[Brief description of the goal]
 
-        let status: 'OFFLINE' | 'WAITING' | 'PROCESSING' = 'OFFLINE';
-        if (assignedTasks.length > 0) {
-          status = 'PROCESSING';
-        } else if (isWaiting || isRecent) {
-          status = 'WAITING';
-        }
+## User Review Required
+> [!IMPORTANT]
+> [List critical items requiring user attention]
 
-        return {
-          agentId: agent.id,
-          displayName: agent.displayName,
-          role: agent.role,
-          status,
-          lastSeen,
-          currentTasks: assignedTasks.map(t => t.id)
-        };
-      });
+## Proposed Changes
+### [Component Name]
+#### [MODIFY] [filename]
+
+## Verification Plan
+### Automated Tests
+- [ ] Command: \`pnpm test\`
+- [ ] Unit Test: ...
+
+### Manual Verification
+- [ ] Scenario: ...
+`;
 
       return {
-        content: [{ type: 'text', text: JSON.stringify(result) }]
+        content: [{ type: 'text', text: template }]
+      };
+    } catch (e) { return this.handleError(e); }
+  }
+
+  /**
+   * Submits code for review (Format -> Commit -> Test -> Submit).
+   */
+  async submit_review(args: unknown) {
+    try {
+      const params = submitReviewSchema.parse(args);
+      const worktreePath = path.resolve(process.cwd(), '.worktrees', `feature-${params.taskId}`);
+
+      if (!fs.existsSync(worktreePath)) {
+        return { isError: true, content: [{ type: 'text', text: `Worktree for ${params.taskId} not found. Expected at ${worktreePath}` }] };
+      }
+
+      console.log(`[Tool] Submitting review for ${params.taskId}`);
+
+      // 1. Format
+      console.log('- Formatting...');
+      await execAsync('pnpm format', { cwd: worktreePath });
+
+      // 2. Commit
+      console.log('- Committing...');
+      try {
+        await execAsync('git add .', { cwd: worktreePath });
+        // Check if there are changes to commit
+        const status = await execAsync('git status --porcelain', { cwd: worktreePath });
+        if (status.stdout.trim()) {
+          await execAsync(`git commit -m "${params.message}"`, { cwd: worktreePath });
+        } else {
+          console.log('  (No changes to commit)');
+        }
+      } catch (e) {
+        console.error('Commit failed:', e);
+        throw e; // specific error handling can be improved
+      }
+
+      // 3. Test
+      if (params.runTests) {
+        console.log('- Testing...');
+        try {
+          await execAsync('pnpm test', { cwd: worktreePath });
+        } catch (e: any) {
+          console.error('Tests failed');
+          return { isError: true, content: [{ type: 'text', text: `TESTS FAILED for ${params.taskId}:\n\n${e.stdout}\n\n${e.stderr}\n\nSubmission ABORTED. Please fix tests.` }] };
+        }
+      }
+
+      // 4. Push
+      console.log('- Pushing...');
+      const branchName = `feature/${params.taskId}`;
+      await execAsync(`git push origin ${branchName}`, { cwd: worktreePath });
+
+      // 5. Update Status
+      console.log('- Updating Status...');
+      this.queue.updateStatus(params.taskId, 'IN_REVIEW');
+
+      return {
+        content: [{ type: 'text', text: `Success: Task ${params.taskId} submitted for review on branch ${branchName}.` }]
+      };
+    } catch (e) { return this.handleError(e); }
+  }
+
+  /**
+   * Updates progress for a task with an observation message.
+   * Serves as both a timeline update and an agent heartbeat.
+   * 
+   * @param args - The arguments for update_progress tool (updateProgressSchema).
+   * @returns MCP Tool content confirming progress recorded.
+   */
+  async update_progress(args: unknown) {
+    try {
+      const params = updateProgressSchema.parse(args);
+
+      // Update agent heartbeat
+      this.registry.heartbeat(params.agentId);
+
+      // Add message to task timeline
+      this.queue.addMessage(params.taskId, 'agent', params.message, {
+        phase: params.phase,
+        percentage: params.percentage,
+        agentId: params.agentId
+      });
+
+      console.log(`[Tool] Progress update for ${params.taskId}: ${params.phase || 'N/A'} - ${params.message.substring(0, 50)}...`);
+
+      return {
+        content: [{ type: 'text', text: 'Progress recorded' }]
       };
     } catch (e) { return this.handleError(e); }
   }

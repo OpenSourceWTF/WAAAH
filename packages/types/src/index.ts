@@ -13,6 +13,7 @@ export interface AgentIdentity {
   /** Unique ID of the agent (e.g. "fullstack-1") */
   id: string;
   role: AgentRole;
+  state?: string;      // Current state summary (for resumption)
   displayName?: string;
   capabilities: string[];
   status?: 'idle' | 'busy' | 'offline'; // made optional as it's computed
@@ -22,12 +23,25 @@ export interface AgentIdentity {
 }
 
 /**
+ * Message in a task thread
+ */
+export interface TaskMessage {
+  id: string;
+  taskId: string;
+  role: 'user' | 'agent' | 'system';
+  content: string;
+  timestamp: number;
+  metadata?: Record<string, unknown>;
+}
+
+/**
  * Interface representing a task within the system.
  */
 export interface Task {
   id: string;
   status: TaskStatus;
   prompt: string;
+  title?: string; // Auto-generated descriptive title from first line of prompt
   priority: 'high' | 'normal' | 'critical';
   from: {
     type: 'user' | 'agent' | 'system';
@@ -45,6 +59,16 @@ export interface Task {
   assignedTo?: string; // agentId who picked it up
   response?: any; // The result payload
   threadId?: string;
+  messages?: TaskMessage[];
+  dependencies?: string[];
+  history?: TaskHistoryEvent[];
+}
+
+export interface TaskHistoryEvent {
+  timestamp: number;
+  status: TaskStatus;
+  agentId?: string;
+  message?: string;
 }
 
 /**
@@ -88,7 +112,10 @@ export const TOOL_NAMES = [
   'get_agent_status',
   'ack_task',
   'admin_update_agent',
-  'admin_evict_agent'
+  'admin_evict_agent',
+  'block_task',
+  'answer_task',
+  'get_task_context'
 ] as const;
 export type ToolName = typeof TOOL_NAMES[number];
 
