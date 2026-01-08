@@ -171,11 +171,7 @@ On startup, WAAAH creates `data/waaah.db`, runs migrations, and seeds agents fro
    openssl rand -hex 32
    ```
 
-2. **Edit `.env` to set your tokens**:
-   - **`WAAAH_API_KEY`**: Shared secret for server authentication (Required).
-   - **`DISCORD_TOKEN`**: Required for the Discord bot.
-   - **`APPROVED_USERS`**: Restrict bot access to specific Discord user IDs.
-   - **`DOMAIN_NAME`**: Required for Docker/SSL production setup.
+2. **Edit `.env` to set your tokens** — see [`.env.example`](.env.example) for the full list of environment variables.
 
 ---
 
