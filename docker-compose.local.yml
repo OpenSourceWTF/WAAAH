@@ -1,0 +1,68 @@
+# Local development compose file
+# Usage: docker compose -f docker-compose.local.yml up -d
+
+services:
+  waaah-server:
+    build:
+      context: .
+      dockerfile: packages/mcp-server/Dockerfile
+    container_name: waaah-server
+    ports:
+      - "3000:3000" # Expose directly for local dev
+    volumes:
+      - ./data:/app/data
+      - ./config:/app/config
+    environment:
+      - PORT=3000
+      - WAAAH_API_KEY=${WAAAH_API_KEY}
+      - AGENTS_CONFIG=/app/config/agents.yaml
+      - DB_PATH=/app/data/waaah.db
+    restart: unless-stopped
+    networks:
+      - waaah-network
+
+  # Unified Bot (Discord + Slack)
+  bot:
+    build:
+      context: .
+      dockerfile: packages/bot/Dockerfile
+    container_name: waaah-bot
+    environment:
+      - MCP_SERVER_URL=http://waaah-server:3000
+      - PLATFORM=${PLATFORM:-discord}
+      # Discord
+      - DISCORD_TOKEN=${DISCORD_TOKEN}
+      - DELEGATION_CHANNEL_ID=${DELEGATION_CHANNEL_ID}
+      # Slack
+      - SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN}
+      - SLACK_SIGNING_SECRET=${SLACK_SIGNING_SECRET}
+      - SLACK_APP_TOKEN=${SLACK_APP_TOKEN}
+      - SLACK_DELEGATION_CHANNEL_ID=${SLACK_DELEGATION_CHANNEL_ID}
+      # Shared
+      - WAAAH_API_KEY=${WAAAH_API_KEY}
+      - APPROVED_USERS=${APPROVED_USERS}
+      - AGENTS_CONFIG=/app/config/agents.yaml
+    volumes:
+      - ./config:/app/config
+    restart: unless-stopped
+    depends_on:
+      - waaah-server
+    networks:
+      - waaah-network
+
+  # Nginx reverse proxy (no SSL)
+  nginx:
+    image: nginx:1.15-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/conf.d/local.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - waaah-server
+    networks:
+      - waaah-network
+
+networks:
+  waaah-network:
+    driver: bridge

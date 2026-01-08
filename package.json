@@ -36,7 +36,12 @@
     "docker:logs": "docker compose logs -f",
     "docker:restart": "docker compose restart",
     "docker:reload": "docker compose down && docker compose build && docker compose up -d",
-    "docker:ps": "docker compose ps"
+    "docker:ps": "docker compose ps",
+    "docker:local:up": "docker compose -f docker-compose.local.yml up -d",
+    "docker:local:down": "docker compose -f docker-compose.local.yml down",
+    "docker:local:build": "docker compose -f docker-compose.local.yml build",
+    "docker:local:logs": "docker compose -f docker-compose.local.yml logs -f",
+    "docker:local:reload": "docker compose -f docker-compose.local.yml down && docker compose -f docker-compose.local.yml build && docker compose -f docker-compose.local.yml up -d"
   },
   "devDependencies": {
     "@types/node": "^20.10.5",
