@@ -3,7 +3,8 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Users, ListChecks, Skull, Search, Filter, MessageSquare, ChevronDown, ChevronUp, RefreshCw, XCircle, Power, Sun, Moon } from "lucide-react";
+import { ListChecks, Skull, Search, Filter, MessageSquare, ChevronDown, ChevronUp, RefreshCw, XCircle, Power, Sun, Moon, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { KanbanBoard } from './KanbanBoard';
 import { ActivityFeed } from '@/components/ActivityFeed';
 import { useTheme } from '@/contexts/ThemeContext';
 
@@ -26,6 +27,11 @@ interface Task {
   toAgentId?: string;
   toAgentRole?: string;
   response?: Record<string, unknown>;
+  context?: Record<string, unknown>;
+  history?: { timestamp: number; status: string; agentId?: string; message?: string }[];
+  messages?: { timestamp: number; role: string; content: string }[];
+  createdAt?: number;
+  completedAt?: number;
 }
 
 function TaskSkeleton() {
@@ -47,6 +53,17 @@ export function Dashboard() {
   const { theme, setTheme, t } = useTheme();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [recentCompleted, setRecentCompleted] = useState<Task[]>([]);
+  const [recentCancelled, setRecentCancelled] = useState<Task[]>([]);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
+    const saved = localStorage.getItem('waaah_sidebar_open');
+    return saved !== null ? JSON.parse(saved) : true;
+  });
+
+  // Persist Sidebar State
+  useEffect(() => {
+    localStorage.setItem('waaah_sidebar_open', JSON.stringify(isSidebarOpen));
+  }, [isSidebarOpen]);
 
   // History State
   const [history, setHistory] = useState<Task[]>([]);
@@ -67,6 +84,13 @@ export function Dashboard() {
   const [stats, setStats] = useState({ total: 0, completed: 0 });
   const [connected, setConnected] = useState(true);
 
+  // Modal State
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [reviewDiff, setReviewDiff] = useState<string>('');
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const [commentText, setCommentText] = useState('');
+  const [isSubmittingComment, setIsSubmittingComment] = useState(false);
+
   // Debounce Search
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -78,11 +102,13 @@ export function Dashboard() {
   // Initial Data Fetch
   const fetchData = async () => {
     try {
-      const [agentsRes, tasksRes, botRes, statsRes] = await Promise.all([
+      const [agentsRes, tasksRes, botRes, statsRes, recentRes, cancelledRes] = await Promise.all([
         fetch('/admin/agents/status'),
         fetch('/admin/tasks'),
         fetch('/admin/bot/status'),
-        fetch('/admin/stats')
+        fetch('/admin/stats'),
+        fetch('/admin/tasks/history?limit=10&status=COMPLETED'),
+        fetch('/admin/tasks/history?limit=10&status=CANCELLED,FAILED')
       ]);
 
       if (agentsRes.ok) setAgents(await agentsRes.json());
@@ -92,6 +118,9 @@ export function Dashboard() {
         setBotCount(data.count);
       }
       if (statsRes.ok) setStats(await statsRes.json());
+      if (recentRes.ok) setRecentCompleted(await recentRes.json());
+      if (cancelledRes.ok) setRecentCancelled(await cancelledRes.json());
+
       setConnected(true);
     } catch (e) {
       console.error('Fetch error:', e);
@@ -223,18 +252,103 @@ export function Dashboard() {
     }
   };
 
+  // Task Click Handler (Opens Generic Modal)
+  const handleTaskClick = async (task: Task) => {
+    setSelectedTask(task);
+
+    // If it's a generic task, we might want to fetch fresh details if they are missing
+    // But for now, we rely on the task object passed in.
+
+    // If IN_REVIEW, pre-load diff
+    if (['REVIEW', 'IN_REVIEW'].includes(task.status)) {
+      setReviewLoading(true);
+      setReviewDiff('Loading diff...');
+      try {
+        const res = await fetch(`/admin/tasks/${task.id}/diff`);
+        if (res.ok) {
+          const data = await res.json();
+          setReviewDiff(data.diff || 'No diff returned.');
+        } else {
+          setReviewDiff('Failed to fetch diff.');
+        }
+      } catch (e) {
+        setReviewDiff('Error loading diff.');
+      } finally {
+        setReviewLoading(false);
+      }
+    }
+  };
+
+  const handleApproveReview = async () => {
+    if (!selectedTask) return;
+    try {
+      await fetch(`/admin/tasks/${selectedTask.id}/approve`, { method: 'POST' });
+      setSelectedTask(null);
+      fetchData();
+    } catch (e) {
+      alert('Failed to approve task');
+    }
+  };
+
+  const handleRejectReview = async () => {
+    if (!selectedTask) return;
+    const reason = prompt("Enter rejection reason:");
+    if (!reason) return;
+
+    try {
+      await fetch(`/admin/tasks/${selectedTask.id}/reject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason })
+      });
+      setSelectedTask(null);
+      fetchData();
+    } catch (e) {
+      alert('Failed to reject task');
+    }
+  };
+
+  const handleAddComment = async () => {
+    if (!selectedTask || !commentText.trim()) return;
+    setIsSubmittingComment(true);
+    try {
+      await fetch(`/admin/tasks/${selectedTask.id}/comments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: commentText })
+      });
+      setCommentText('');
+      // Refresh task details to show new comment
+      const res = await fetch(`/admin/tasks/${selectedTask.id}`);
+      if (res.ok) {
+        const updatedTask = await res.json();
+        setSelectedTask(updatedTask);
+      }
+    } catch (e) {
+      alert('Failed to add comment');
+    } finally {
+      setIsSubmittingComment(false);
+    }
+  };
 
   // Helper for status badge style -- CUSTOM COLORS
   const getStatusBadgeClass = (status: string) => {
     const base = "text-xs font-bold px-2 py-1 border border-black";
     switch (status) {
-      case 'COMPLETED': return `${base} bg-primary text-primary-foreground border-primary`; // Green / White
+      case 'COMPLETED': return `${base} bg-green-600 text-white border-green-800`;
       case 'FAILED':
-      case 'CANCELLED': return `${base} bg-red-600 text-white border-red-800`; // Red / White
-      case 'PROCESSING': return `${base} bg-cyan-500 text-white border-cyan-700`; // Cyan / White
-      case 'ASSIGNED': // Fallthrough
-      case 'WAITING': // Fallthrough
-      case 'QUEUED': return `${base} bg-yellow-500 text-white border-yellow-700`; // Yellow / White
+      case 'CANCELLED': return `${base} bg-red-600 text-white border-red-800`;
+      case 'ASSIGNED':
+      case 'IN_PROGRESS':
+      case 'PROCESSING': return `${base} bg-blue-600 text-white border-blue-800`;
+      case 'QUEUED':
+      case 'PENDING_ACK':
+      case 'WAITING': return `${base} bg-yellow-500 text-black border-yellow-700`;
+      case 'BLOCKED':
+      case 'PENDING':
+      case 'PENDING_RES':
+      case 'REVIEW':
+      case 'IN_REVIEW': return `${base} bg-white text-black border-gray-400`;
       default: return `${base} bg-gray-600 text-white`;
     }
   };
@@ -250,6 +364,31 @@ export function Dashboard() {
     if (response.error && typeof response.error === 'string') return `ERROR: ${response.error}`;
 
     return JSON.stringify(response, null, 2);
+  };
+
+  // ... duplicate Task interface removed ...
+
+  // ... existing code ...
+
+  const formatDate = (ts?: number) => {
+    if (!ts) return '';
+    return new Date(ts).toLocaleString(undefined, {
+      month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
+    });
+  };
+
+  const getDuration = (start?: number, end?: number) => {
+    if (!start) return '';
+    const endTime = end || Date.now();
+    const diff = Math.max(0, endTime - start);
+    const mins = Math.floor(diff / 60000);
+    const secs = Math.floor((diff % 60000) / 1000);
+    if (mins > 60) {
+      const hours = Math.floor(mins / 60);
+      return `${hours}h ${mins % 60}m`;
+    }
+    if (mins > 0) return `${mins}m ${secs}s`;
+    return `${secs}s`;
   };
 
   // Toggle Task Expansion
@@ -289,6 +428,16 @@ export function Dashboard() {
         <CardContent className="p-4 pt-4 text-sm font-mono text-primary/80">
           <p className="font-bold border-l-4 border-primary pl-2 mb-2 text-foreground">{task.command}</p>
 
+          <div className="flex justify-between items-center text-[10px] text-primary/50 mb-2 font-mono">
+            {task.createdAt && <span>Created: {formatDate(task.createdAt)}</span>}
+            {(!['COMPLETED', 'FAILED', 'CANCELLED'].includes(task.status) && task.createdAt) && (
+              <span className="text-blue-500">Run: {getDuration(task.createdAt)}</span>
+            )}
+            {(['COMPLETED', 'FAILED'].includes(task.status) && task.completedAt && task.createdAt) && (
+              <span>Duration: {getDuration(task.createdAt, task.completedAt)}</span>
+            )}
+          </div>
+
           {/* Expanded Content */}
           {isExpanded ? (
             <div className="mt-4 space-y-4 border-t border-primary/20 pt-4 bg-primary/5 -mx-4 px-4 pb-2">
@@ -315,6 +464,12 @@ export function Dashboard() {
                   </pre>
                 </div>
               )}
+
+              {/* Timestamps Detail */}
+              <div className="grid grid-cols-2 gap-2 text-xs text-primary/60 border-t border-primary/10 pt-2">
+                {task.createdAt && <div>Created: {new Date(task.createdAt).toLocaleString()}</div>}
+                {task.completedAt && <div>Completed: {new Date(task.completedAt).toLocaleString()}</div>}
+              </div>
 
               {/* Action Buttons */}
               {(canCancel || canRetry) && (
@@ -361,9 +516,27 @@ export function Dashboard() {
           </div>
           <div>
             <h1 className="text-3xl font-black tracking-widest text-shadow-neon text-foreground">{t('APP_TITLE')}</h1>
+
             <p className="text-xs text-primary/70">{t('APP_SUBTITLE')}</p>
           </div>
         </div>
+
+        {/* Stats moved to Header */}
+        <div className="flex items-center gap-8 mx-4">
+          <div>
+            <span className="text-primary/70 text-xs font-bold mr-2 uppercase">{t('AGENTS_TITLE')}:</span>
+            <span className="font-bold text-xl">{agents.filter(a => a.status === 'PROCESSING').length} / {agents.length}</span>
+          </div>
+          <div>
+            <span className="text-primary/70 text-xs font-bold mr-2 uppercase">{t('TASKS_TITLE')}:</span>
+            <span className="font-bold text-xl">{activeTasks.length}</span>
+          </div>
+          <div>
+            <span className="text-primary/70 text-xs font-bold mr-2 uppercase">COMPLETED:</span>
+            <span className="font-bold text-xl">{stats.completed}</span>
+          </div>
+        </div>
+
         <div className="flex items-center gap-4">
           <div className="flex bg-primary/10 border border-primary/20 rounded-md p-1 gap-1">
             <Button variant="ghost" size="icon" className={`h-8 w-8 ${theme === 'LIGHT' ? 'bg-primary text-primary-foreground' : 'text-primary'}`} onClick={() => setTheme('LIGHT')} title="Light Mode"><Sun className="h-4 w-4" /></Button>
@@ -380,6 +553,9 @@ export function Dashboard() {
               )
             ) : t('DISCONNECTED')}
           </Badge>
+          <Button variant="ghost" size="icon" onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="ml-2 text-primary hover:bg-primary/10">
+            {isSidebarOpen ? <PanelLeftClose className="h-6 w-6" /> : <PanelLeftOpen className="h-6 w-6" />}
+          </Button>
         </div>
       </header>
 
@@ -387,47 +563,33 @@ export function Dashboard() {
       <div className="flex-1 flex overflow-hidden">
 
         {/* Left: Main Tabs Area (Scrollable within tabs) */}
-        <div className="flex-1 overflow-hidden p-8 flex flex-col bg-background">
+        <div className="flex-1 overflow-hidden p-4 flex flex-col bg-background">
 
           {/* Overview Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 flex-none mb-8">
-            <Card className="border-2 border-primary bg-background shadow-sm hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-all cursor-crosshair">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 border-b border-primary/30">
-                <CardTitle className="text-sm font-bold text-primary">{t('AGENTS_TITLE')}</CardTitle>
-                <Users className="h-6 w-6 text-primary" />
-              </CardHeader>
-              <CardContent className="pt-4">
-                <div className="text-4xl font-black tracking-tighter text-shadow-neon">{agents.length}</div>
-              </CardContent>
-            </Card>
-            <Card className="border-2 border-primary bg-background shadow-sm hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-all cursor-crosshair">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 border-b border-primary/30">
-                <CardTitle className="text-sm font-bold text-primary">{t('TASKS_TITLE')}</CardTitle>
-                <ListChecks className="h-6 w-6 text-primary" />
-              </CardHeader>
-              <CardContent className="pt-4">
-                <div className="text-4xl font-black tracking-tighter text-shadow-neon">{activeTasks.length}</div>
-              </CardContent>
-            </Card>
-            <Card className="border-2 border-primary bg-background shadow-sm hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-all cursor-crosshair">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 border-b border-primary/30">
-                <CardTitle className="text-sm font-bold text-primary">COMPLETED</CardTitle>
-                <ListChecks className="h-6 w-6 text-primary" />
-              </CardHeader>
-              <CardContent className="pt-4">
-                <div className="text-4xl font-black tracking-tighter text-shadow-neon">{stats.completed} <span className="text-2xl opacity-50">/ {stats.total}</span></div>
-              </CardContent>
-            </Card>
-          </div>
+
 
           {/* Tabs Content - Main Part, Flex 1 to take remaining space */}
           <div className="flex-1 min-h-0 flex flex-col">
-            <Tabs defaultValue="tasks" className="flex flex-col h-full space-y-6">
+            <Tabs defaultValue="kanban" className="flex flex-col h-full space-y-6">
               <TabsList className="bg-transparent border-b-2 border-primary w-full justify-start rounded-none p-0 h-auto gap-0 flex-none">
+                <TabsTrigger value="kanban" className="rounded-none border-x-2 border-t-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-xl px-6 py-2">KANBAN</TabsTrigger>
                 <TabsTrigger value="tasks" className="rounded-none border-x-2 border-t-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-xl px-6 py-2">{t('TASKS_TITLE').toLowerCase()} ({activeTasks.length})</TabsTrigger>
                 <TabsTrigger value="history" className="rounded-none border-x-2 border-t-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-xl px-6 py-2">{t('HISTORY_TITLE').toLowerCase()}</TabsTrigger>
                 <TabsTrigger value="logs" className="rounded-none border-x-2 border-t-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-xl px-6 py-2 flex items-center gap-2"><MessageSquare className="h-4 w-4" /> {t('LOGS_TITLE').toLowerCase()}</TabsTrigger>
               </TabsList>
+
+              {/* KANBAN TAB */}
+              <TabsContent value="kanban" className="flex-1 overflow-hidden m-0 pt-4 h-full">
+                <KanbanBoard
+                  tasks={[...activeTasks]}
+                  completedTasks={recentCompleted}
+                  cancelledTasks={recentCancelled}
+                  onCancelTask={handleCancelTask}
+                  onRetryTask={handleRetryTask}
+                  onViewHistory={() => document.getElementById('tab-trigger-history')?.click() || (document.querySelector('[value="history"]') as HTMLElement)?.click()}
+                  onTaskClick={handleTaskClick}
+                />
+              </TabsContent>
 
               {/* TASKS TAB */}
               <TabsContent value="tasks" className="flex-1 overflow-y-auto m-0 pt-4 pr-2 scrollbar-thin scrollbar-thumb-primary scrollbar-track-black space-y-4">
@@ -510,8 +672,8 @@ export function Dashboard() {
           </div>
         </div>
 
-        {/* Right: Sidebar (Fixed Width, Flex Column, Scrollable Content) */}
-        <div className="w-96 border-l-2 border-primary bg-card flex flex-col h-full overflow-hidden">
+        {/* Right: Sidebar (Collapsible) */}
+        <div className={`${isSidebarOpen ? 'w-96 border-l-2' : 'w-0 border-l-0'} transition-all duration-300 border-primary bg-card flex flex-col h-full overflow-hidden`}>
 
           {/* 1. Agent Status (Occupies full height of sidebar now, or just flexible) */}
           <div className="flex-1 overflow-y-auto p-6 scrollbar-thin scrollbar-thumb-primary scrollbar-track-black">
@@ -526,6 +688,15 @@ export function Dashboard() {
                   <div className="space-y-1">
                     <div className="text-sm font-bold text-primary group-hover:text-foreground transition-colors">{agent.displayName || agent.id}</div>
                     <div className="text-xs text-primary/60 font-mono tracking-tighter">[{agent.role}]</div>
+                    {agent.currentTasks && agent.currentTasks.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {agent.currentTasks.map(taskId => (
+                          <Badge key={taskId} variant="outline" className="text-[10px] h-4 px-1 border-primary/50 text-primary/80 font-mono bg-black/20">
+                            {taskId}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     <Badge className={`${getStatusBadgeClass(agent.status)} ${agent.status === 'PROCESSING' ? 'animate-pulse' : ''}`}>
@@ -549,6 +720,133 @@ export function Dashboard() {
         </div>
 
       </div>
+
+      {/* Task Modal Overlay */}
+      {selectedTask && (
+        <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setSelectedTask(null)}>
+          <div className="bg-card border-2 border-primary w-full max-w-4xl max-h-[90vh] flex flex-col shadow-lg shadow-primary/20" onClick={e => e.stopPropagation()}>
+            <div className="p-4 border-b border-primary flex justify-between items-center bg-primary/10">
+              <h2 className="text-xl font-bold flex items-center gap-2">
+                <Search className="h-5 w-5" /> TASK: {selectedTask.id}
+                <Badge className={getStatusBadgeClass(selectedTask.status)}>{selectedTask.status}</Badge>
+              </h2>
+              <Button variant="ghost" size="icon" onClick={() => setSelectedTask(null)}>
+                <XCircle className="h-6 w-6 text-primary/70 hover:text-primary" />
+              </Button>
+            </div>
+
+            <Tabs defaultValue="details" className="flex-1 flex flex-col min-h-0">
+              <div className="px-4 pt-2 border-b border-primary/30">
+                <TabsList className="bg-transparent w-full justify-start rounded-none p-0 h-auto gap-4">
+                  <TabsTrigger value="details" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary px-4 py-2" onClick={e => e.stopPropagation()}>DETAILS</TabsTrigger>
+                  <TabsTrigger value="timeline" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary px-4 py-2" onClick={e => e.stopPropagation()}>TIMELINE</TabsTrigger>
+                  {['REVIEW', 'IN_REVIEW', 'BLOCKED'].includes(selectedTask.status) && (
+                    <TabsTrigger value="review" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary px-4 py-2" onClick={e => e.stopPropagation()}>REVIEW</TabsTrigger>
+                  )}
+                </TabsList>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-0">
+                {/* DETAILS TAB */}
+                <TabsContent value="details" className="p-6 space-y-4 m-0">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="p-4 border border-primary/30 bg-black/40">
+                      <h3 className="text-sm font-bold opacity-70 mb-2">PROMPT</h3>
+                      <p className="whitespace-pre-wrap text-sm">{selectedTask.prompt}</p>
+                    </div>
+                    <div className="p-4 border border-primary/30 bg-black/40">
+                      <h3 className="text-sm font-bold opacity-70 mb-2">OUTPUT SUMMARY</h3>
+                      <div className="text-xs font-mono whitespace-pre-wrap max-h-60 overflow-y-auto">
+                        {formatResponse(selectedTask.response)}
+                      </div>
+                    </div>
+                  </div>
+                  {selectedTask.context && (
+                    <div className="p-4 border border-primary/30 bg-black/40">
+                      <h3 className="text-sm font-bold opacity-70 mb-2">CONTEXT</h3>
+                      <pre className="text-xs text-primary/70 overflow-x-auto">{JSON.stringify(selectedTask.context, null, 2)}</pre>
+                    </div>
+                  )}
+                </TabsContent>
+
+                {/* TIMELINE TAB */}
+                <TabsContent value="timeline" className="p-6 space-y-4 m-0 min-h-[200px]">
+                  <div className="space-y-4 border-l-2 border-primary/20 ml-2 pl-6">
+                    {/* Combine History and Messages */}
+                    {(() => {
+                      const events = [
+                        ...(selectedTask.history || []).map(h => ({ ...h, type: 'status' })),
+                        ...(selectedTask.messages || []).map(m => ({ ...m, type: 'message' }))
+                      ].sort((a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0));
+
+                      if (events.length === 0) return <div className="italic text-primary/50">No history available for this task.</div>;
+
+                      return events.map((event: any, i) => (
+                        <div key={i} className="relative">
+                          <div className={`absolute -left-[31px] top-1 h-3 w-3 rounded-full border-2 border-background ${event.type === 'status' ? 'bg-primary' : 'bg-primary/50'}`}></div>
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-2 text-xs opacity-50 font-mono">
+                              <span>{event.timestamp ? new Date(event.timestamp).toLocaleTimeString() : '—'}</span>
+                              {event.type === 'status' && <Badge variant="outline" className="text-[10px] h-4 px-1">{event.status}</Badge>}
+                              <span className="font-bold">{event.agentId || (event.role ? event.role.toUpperCase() : 'SYSTEM')}</span>
+                            </div>
+                            <div className={`text-sm ${event.type === 'status' ? 'font-bold' : ''}`}>
+                              {event.message || event.content}
+                            </div>
+                          </div>
+                        </div>
+                      ));
+                    })()}
+                  </div>
+
+                  {/* Add Comment Input */}
+                  <div className="mt-4 pt-4 border-t border-primary/20">
+                    <label className="text-xs font-bold text-primary/70 block mb-2">ADD COMMENT</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={commentText}
+                        onChange={(e) => setCommentText(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAddComment(); } }}
+                        placeholder="Type your comment..."
+                        className="flex-1 bg-input border border-primary/30 p-2 text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary font-mono text-sm"
+                        disabled={isSubmittingComment}
+                      />
+                      <Button
+                        onClick={handleAddComment}
+                        disabled={!commentText.trim() || isSubmittingComment}
+                        className="bg-primary text-primary-foreground hover:bg-primary/90 font-bold px-4"
+                      >
+                        {isSubmittingComment ? 'Adding...' : 'Add Comment'}
+                      </Button>
+                    </div>
+                  </div>
+                </TabsContent>
+
+                {/* REVIEW TAB */}
+                <TabsContent value="review" className="p-6 space-y-4 m-0">
+                  <div>
+                    <h3 className="text-sm font-bold opacity-70 mb-2 flex items-center gap-2">
+                      GIT DIFF <span className="text-xs opacity-50 font-normal">(main...feature/{selectedTask.id})</span>
+                    </h3>
+                    <div className={`p-4 bg-black border border-primary/50 font-mono text-xs overflow-x-auto whitespace-pre ${reviewLoading ? 'animate-pulse opacity-50' : ''}`}>
+                      {reviewDiff}
+                    </div>
+                  </div>
+                  <div className="p-4 border-t border-primary/30 bg-primary/5 flex justify-end gap-3 mt-4">
+                    <Button variant="destructive" onClick={handleRejectReview} className="bg-red-600 hover:bg-red-700 text-white font-bold border border-red-800">
+                      REJECT / REQUEST CHANGES
+                    </Button>
+                    <Button onClick={handleApproveReview} className="bg-green-600 hover:bg-green-700 text-white font-bold border border-green-800">
+                      APPROVE & MERGE
+                    </Button>
+                  </div>
+                </TabsContent>
+              </div>
+            </Tabs>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

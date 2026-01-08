@@ -12,6 +12,10 @@ import { ToolHandler } from './mcp/tools.js';
 import { scanPrompt, getSecurityContext } from './security/prompt-scanner.js';
 import { eventBus, emitActivity } from './state/events.js';
 import path from 'path';
+import { exec } from 'child_process';
+import util from 'util';
+
+const execAsync = util.promisify(exec);
 
 dotenv.config();
 
@@ -126,7 +130,10 @@ app.post('/admin/enqueue', (req, res) => {
 });
 
 app.get('/admin/tasks', (req, res) => {
-  res.json(queue.getAll());
+  // Only return active tasks to prevent payload explosion
+  const allTasks = queue.getAll();
+  const activeTasks = allTasks.filter(t => !['COMPLETED', 'FAILED', 'BLOCKED', 'CANCELLED'].includes(t.status));
+  res.json(activeTasks);
 });
 
 /**
@@ -192,13 +199,25 @@ app.get('/admin/tasks/:taskId', (req, res) => {
 });
 
 // Cancel a task
-app.post('/admin/tasks/:taskId/cancel', (req, res) => {
+app.post('/admin/tasks/:taskId/cancel', async (req, res) => {
   const { taskId } = req.params;
   const result = queue.cancelTask(taskId);
 
   if (!result.success) {
     res.status(400).json({ error: result.error });
     return;
+  }
+
+  // Implicit Cleanup: Remove worktree and branch
+  const branchName = `feature-${taskId}`;
+  const worktreePath = path.join(WORKSPACE_ROOT, '.worktrees', branchName);
+
+  try {
+    console.log(`[Cancel] Cleaning up worktree for task ${taskId}...`);
+    await execAsync(`git worktree remove ${worktreePath} --force`, { cwd: WORKSPACE_ROOT }).catch(() => { });
+    await execAsync(`git branch -D ${branchName}`, { cwd: WORKSPACE_ROOT }).catch(() => { });
+  } catch (e) {
+    console.warn(`[Cancel] Cleanup warning for ${taskId}:`, e);
   }
 
   res.json({ success: true, taskId });
@@ -215,6 +234,102 @@ app.post('/admin/tasks/:taskId/retry', (req, res) => {
   }
 
   res.json({ success: true, taskId });
+});
+
+// Add comment to a task
+app.post('/admin/tasks/:taskId/comments', (req, res) => {
+  const { taskId } = req.params;
+  const { content } = req.body;
+
+  if (!content || typeof content !== 'string') {
+    res.status(400).json({ error: 'Missing or invalid comment content' });
+    return;
+  }
+
+  try {
+    queue.addMessage(taskId, 'user', content);
+    res.json({ success: true });
+  } catch (e: any) {
+    console.error(`Failed to add comment to task ${taskId}:`, e.message);
+    res.status(500).json({ error: 'Failed to add comment' });
+  }
+});
+
+
+
+
+// Review System Endpoints
+
+// GET Diff
+app.get('/admin/tasks/:taskId/diff', async (req, res) => {
+  const { taskId } = req.params;
+  const branchName = `feature-${taskId}`;
+
+  try {
+    // Diff between main and the feature branch
+    const { stdout } = await execAsync(`git diff main...${branchName}`, { cwd: WORKSPACE_ROOT });
+    res.json({ diff: stdout });
+  } catch (e: any) {
+    console.error(`Diff failed for ${taskId}:`, e.message);
+    res.status(500).json({ error: 'Failed to fetch diff', details: e.message });
+  }
+});
+
+// POST Approve
+app.post('/admin/tasks/:taskId/approve', async (req, res) => {
+  const { taskId } = req.params;
+  const branchName = `feature-${taskId}`;
+  const worktreePath = path.join(WORKSPACE_ROOT, '.worktrees', branchName);
+
+  try {
+    console.log(`[Review] Approving task ${taskId} (Merging ${branchName})...`);
+
+    // 1. Merge (Assuming Fast-Forward or Squash)
+    // We need to run this in the ROOT, not the worktree
+    await execAsync(`git checkout main && git merge ${branchName}`, { cwd: WORKSPACE_ROOT });
+
+    // 2. Cleanup Worktree
+    await execAsync(`git worktree remove ${worktreePath} --force`, { cwd: WORKSPACE_ROOT }).catch(() => { });
+
+    // 3. Delete Branch
+    await execAsync(`git branch -d ${branchName}`, { cwd: WORKSPACE_ROOT }).catch(() => { });
+
+    // 4. Update Task Status
+    const task = queue.getTask(taskId);
+    if (task) {
+      queue.updateStatus(taskId, 'COMPLETED');
+      // updateStatus handles persistence
+    }
+
+    res.json({ success: true, message: 'Task approved and merged' });
+  } catch (e: any) {
+    console.error(`Approve failed for ${taskId}:`, e.message);
+    res.status(500).json({ error: 'Failed to approve task', details: e.message });
+  }
+});
+
+// POST Reject
+app.post('/admin/tasks/:taskId/reject', async (req, res) => {
+  const { taskId } = req.params;
+  const { reason } = req.body;
+
+  try {
+    console.log(`[Review] Rejecting task ${taskId}...`);
+
+    // Update Status -> QUEUED (Send back to pool)
+    // Append rejection note to prompt or context? 
+    // Ideally append to contexts/messages.
+    const task = queue.getTask(taskId);
+    if (task) {
+      queue.updateStatus(taskId, 'QUEUED');
+      // Add rejection message
+      queue.addMessage(taskId, 'system', `[REVIEW REJECTION] ${reason || 'Changes requested.'}`);
+    }
+
+    res.json({ success: true, message: 'Task rejected and requeued' });
+  } catch (e: any) {
+    res.status(500).json({ error: 'Failed to reject task' });
+  }
 });
 
 // Long-polling endpoint for task completion events
@@ -289,13 +404,33 @@ app.post('/admin/evict', (req, res) => {
 
 // Get all agents with their connection status
 app.get('/admin/agents/status', async (req, res) => {
-  const result = await tools.list_connected_agents({});
-  const content = result.content?.[0]?.text;
-  if (content) {
-    res.json(JSON.parse(content));
-  } else {
-    res.json([]);
-  }
+  const agents = registry.getAll();
+  const waitingAgents = queue.getWaitingAgents();
+
+  const result = agents.map(agent => {
+    const assignedTasks = queue.getAssignedTasksForAgent(agent.id);
+    const lastSeen = registry.getLastSeen(agent.id);
+    const isRecent = lastSeen && (Date.now() - lastSeen) < 5 * 60 * 1000;
+    const isWaiting = waitingAgents.includes(agent.id);
+
+    let status: 'OFFLINE' | 'WAITING' | 'PROCESSING' = 'OFFLINE';
+    if (assignedTasks.length > 0) {
+      status = 'PROCESSING';
+    } else if (isWaiting || isRecent) {
+      status = 'WAITING';
+    }
+
+    return {
+      agentId: agent.id,
+      displayName: agent.displayName,
+      role: agent.role,
+      status,
+      lastSeen,
+      currentTasks: assignedTasks.map(t => t.id)
+    };
+  });
+
+  res.json(result);
 });
 
 app.post('/admin/agents/:agentId/evict', (req, res) => {
@@ -314,7 +449,9 @@ app.post('/admin/agents/:agentId/evict', (req, res) => {
 const VALID_TOOLS = [
   'register_agent', 'wait_for_prompt', 'send_response', 'assign_task',
   'list_agents', 'get_agent_status', 'ack_task', 'admin_update_agent',
-  'list_connected_agents', 'wait_for_task', 'admin_evict_agent'
+  'wait_for_task', 'admin_evict_agent',
+  'get_task_context', 'block_task', 'answer_task', 'update_progress',
+  'scaffold_plan', 'submit_review'
 ] as const;
 
 type ToolName = typeof VALID_TOOLS[number];
@@ -323,7 +460,9 @@ app.post('/mcp/tools/:toolName', async (req, res) => {
   const { toolName } = req.params;
   const args = req.body;
 
-  console.log(`[RPC] Call ${toolName}`);
+  if (toolName !== 'wait_for_prompt' && toolName !== 'get_agent_status' && toolName !== 'list_connected_agents' && toolName !== 'wait_for_task') {
+    console.log(`[RPC] Call ${toolName}`);
+  }
 
   // Validate tool name
   if (!VALID_TOOLS.includes(toolName as ToolName)) {
