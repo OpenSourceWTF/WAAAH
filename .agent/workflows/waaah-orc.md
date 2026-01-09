@@ -110,10 +110,11 @@ Then → Step 1
 
 **Goal:** Create clear implementation plan.
 
-### 1.1 Check for Spec
+### 1.1 Check for Spec/Tasks (per S4/S17)
 
-- **IF** `ctx.spec['tasks.md']` exists → Use as implementation guide
-- **ELSE** → Create your own (example below)
+- **IF** `ctx.spec` exists → Use specification text as source of truth
+- **IF** `ctx.tasks` exists → Use task checklist as implementation guide
+- **ELSE** → Generate your own inline spec (example below)
 
 ### 1.2 Self-Generated Spec Example
 
@@ -193,7 +194,24 @@ FOR each acceptance criterion:
 Rate 1-10: Correctness? Code quality?
 **Both ≥8 → Continue. Otherwise → Fix.**
 
-### 2.5 **Submit for Review** (KEY STEP)
+### 2.5 Documentation Phase (per S17)
+
+After tests pass, add inline documentation:
+1. **Infer format** from existing codebase (e.g., TSDoc for TypeScript, JSDoc for JavaScript)
+2. **Document** all exported functions, classes, and interfaces
+3. **Include**: parameters, returns, throws, and usage examples where helpful
+
+```
+// Example TSDoc format for TypeScript:
+/**
+ * Finds the best matching agent for a task.
+ * @param task - The task to match
+ * @param candidates - Available agent pool
+ * @returns The matched agent or null if none eligible
+ */
+```
+
+### 2.6 **Submit for Review** (KEY STEP)
 
 ```
 submit_review({ taskId: <TASK_ID>, message: "feat: <brief description>" })

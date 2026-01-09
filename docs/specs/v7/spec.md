@@ -44,4 +44,7 @@ S8 depends on S3 and S9.
 S5 depends on S2, S3, S9.
 S6 depends on S4.
 S12 depends on S7.
+S17 depends on S4.
+S16 depends on S17.
+S18 standalone (can run in parallel with S1-S11).
 ```
