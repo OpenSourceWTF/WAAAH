@@ -265,14 +265,17 @@ describe('ToolHandler', () => {
   });
 
   describe('admin_update_agent', () => {
-    it.skip('updates agent properties', async () => {
+    it('updates agent properties', async () => {
       const agentId = uid();
       registry.register({ id: agentId, displayName: '@OldName', capabilities: ['code-writing'] });
 
+      // Schema expects metadata.displayName, not displayName directly
       const result = await tools.admin_update_agent({
         agentId,
-        displayName: '@UpdatedName',
-        color: '#FF0000'
+        metadata: {
+          displayName: '@UpdatedName',
+          color: '#FF0000'
+        }
       });
 
       expect(result.content[0].text).toContain('Updated agent');

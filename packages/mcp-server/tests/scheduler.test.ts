@@ -134,13 +134,56 @@ describe('HybridScheduler', () => {
   });
 
   describe('rebalanceOrphanedTasks', () => {
-    // Skip: Requires agent table mock - testing agent last-seen is out of scope for queue refactoring
-    it.skip('requeues tasks from offline agents (>5 min)', () => {
-      // Test would require mocking agents table responses
+    it('requeues tasks from offline agents (>5 min)', () => {
+      // Register an agent
+      ctx.registry.register({ id: 'offline-agent', displayName: '@offline', capabilities: ['code-writing'] });
+
+      // Set last seen to more than 5 minutes ago
+      const fiveMinutesAgo = Date.now() - (6 * 60 * 1000);
+      (ctx.db as any).prepare('UPDATE agents SET lastSeen = ? WHERE id = ?').run(fiveMinutesAgo, 'offline-agent');
+
+      // Create a task assigned to this agent
+      const task = mockTask({
+        id: 'orphaned-task',
+        status: 'ASSIGNED',
+        to: { agentId: 'offline-agent', requiredCapabilities: ['code-writing'] },
+        assignedTo: 'offline-agent'
+      });
+      queue.enqueue(task);
+      queue.updateStatus('orphaned-task', 'ASSIGNED');
+
+      // Start scheduler which should requeue the task
+      queue.startScheduler(100);
+      vi.advanceTimersByTime(150);
+
+      const updated = queue.getTask('orphaned-task');
+      expect(updated?.status).toBe('QUEUED');
     });
 
-    it.skip('ignores agents seen recently', () => {
-      // Test would require mocking agents table responses
+    it('ignores agents seen recently', () => {
+      // Register an agent
+      ctx.registry.register({ id: 'active-agent', displayName: '@active', capabilities: ['code-writing'] });
+
+      // Set last seen to now (active agent)
+      (ctx.db as any).prepare('UPDATE agents SET lastSeen = ? WHERE id = ?').run(Date.now(), 'active-agent');
+
+      // Create a task assigned to this agent
+      const task = mockTask({
+        id: 'active-task',
+        status: 'ASSIGNED',
+        to: { agentId: 'active-agent', requiredCapabilities: ['code-writing'] },
+        assignedTo: 'active-agent'
+      });
+      queue.enqueue(task);
+      queue.updateStatus('active-task', 'ASSIGNED');
+
+      // Start scheduler
+      queue.startScheduler(100);
+      vi.advanceTimersByTime(150);
+
+      // Task should remain assigned (agent is active)
+      const updated = queue.getTask('active-task');
+      expect(updated?.status).toBe('ASSIGNED');
     });
   });
 
