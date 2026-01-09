@@ -25,9 +25,10 @@ Per **Section 3.5 (Spec-Driven Development)**, agents should use embedded specs 
    - Run tests → Should pass
 
 3. **Documentation Phase**:
-   - After passing tests, add inline documentation using **TSDoc** format
+   - After passing tests, add inline documentation using the project's established format
+   - Infer standard from existing codebase (e.g., TSDoc for TypeScript, JSDoc for JavaScript, docstrings for Python)
    - Document all exported functions, classes, and interfaces
-   - Include `@param`, `@returns`, `@throws`, and usage examples
+   - Include parameters, returns, throws, and usage examples where appropriate
 
 ### CLI Integration (`waaah assign`)
 - When `waaah assign spec.md` is invoked, read file contents and attach to `assign_task` call

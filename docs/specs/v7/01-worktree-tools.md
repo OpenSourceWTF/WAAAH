@@ -13,7 +13,11 @@ Standardized to `feature-{{taskId}}`.
 
 ### Cleanup (CRITICAL)
 **Agents MUST remove their worktree when task reaches `COMPLETED`.**
-The `clean_workspace` tool or equivalent `git worktree remove` command is the primary mechanism for worktree/branch teardown following a successful merge.
+Use `git worktree remove` via `run_command` tool (not an MCP tool). Example:
+```bash
+git worktree remove .worktrees/feature-<TASK_ID> --force
+git branch -D feature-<TASK_ID>
+```
 
 ## Unified Worktree Strategy (Post Jan 8 Update)
 

@@ -39,7 +39,7 @@ When receiving a task that was previously `IN_REVIEW`:
 ### Spec-Driven Development (per S17)
 - Check for `ctx.spec` or `ctx.tasks` in Phase 1
 - If absent, generate inline spec before implementation
-- Phase 2 includes TDD (tests first) and TSDoc documentation
+- Phase 2 includes TDD (tests first) and documentation using the project's established format
 
 ## Status
 TODO

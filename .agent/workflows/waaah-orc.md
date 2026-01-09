@@ -26,11 +26,13 @@ description: Orchestrator agent lifecycle - plan/build/verify/merge
 |-------------|-------------|
 | QUEUED / ASSIGNED | → PHASE 1 (Plan) |
 | IN_PROGRESS (new) | → PHASE 2 (Build) |
-| IN_PROGRESS (rejected) | → Read messages for feedback, PHASE 2 |
+| QUEUED (with feedback) | → Read `task.messages` for user feedback, then PHASE 2 |
 | APPROVED | → PHASE 3 (Merge) |
 | BLOCKED + answer | → Resume PHASE 2 with answer |
 | CANCELLED | → Cleanup worktree, loop |
 | IN_REVIEW | → Do nothing, wait |
+
+> **Note**: Tasks returning from `IN_REVIEW` with feedback become `QUEUED` again. Check `task.messages` for user comments.
 
 ---
 
@@ -41,7 +43,7 @@ description: Orchestrator agent lifecycle - plan/build/verify/merge
 1. **Register:**
    ```
    register_agent({
-     capabilities: ["code-writing", "spec-writing", "test-writing"]
+     capabilities: ["code-writing", "spec-writing", "test-writing", "doc-writing"]
    })
    ```
    If fails → Retry after 5 seconds, max 3 attempts, then exit.

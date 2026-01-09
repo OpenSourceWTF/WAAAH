@@ -163,7 +163,7 @@ WAAAH supports **spec-driven development** to ensure structured, verifiable work
 *   **If spec provided**: Agent uses embedded spec as the source of truth for requirements.
 *   **If no spec provided**: Agent MUST generate a spec inline before implementation (self-generated planning).
 *   **Testing Phase**: Agent writes tests BEFORE implementation (TDD), then fills in code.
-*   **Documentation Phase**: Agent adds inline documentation using **TSDoc** format for all exported functions/classes.
+*   **Documentation Phase**: Agent adds inline documentation using the project's established format (infer from codebase).
 
 **Priority Levels**:
 Tasks support three priority levels, processed in this order:
