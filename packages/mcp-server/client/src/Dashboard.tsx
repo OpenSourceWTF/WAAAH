@@ -3,7 +3,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { ListChecks, Skull, Search, Filter, MessageSquare, ChevronDown, ChevronUp, RefreshCw, XCircle, Power, Sun, Moon, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { ListChecks, Skull, Search, Filter, MessageSquare, ChevronDown, ChevronUp, RefreshCw, XCircle, Power, Sun, Moon, PanelLeftClose, PanelLeftOpen, Pin, Clock, Cpu } from "lucide-react";
 import { KanbanBoard } from './KanbanBoard';
 import { ActivityFeed } from '@/components/ActivityFeed';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -16,12 +16,15 @@ interface Agent {
   status: 'OFFLINE' | 'WAITING' | 'PROCESSING';
   lastSeen?: number;
   currentTasks?: string[];
+  capabilities?: string[];  // Task 1: expandable agent cards
+  createdAt?: number;       // Task 1: expandable agent cards
 }
 
 interface Task {
   id: string;
   command: string;
   prompt: string;
+  title?: string;  // Task 3: task title support
   status: string;
   text?: string; // For history items
   toAgentId?: string;
@@ -79,6 +82,10 @@ export function Dashboard() {
 
   // Expandable Cards State
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
+
+  // Task 1: Expandable Agent Cards - pin/hover state
+  const [pinnedAgents, setPinnedAgents] = useState<Set<string>>(new Set());
+  const [hoveredAgent, setHoveredAgent] = useState<string | null>(null);
 
   const [botCount, setBotCount] = useState(0);
   const [stats, setStats] = useState({ total: 0, completed: 0 });
@@ -332,6 +339,31 @@ export function Dashboard() {
       }
       return next;
     });
+  };
+
+  // Task 1: Toggle agent pin
+  const toggleAgentPin = (agentId: string) => {
+    setPinnedAgents(prev => {
+      const next = new Set(prev);
+      if (next.has(agentId)) {
+        next.delete(agentId);
+      } else {
+        next.add(agentId);
+      }
+      return next;
+    });
+  };
+
+  // Task 1: Relative time helper
+  const getRelativeTime = (ts?: number) => {
+    if (!ts) return 'Unknown';
+    const diff = Date.now() - ts;
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'Just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours}h ago`;
+    return `${Math.floor(hours / 24)}d ago`;
   };
 
   const renderTaskCard = (task: Task) => {
@@ -612,37 +644,100 @@ export function Dashboard() {
             </h2>
             <div className="space-y-3">
               {agents.length === 0 && <div className="text-sm text-primary/50 italic">NO AGENTS AROUND...</div>}
-              {agents.map(agent => (
-                <div key={agent.id} className="flex items-center justify-between p-3 border-2 border-primary/50 hover:border-primary bg-card hover:bg-primary/10 transition-all cursor-pointer group hover:translate-x-1">
-                  <div className="space-y-1">
-                    <div className="text-sm font-bold text-primary group-hover:text-foreground transition-colors">{agent.displayName || agent.id}</div>
-                    <div className="text-xs text-primary/60 font-mono tracking-tighter">[{agent.role}]</div>
-                    {agent.currentTasks && agent.currentTasks.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {agent.currentTasks.map(taskId => (
-                          <Badge key={taskId} variant="outline" className="text-[10px] h-4 px-1 border-primary/50 text-primary/80 font-mono bg-black/20">
-                            {taskId}
-                          </Badge>
-                        ))}
+              {agents.map(agent => {
+                const isPinned = pinnedAgents.has(agent.id);
+                const isHovered = hoveredAgent === agent.id;
+                const isExpanded = isPinned || isHovered;
+
+                return (
+                  <div
+                    key={agent.id}
+                    className={`border-2 transition-all cursor-pointer group ${isPinned
+                      ? 'border-primary bg-primary/10 shadow-[0_0_10px_hsl(var(--glow)/0.3)]'
+                      : 'border-primary/50 hover:border-primary bg-card hover:bg-primary/10'
+                      }`}
+                    onClick={() => toggleAgentPin(agent.id)}
+                    onMouseEnter={() => setHoveredAgent(agent.id)}
+                    onMouseLeave={() => setHoveredAgent(null)}
+                  >
+                    {/* Header Row */}
+                    <div className="flex items-center justify-between p-3">
+                      <div className="space-y-1 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-bold text-primary group-hover:text-foreground transition-colors">
+                            {agent.displayName || agent.id}
+                          </span>
+                          {isPinned && <Pin className="h-3 w-3 text-primary" />}
+                        </div>
+                        <div className="text-xs text-primary/60 font-mono tracking-tighter">[{agent.role}]</div>
+                        {agent.currentTasks && agent.currentTasks.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {agent.currentTasks.map(taskId => (
+                              <Badge key={taskId} variant="outline" className="text-[10px] h-4 px-1 border-primary/50 text-primary/80 font-mono bg-black/20">
+                                {taskId}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                    )}
+                      <div className="flex items-center gap-2">
+                        <Badge className={`${getStatusBadgeClass(agent.status)} ${agent.status === 'PROCESSING' ? 'animate-pulse' : ''}`}>
+                          {agent.status}
+                        </Badge>
+                        {isExpanded ? <ChevronUp className="h-4 w-4 text-primary" /> : <ChevronDown className="h-4 w-4 text-primary opacity-50" />}
+                      </div>
+                    </div>
+
+                    {/* Expanded Content */}
+                    <div className={`overflow-hidden transition-all duration-300 ${isExpanded ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'}`}>
+                      <div className="px-3 pb-3 pt-2 border-t border-primary/20 bg-primary/5 space-y-3">
+                        {/* Time Info */}
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div className="flex items-center gap-1 text-primary/70">
+                            <Clock className="h-3 w-3" />
+                            <span>Created: {agent.createdAt ? formatDate(agent.createdAt) : 'Unknown'}</span>
+                          </div>
+                          <div className="flex items-center gap-1 text-primary/70">
+                            <span>Last seen: {getRelativeTime(agent.lastSeen)}</span>
+                          </div>
+                        </div>
+
+                        {/* Capabilities */}
+                        {agent.capabilities && agent.capabilities.length > 0 && (
+                          <div>
+                            <div className="flex items-center gap-1 text-xs text-primary/50 mb-1">
+                              <Cpu className="h-3 w-3" />
+                              <span>CAPABILITIES:</span>
+                            </div>
+                            <div className="flex flex-wrap gap-1">
+                              {agent.capabilities.map((cap, i) => (
+                                <Badge key={i} variant="outline" className="text-[10px] h-5 px-2 border-primary/30 text-primary/70 bg-black/20 font-mono">
+                                  {cap}
+                                </Badge>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Actions Row */}
+                        <div className="flex justify-between items-center pt-2 border-t border-primary/10">
+                          <div className="flex items-center gap-1 text-[10px] text-primary/40 font-mono">
+                            ID: {agent.id}
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 px-2 gap-1 bg-white text-black hover:bg-red-500 hover:text-white transition-all rounded-sm text-xs"
+                            onClick={(e) => handleEvictAgent(e, agent.id)}
+                          >
+                            <Power className="h-3 w-3" /> Shutdown
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Badge className={`${getStatusBadgeClass(agent.status)} ${agent.status === 'PROCESSING' ? 'animate-pulse' : ''}`}>
-                      {agent.status}
-                    </Badge>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6 bg-white text-black hover:bg-blue-500 hover:text-white transition-all rounded-sm"
-                      onClick={(e) => handleEvictAgent(e, agent.id)}
-                      title="Shutdown Agent"
-                    >
-                      <Power className="h-3 w-3" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
