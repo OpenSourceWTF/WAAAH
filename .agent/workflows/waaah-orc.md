@@ -276,12 +276,44 @@ update_progress({
 
 > **⚠️ CRITICAL**: Regular heartbeats prove agent is active. Stale tasks (>5 min without update) appear stuck on Dashboard.
 
-### 2.4 Quality Gate
+### 2.4 Test Loop (REQUIRED)
+
+**After completing Build Loop, run comprehensive test verification:**
+
+```
+TEST_LOOP:
+  1. Run full test suite: pnpm test
+  2. IF tests fail:
+     a. Analyze failure output
+     b. Fix the issue
+     c. GOTO TEST_LOOP (re-run all tests)
+  3. IF tests pass:
+     a. Run type check: pnpm typecheck OR tsc --noEmit
+     b. IF type errors → Fix and GOTO TEST_LOOP
+  4. Run lint: pnpm lint
+     a. IF lint errors → Fix and GOTO TEST_LOOP
+  5. ALL CHECKS PASS → Continue to Quality Gate
+```
+
+**Test Loop Heartbeat:**
+```
+update_progress({
+  taskId: <TASK_ID>,
+  agentId: <AGENT_ID>,
+  phase: "TESTING",
+  message: "All tests passing (15/15), type check clean",
+  percentage: 80
+})
+```
+
+> **⚠️ Do NOT proceed to Quality Gate until ALL tests, type checks, and lint pass.**
+
+### 2.5 Quality Gate
 
 Rate 1-10: Correctness? Code quality?
 **Both ≥9.5 → Continue. Otherwise → Fix.**
 
-### 2.5 Documentation Phase (per S17)
+### 2.6 Documentation Phase (per S17)
 
 After tests pass, add inline documentation:
 1. **Infer format** from existing codebase (e.g., TSDoc for TypeScript, JSDoc for JavaScript)
@@ -298,7 +330,7 @@ After tests pass, add inline documentation:
  */
 ```
 
-### 2.6 **Submit for Review** (KEY STEP)
+### 2.7 **Submit for Review** (KEY STEP)
 
 1. **Generate Diffs**:
    ```bash
