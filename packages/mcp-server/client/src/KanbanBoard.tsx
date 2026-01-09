@@ -1,10 +1,19 @@
-
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { XCircle, RefreshCw, History, X, Clock, User, FileText, Settings, MessageSquare, CheckCircle } from "lucide-react";
+import { XCircle, RefreshCw, History, X, Clock, User, FileText, Settings, MessageSquare, CheckCircle, Send, MessageCircle, Circle } from "lucide-react";
+
+interface TaskMessage {
+  id?: string;
+  timestamp: number;
+  role: string;
+  content: string;
+  isRead?: boolean;
+  messageType?: 'comment' | 'progress' | 'review_feedback' | 'block_event';
+  metadata?: Record<string, unknown>;
+}
 
 interface Task {
   id: string;
@@ -17,7 +26,7 @@ interface Task {
   assignedTo?: string;
   context?: Record<string, unknown>;
   response?: Record<string, unknown>;
-  messages?: { timestamp: number; role: string; content: string; metadata?: Record<string, unknown> }[];
+  messages?: TaskMessage[];
   history?: { timestamp: number; status: string; agentId?: string; message?: string }[];
   createdAt?: number;
   completedAt?: number;
@@ -30,6 +39,8 @@ interface KanbanBoardProps {
   onCancelTask: (e: React.MouseEvent, id: string) => void;
   onRetryTask: (e: React.MouseEvent, id: string) => void;
   onApproveTask: (e: React.MouseEvent, id: string) => void;
+  onRejectTask: (id: string, feedback: string) => void;
+  onSendComment: (taskId: string, content: string) => void;
   onViewHistory: () => void;
   onTaskClick?: (task: Task) => void;
 }
@@ -57,9 +68,14 @@ const COLUMNS = [
   { id: 'CANCELLED', label: 'CANCELLED', statuses: ['CANCELLED', 'FAILED'] }
 ];
 
-export const KanbanBoard = React.memo(function KanbanBoard({ tasks, completedTasks, cancelledTasks, onCancelTask, onRetryTask, onApproveTask, onViewHistory }: KanbanBoardProps) {
+export const KanbanBoard = React.memo(function KanbanBoard({ tasks, completedTasks, cancelledTasks, onCancelTask, onRetryTask, onApproveTask, onRejectTask, onViewHistory }: KanbanBoardProps) {
   // Expanded card state - null means no card expanded
   const [expandedTask, setExpandedTask] = useState<Task | null>(null);
+
+  // Rejection modal state
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [rejectFeedback, setRejectFeedback] = useState('');
+  const [rejectingTaskId, setRejectingTaskId] = useState<string | null>(null);
 
   // Group tasks by column
   const columns = useMemo(() => {
@@ -172,6 +188,27 @@ export const KanbanBoard = React.memo(function KanbanBoard({ tasks, completedTas
     setExpandedTask(null);
   }, []);
 
+  // Rejection modal handlers
+  const handleOpenRejectModal = useCallback((taskId: string) => {
+    setRejectingTaskId(taskId);
+    setRejectFeedback('');
+    setShowRejectModal(true);
+  }, []);
+
+  const handleCloseRejectModal = useCallback(() => {
+    setShowRejectModal(false);
+    setRejectFeedback('');
+    setRejectingTaskId(null);
+  }, []);
+
+  const handleConfirmReject = useCallback(() => {
+    if (rejectingTaskId && rejectFeedback.trim()) {
+      onRejectTask(rejectingTaskId, rejectFeedback.trim());
+      handleCloseRejectModal();
+      handleCloseExpanded();
+    }
+  }, [rejectingTaskId, rejectFeedback, onRejectTask, handleCloseRejectModal, handleCloseExpanded]);
+
   // Expanded Card View Component
   const ExpandedCardView = ({ task }: { task: Task }) => {
     const progressUpdates = getProgressUpdates(task);
@@ -237,7 +274,10 @@ export const KanbanBoard = React.memo(function KanbanBoard({ tasks, completedTas
         )}
 
         {/* Tabbed Content */}
-        <Tabs defaultValue="prompt" className="flex-1 flex flex-col min-h-0">
+        <Tabs
+          defaultValue={['REVIEW', 'IN_REVIEW', 'PENDING_RES', 'BLOCKED'].includes(task.status) ? 'review' : 'prompt'}
+          className="flex-1 flex flex-col min-h-0"
+        >
           <TabsList className="bg-transparent border-b border-primary/20 w-full justify-start rounded-none p-0 h-auto gap-0 flex-shrink-0">
             <TabsTrigger
               value="prompt"
@@ -246,19 +286,35 @@ export const KanbanBoard = React.memo(function KanbanBoard({ tasks, completedTas
               <FileText className="h-4 w-4" />
               Prompt
             </TabsTrigger>
+            {task.response && (
+              <TabsTrigger
+                value="output"
+                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-primary/10 px-4 py-2 text-sm flex items-center gap-2"
+              >
+                <MessageSquare className="h-4 w-4" />
+                Output
+              </TabsTrigger>
+            )}
+            <TabsTrigger
+              value="timeline"
+              className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-primary/10 px-4 py-2 text-sm flex items-center gap-2"
+            >
+              <Clock className="h-4 w-4" />
+              Timeline
+            </TabsTrigger>
+            <TabsTrigger
+              value="review"
+              className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-primary/10 px-4 py-2 text-sm flex items-center gap-2"
+            >
+              <CheckCircle className="h-4 w-4" />
+              Review
+            </TabsTrigger>
             <TabsTrigger
               value="context"
               className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-primary/10 px-4 py-2 text-sm flex items-center gap-2"
             >
               <Settings className="h-4 w-4" />
               Context
-            </TabsTrigger>
-            <TabsTrigger
-              value="output"
-              className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-primary/10 px-4 py-2 text-sm flex items-center gap-2"
-            >
-              <MessageSquare className="h-4 w-4" />
-              Output
             </TabsTrigger>
           </TabsList>
 
@@ -276,7 +332,7 @@ export const KanbanBoard = React.memo(function KanbanBoard({ tasks, completedTas
                     {task.prompt}
                   </pre>
                 </div>
-                {/* Timeline of progress updates */}
+                {/* Progress updates remain here */}
                 {progressUpdates.length > 0 && (
                   <div>
                     <h3 className="text-sm font-bold text-primary/70 mb-2">PROGRESS UPDATES</h3>
@@ -299,7 +355,113 @@ export const KanbanBoard = React.memo(function KanbanBoard({ tasks, completedTas
               </div>
             </TabsContent>
 
-            {/* CONTEXT TAB */}
+            {/* OUTPUT TAB - Only rendered if task.response exists */}
+            <TabsContent value="output" className="m-0 p-4 h-full">
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-sm font-bold text-primary/70 mb-2">RESPONSE</h3>
+                  <pre className="text-xs bg-black/30 p-4 border border-primary/20 overflow-auto max-h-[400px] whitespace-pre-wrap">
+                    {formatResponse(task.response)}
+                  </pre>
+                </div>
+              </div>
+            </TabsContent>
+
+            {/* TIMELINE TAB - Combined messages and history */}
+            <TabsContent value="timeline" className="m-0 p-4 h-full">
+              <div className="space-y-4">
+                {/* Messages */}
+                {task.messages && task.messages.length > 0 && (
+                  <div>
+                    <h3 className="text-sm font-bold text-primary/70 mb-2">MESSAGES ({task.messages.length})</h3>
+                    <div className="space-y-2 max-h-[250px] overflow-y-auto">
+                      {task.messages.map((msg, i) => (
+                        <div
+                          key={i}
+                          className={`text-xs p-2 border-l-2 ${msg.role === 'user' ? 'border-blue-500 bg-blue-500/10' :
+                            msg.role === 'agent' ? 'border-primary bg-primary/5' :
+                              'border-gray-500 bg-gray-500/5'
+                            }`}
+                        >
+                          <div className="flex items-center gap-2 mb-1">
+                            <Badge variant="outline" className="text-[10px]">{msg.role}</Badge>
+                            <span className="text-primary/40 font-mono">
+                              {new Date(msg.timestamp).toLocaleTimeString()}
+                            </span>
+                          </div>
+                          <p className="text-primary/80 whitespace-pre-wrap">{msg.content}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {/* History */}
+                {task.history && task.history.length > 0 && (
+                  <div>
+                    <h3 className="text-sm font-bold text-primary/70 mb-2">STATUS HISTORY</h3>
+                    <div className="space-y-1 max-h-[200px] overflow-y-auto border-l-2 border-primary/20 pl-4">
+                      {task.history.map((h, i) => (
+                        <div key={i} className="text-xs flex items-center gap-2">
+                          <span className="text-primary/40 font-mono shrink-0">
+                            {new Date(h.timestamp).toLocaleTimeString()}
+                          </span>
+                          <Badge className={getStatusBadgeClass(h.status)}>{h.status}</Badge>
+                          {h.message && <span className="text-primary/60 truncate">{h.message}</span>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {/* Empty state */}
+                {(!task.messages || task.messages.length === 0) && (!task.history || task.history.length === 0) && (
+                  <div className="text-center p-8 text-primary/40 italic">
+                    No timeline events available
+                  </div>
+                )}
+              </div>
+            </TabsContent>
+
+            {/* REVIEW TAB - File diffs / review content */}
+            <TabsContent value="review" className="m-0 p-4 h-full">
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-sm font-bold text-primary/70 mb-2">REVIEW STATUS</h3>
+                  <div className="flex items-center gap-2 mb-4">
+                    <Badge className={getStatusBadgeClass(task.status)}>{task.status}</Badge>
+                    {task.assignedTo && (
+                      <span className="text-xs text-primary/60">
+                        Assigned to: <span className="font-mono">{task.assignedTo}</span>
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-primary/70 mb-2">FILE CHANGES</h3>
+                  {/* Placeholder for diff content - check if context has fileChanges or similar */}
+                  {task.context && (task.context as any).fileChanges ? (
+                    <pre className="text-xs bg-black/30 p-4 border border-primary/20 overflow-auto max-h-[300px] whitespace-pre-wrap">
+                      {JSON.stringify((task.context as any).fileChanges, null, 2)}
+                    </pre>
+                  ) : task.context && (task.context as any).artifacts ? (
+                    <div className="space-y-2">
+                      <p className="text-xs text-primary/60 mb-2">Artifacts submitted for review:</p>
+                      {((task.context as any).artifacts as string[]).map((artifact, i) => (
+                        <div key={i} className="text-xs bg-black/30 p-2 border border-primary/20 font-mono break-all">
+                          {artifact}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center p-8 border-2 border-dashed border-primary/30 text-primary/40 italic">
+                      <p>No file diff data available</p>
+                      <p className="text-xs mt-2">Diff information will appear here when available</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </TabsContent>
+
+            {/* CONTEXT TAB - Cleaned up, no history/messages */}
             <TabsContent value="context" className="m-0 p-4 h-full">
               <div className="space-y-4">
                 <div>
@@ -331,60 +493,6 @@ export const KanbanBoard = React.memo(function KanbanBoard({ tasks, completedTas
                     </pre>
                   </div>
                 )}
-                {/* Task History */}
-                {task.history && task.history.length > 0 && (
-                  <div>
-                    <h3 className="text-sm font-bold text-primary/70 mb-2">HISTORY</h3>
-                    <div className="space-y-1 max-h-[200px] overflow-y-auto border-l-2 border-primary/20 pl-4">
-                      {task.history.map((h, i) => (
-                        <div key={i} className="text-xs flex items-center gap-2">
-                          <span className="text-primary/40 font-mono shrink-0">
-                            {new Date(h.timestamp).toLocaleTimeString()}
-                          </span>
-                          <Badge className={getStatusBadgeClass(h.status)}>{h.status}</Badge>
-                          {h.message && <span className="text-primary/60 truncate">{h.message}</span>}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </TabsContent>
-
-            {/* OUTPUT TAB */}
-            <TabsContent value="output" className="m-0 p-4 h-full">
-              <div className="space-y-4">
-                <div>
-                  <h3 className="text-sm font-bold text-primary/70 mb-2">RESPONSE</h3>
-                  <pre className="text-xs bg-black/30 p-4 border border-primary/20 overflow-auto max-h-[200px] whitespace-pre-wrap">
-                    {formatResponse(task.response)}
-                  </pre>
-                </div>
-                {/* Messages / Timeline */}
-                {task.messages && task.messages.length > 0 && (
-                  <div>
-                    <h3 className="text-sm font-bold text-primary/70 mb-2">MESSAGES ({task.messages.length})</h3>
-                    <div className="space-y-2 max-h-[250px] overflow-y-auto">
-                      {task.messages.map((msg, i) => (
-                        <div
-                          key={i}
-                          className={`text-xs p-2 border-l-2 ${msg.role === 'user' ? 'border-blue-500 bg-blue-500/10' :
-                            msg.role === 'agent' ? 'border-primary bg-primary/5' :
-                              'border-gray-500 bg-gray-500/5'
-                            }`}
-                        >
-                          <div className="flex items-center gap-2 mb-1">
-                            <Badge variant="outline" className="text-[10px]">{msg.role}</Badge>
-                            <span className="text-primary/40 font-mono">
-                              {new Date(msg.timestamp).toLocaleTimeString()}
-                            </span>
-                          </div>
-                          <p className="text-primary/80 whitespace-pre-wrap">{msg.content}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
             </TabsContent>
           </div>
@@ -401,6 +509,16 @@ export const KanbanBoard = React.memo(function KanbanBoard({ tasks, completedTas
                 onClick={(e) => { onApproveTask(e, task.id); handleCloseExpanded(); }}
               >
                 <CheckCircle className="h-4 w-4" /> Approve
+              </Button>
+            )}
+            {canApprove && (
+              <Button
+                variant="destructive"
+                size="sm"
+                className="h-8 gap-2 font-mono uppercase bg-orange-600 hover:bg-orange-700 text-white border-orange-800"
+                onClick={() => handleOpenRejectModal(task.id)}
+              >
+                <XCircle className="h-4 w-4" /> Reject
               </Button>
             )}
             {canRetry && (
@@ -569,6 +687,44 @@ export const KanbanBoard = React.memo(function KanbanBoard({ tasks, completedTas
           </div>
         </div>
       ))}
+
+      {/* Rejection Feedback Modal */}
+      {showRejectModal && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-card border-2 border-primary p-6 w-full max-w-md shadow-lg shadow-primary/30 animate-in zoom-in-95 duration-200">
+            <h2 className="text-xl font-bold mb-4 text-primary">Reject Task</h2>
+            <p className="text-sm text-muted-foreground mb-4">
+              Please provide feedback for the agent explaining what needs to be fixed.
+            </p>
+            <textarea
+              className="w-full h-32 p-3 bg-black/50 border-2 border-primary/50 text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none resize-none"
+              placeholder="Enter rejection feedback (required)..."
+              value={rejectFeedback}
+              onChange={(e) => setRejectFeedback(e.target.value)}
+              autoFocus
+            />
+            <div className="flex justify-end gap-2 mt-4">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 font-mono uppercase border-primary text-primary hover:bg-primary hover:text-black"
+                onClick={handleCloseRejectModal}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                className="h-8 font-mono uppercase bg-orange-600 hover:bg-orange-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={handleConfirmReject}
+                disabled={!rejectFeedback.trim()}
+              >
+                Confirm Rejection
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }, arePropsEqual);

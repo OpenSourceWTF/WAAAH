@@ -72,7 +72,64 @@ git worktree list | grep "feature-<TASK_ID>"
 | CANCELLED | | → Cleanup worktree, loop |
 | IN_REVIEW | | → Do nothing, wait |
 
-> **Note**: Tasks returning from `IN_REVIEW` with feedback become `QUEUED` again. Check `task.messages` for user comments. Empty `messages` array with existing worktree = APPROVED.
+> **Note**: Tasks returning from `IN_REVIEW` with feedback become `IN_PROGRESS` again. Check `task.messages` for user comments. Empty `messages` array with existing worktree = APPROVED.
+
+---
+
+## 🔴 REJECTION DETECTION
+
+**When a task returns from review with feedback, you MUST process it:**
+
+### Detection Logic
+
+```
+IS_REJECTED = (
+  worktree_exists(BRANCH)                        // You already worked on this
+  AND ctx.status === "IN_PROGRESS"               // Sent back to work
+  AND has_unread_feedback(ctx.messages)          // User left feedback
+)
+
+# Check for rejection feedback in messages:
+REJECTION_FEEDBACK = ctx.messages.filter(m => 
+  m.role === 'user' && 
+  m.content.startsWith('Task Rejected:')
+)
+```
+
+### Handling Rejection Feedback
+
+**If REJECTION_FEEDBACK exists:**
+
+1. **Read ALL feedback comments** carefully
+2. **For EACH feedback item:**
+   a. Understand the specific issue
+   b. Fix the issue in the worktree
+   c. Add a message acknowledging the fix: `update_progress({ message: "Fixed: <summary of fix>" })`
+3. **After addressing ALL feedback:**
+   a. Run full test loop (2.5)
+   b. Pass quality gates (2.4, 2.6, 2.8)
+   c. Re-submit for review (2.9)
+
+**Example Flow:**
+```
+# 1. Receive rejected task
+ctx = wait_for_prompt(...)
+# ctx.messages = [{ role: 'user', content: 'Task Rejected: Missing error handling for empty input' }]
+
+# 2. Acknowledge and fix
+cd <WORKTREE>
+# ... fix the error handling ...
+
+# 3. Report progress
+update_progress({
+  taskId: <TASK_ID>,
+  agentId: <AGENT_ID>,
+  phase: "EXECUTION",
+  message: "Fixed: Added empty input validation with descriptive error message"
+})
+
+# 4. Run tests, pass gates, re-submit
+```
 
 ---
 
@@ -287,6 +344,26 @@ update_progress({
 ```
 
 > **⚠️ CRITICAL**: Regular heartbeats prove agent is active. Stale tasks (>5 min without update) appear stuck on Dashboard.
+
+### 2.3.2 📬 Processing User Comments (Mailbox)
+
+The `update_progress` response may contain unread user comments. **You MUST check and process these:**
+
+```
+response = update_progress({ taskId, agentId, phase, message, percentage })
+
+IF response.unreadComments AND response.unreadComments.length > 0:
+  FOR EACH comment in response.unreadComments:
+    # Treat comment.content as additional user guidance
+    # Incorporate into current work (e.g., adjust approach, add requirements)
+    console.log("User comment:", comment.content)
+```
+
+**Comment Processing Rules:**
+- Comments are **advisory guidance**, not blocking instructions
+- Use best judgment to incorporate feedback into current work
+- If comment requires significant scope change → Consider `block_task`
+- Always acknowledge receipt via next `update_progress` message
 
 ### 2.3.1 🛑 BLOCKED Conditions
 

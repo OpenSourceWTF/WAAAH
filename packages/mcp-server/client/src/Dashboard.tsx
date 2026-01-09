@@ -263,8 +263,24 @@ export function Dashboard() {
       const res = await fetch(`/admin/tasks/${taskId}/approve`, { method: 'POST' });
       if (!res.ok) throw new Error('Failed to approve');
       console.log(`Task ${taskId} approved`);
+      fetchData(); // Refresh immediately
     } catch (error) {
       console.error("Failed to approve task", error);
+    }
+  }, []);
+
+  const handleRejectTask = useCallback(async (taskId: string, feedback: string) => {
+    try {
+      const res = await fetch(`/admin/tasks/${taskId}/reject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ feedback })
+      });
+      if (!res.ok) throw new Error('Failed to reject');
+      console.log(`Task ${taskId} rejected with feedback: ${feedback}`);
+      fetchData(); // Refresh immediately
+    } catch (error) {
+      console.error("Failed to reject task", error);
     }
   }, []);
 
@@ -571,6 +587,7 @@ export function Dashboard() {
                   onCancelTask={handleCancelTask}
                   onRetryTask={handleRetryTask}
                   onApproveTask={handleApproveTask}
+                  onRejectTask={handleRejectTask}
                   onViewHistory={handleViewHistory}
                 />
               </TabsContent>
