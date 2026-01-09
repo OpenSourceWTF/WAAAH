@@ -11,8 +11,9 @@ The Hub provides operational instructions (Notice block) during task delivery. L
 ### Branch Naming
 Standardized to `feature-{{taskId}}`.
 
-### Cleanup
-The `clean_workspace` tool is the primary mechanism for worktree/branch teardown following a successful merge.
+### Cleanup (CRITICAL)
+**Agents MUST remove their worktree when task reaches `COMPLETED`.**
+The `clean_workspace` tool or equivalent `git worktree remove` command is the primary mechanism for worktree/branch teardown following a successful merge.
 
 ## Unified Worktree Strategy (Post Jan 8 Update)
 
@@ -22,10 +23,11 @@ Following the Jan 8 incident, the system transitioned to a **Unified Instruction
 
 2. **ack_task Integration**: For agents running in the same environment as the Hub, `ack_task` performs a background check (`_ensureWorktree`) to verify paths, though it remains non-blocking for remote agents.
 
-3. **Merge Responsibility**: Once approved, the agent performs the merge and cleanup.
+3. **Merge & Cleanup Responsibility**: Once approved, the agent performs the merge and **must cleanup the worktree**.
 
 ## Implementation Checklist
 - [x] Implement `/admin/tasks/:taskId/approve` (Refactored to remove Git operations)
 - [x] Implement `/admin/tasks/:taskId/reject` with feedback and worktree preservation
 - [x] Ensure `ack_task` does NOT manage worktrees
 - [x] Document decentralized worktree management
+- [x] Document cleanup requirement on COMPLETED
