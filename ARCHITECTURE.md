@@ -16,6 +16,7 @@ The system is designed around a **"Pull" architecture** where agents actively re
 *   **Centralized State, Distributed Execution**: The MCP Server holds the source of truth; Agents hold the execution context.
 *   **Database-Backed Consistency**: All state transitions are persisted immediately. No ephemeral in-memory state for critical flows.
 *   **Capability-Based Matching**: Agents are assigned work based on what they *can* do, not just who they are.
+*   **Git-Based Isolation**: File system operations happen in isolated Git worktrees. Agents must track workspace context (repo/branch) to prevent collisions.
 
 ---
 
@@ -27,51 +28,48 @@ graph TD
     User -->|View/Manage| Dash[Dashboard UI]
     User -->|CLI Ops| CLI[WAAAH CLI]
 
-    subgraph "Control Plane"
+    subgraph Control_Plane
         Bot -->|HTTP/MCP| Server[MCP Server]
         Dash -->|HTTP/SSE| Server
         CLI -->|HTTP/MCP| Server
         Server -->|Read/Write| DB[(SQLite Database)]
     end
 
-    subgraph "Execution Plane"
+    subgraph Execution_Plane
         Server --"MCP (SSE)"--> Agent1[Orchestrator Agent]
         Server --"MCP (SSE)"--> Agent2[Coding Agent]
-        Server --"MCP (SSE)"--> Agent3[Doc Agent]
     end
 
-    Agent1 <--> FS[FileSystem / Git]
-    Agent2 <--> FS
+    Agent1 <--> WORKTREE1[Git Worktree A]
+    Agent2 <--> WORKTREE2[Git Worktree B]
 ```
 
 ### Components Detail
 
 1.  **MCP Server (`packages/mcp-server`)**:
-    *   The brain of the operation.
-    *   Hosts the MCP endpoints for tools (`list_agents`, `server_ready`, etc.).
-    *   Manages the global `TaskQueue` and `AgentRegistry`.
-    *   Runs the `HybridScheduler` loop for task assignment.
-    *   Exposes a REST API (`/admin/*`) for the Dashboard and CLI.
+    *   **Role**: Scheduling, communications, data persistence, and task state management.
+    *   **Constraint**: NO access to agent's remote contexts or file systems.
+    *   Hosts MCP endpoints and Admin API.
+    *   Runs the `HybridScheduler` (periodic cleanup/rebalancing loop).
 
 2.  **Unified Bot (`packages/bot`)**:
     *   Interface for users on Discord and Slack.
     *   Adapters normalize messages into a standard format.
-    *   Communicates with the MCP Server to create tasks (`/admin/enqueue`) and report events.
 
 3.  **Dashboard (`packages/mcp-server/client`)**:
-    *   React/Vite single-page application.
-    *   Visualizes the Kanban board of tasks.
-    *   Real-time updates via Server-Sent Events (SSE) or polling.
+    *   React/Vite app visualization of the Kanban board.
+    *   Real-time updates via Server-Sent Events.
 
 4.  **CLI (`packages/cli`)**:
-    *   Operator tool for manual management.
-    *   Commands: `waaah send`, `waaah list-agents`, `waaah status`.
-    *   Useful for headless environments or scripting.
+    *   Operator tool for manual management (`waaah send`, `waaah status`).
+    *   Used for headless operations.
 
 5.  **Agents**:
-    *   Autonomous processes (e.g., initialized via Claude Desktop or headless scripts).
-    *   Connect to the Server via MCP.
-    *   Poll for work using the `wait_for_prompt` tool (Long Polling).
+    *   Autonomous processes connecting via MCP.
+    *   **Responsibility**:
+        *   Poll for work (`wait_for_prompt`).
+        *   **Worktree Management**: Create/Manage isolated git worktrees for tasks.
+        *   **Execution**: Perform changes, commit, and push.
 
 ---
 
@@ -79,44 +77,53 @@ graph TD
 
 ### 3.1 Task Lifecycle
 
-Tasks move through a strict state machine to ensure no work is lost.
+Tasks move through a strict state machine. The "Happy Path" involves a review loop.
 
 ```mermaid
 stateDiagram-v2
     [*] --> QUEUED: Created via Bot/CLI
     QUEUED --> ASSIGNED: Scheduler matches Agent
-    ASSIGNED --> PENDING_ACK: Agent reserved
+    ASSIGNED --> PENDING_ACK: Server reserves Agent
     PENDING_ACK --> IN_PROGRESS: Agent ACKs task
     PENDING_ACK --> QUEUED: Timeout (Requeue)
     
-    IN_PROGRESS --> BLOCKED: Agent explicitly blocks
-    BLOCKED --> QUEUED: Dependencies met
-    BLOCKED --> IN_PROGRESS: User answers question
+    IN_PROGRESS --> BLOCKED: Agent needs info
+    BLOCKED --> IN_PROGRESS: User answers
     
-    IN_PROGRESS --> COMPLETED: Success
+    IN_PROGRESS --> IN_REVIEW: Agent Commits & Pushes
+    IN_REVIEW --> APPROVED: User Approves (No Feedback)
+    IN_REVIEW --> QUEUED: User Requests Changes (Feedback)
+    
+    APPROVED --> COMPLETED: Final Transition
+    
     IN_PROGRESS --> FAILED: Error/Crash
     
     COMPLETED --> [*]
     FAILED --> [*]
 ```
 
-### 3.2 Task Assignment Loop (The Scheduler)
+**Key Transitions**:
+*   **IN_PROGRESS → IN_REVIEW**: Agent has committed changes to a feature branch and pushed to origin.
+*   **IN_REVIEW → QUEUED**: User provides feedback/comments. Status resets to allow Agent to pick it up again (or a different agent).
+*   **IN_REVIEW → APPROVED**: User is satisfied. No further changes needed.
+*   **APPROVED → COMPLETED**: System finalizes the task.
 
-The `HybridScheduler` runs every 10 seconds to process the queue.
+### 3.2 Task Assignment & Scheduler
 
-1.  **Requeue Stuck Tasks**: Checks for tasks in `PENDING_ACK` > 30s (`ACK_TIMEOUT_MS`). Resets them to `QUEUED`.
-2.  **Unblock Tasks**: Checks `BLOCKED` tasks. If dependency tasks are `COMPLETED`, moves them to `QUEUED`.
-3.  **Assign Pending**:
-    *   Fetches `QUEUED` tasks (sorted by Priority -> Age).
-    *   Fetches `WaitingAgents` (agents calling `wait_for_prompt`).
-    *   **Matching Logic** (`AgentMatcher`):
-        *   **Capabilities (40%)**: Hard requirement. Agent *must* have all `requiredCapabilities`.
-        *   **Workspace (40%)**: Preference. Matching `repoId` boosts score.
-        *   **Hint (20%)**: User preference (`@AgentName`).
-    *   If Match Found:
-        *   Task -> `PENDING_ACK`.
-        *   Agent -> Removed from Waiting List.
-        *   Server responds to Agent's open HTTP request with the Task.
+The `HybridScheduler` runs frequently (every ~2s) to process the queue.
+
+**Assignment Logic**:
+Tasks are **pulled** by agents via `wait_for_prompt`. The server's scheduler acts as a matchmaker to "reserve" a task for a specific polling request.
+
+1.  **Orphan/Timeout Check**: Requeue `PENDING_ACK` tasks > 30s.
+2.  **Unblock**: Move `BLOCKED` tasks to `QUEUED` if dependencies are resolved.
+3.  **Match & Reserve**:
+    *   Trigger: Agent polls `wait_for_prompt`.
+    *   Logic:
+        *   **Capabilities**: Must match `requiredCapabilities`.
+        *   **Workspace Context**: `repoId` matches Agent's current context (to reuse worktrees).
+        *   **Agent Hint**: Preference for specific agent IDs.
+    *   Action: Task state `QUEUED` → `ASSIGNED` → `PENDING_ACK`.
 
 ---
 
@@ -124,25 +131,24 @@ The `HybridScheduler` runs every 10 seconds to process the queue.
 
 ### Database Schema
 We use SQLite (`mcp.db`) as the single source for all state.
-*   **Tasks Table**: `id`, `prompt`, `status`, `agentId`, `context` (JSON), `dependencies` (JSON).
-*   **Agents Table**: `id`, `displayName`, `capabilities` (JSON), `lastSeen` (timestamp).
-*   **Events Table**: Audit log of all system actions.
 
 ### Key Assumptions
-1.  **Agent Volatility**: Agents may crash or disconnect at any time. The `lastSeen` heartbeat and `ACK_TIMEOUT` mechanisms handle this.
-2.  **Tool Availability**: The server assumes registered agents possess the standard toolset (`replace_file_content`, `run_command`, etc.) if they advertise the `code-writing` capability.
-3.  **File System Trust**: Agents operate on a shared or accessible file system (Worktrees/Local). We assume they have IO permissions.
-4.  **Single Server**: Currently designed as a singleton orchestrator. Horizontal scaling would require a shared database (e.g., Postgres).
+1.  **Agent Volatility**: Agents may crash. `ACK_TIMEOUT` handles this.
+2.  **Environment Specificity**: The file system is **NOT** generic. We assume unique environments.
+    *   Agents must report their `workspaceContext` (Repo ID, Branch, Local/Github).
+    *   `assign_task` specifies the target environment.
+3.  **Git Worktree Mandate**:
+    *   Agents MUST use `git worktree` for isolation.
+    *   Flow: `create_worktree` (Standardized branch name) → Do Work → Commit → Push.
+    *   Main branch should remain clean.
+4.  **No Server Access to FS**: The MCP Server knows *about* the file system (via metadata) but cannot touch it directly.
 
 ---
 
 ## 5. Reverse Engineering Notes
 
-*Derived from codebase analysis (Jan 2026)*
-
-*   **Queue implementation**: The `TaskQueue` class in `src/state/queue.ts` is a "fat controller" combining persistence and emitting events. Refactoring to a Repository pattern is partially complete (`AgentRepository`).
-*   **Polling mechanism**: Agents use a "Long Poll" (`wait_for_prompt` tool). The server holds the request open for up to 290s. This mimics a push via a pull mechanism.
-*   **Frontend**: The React dashboard is served directly by the MCP Express server from the `dist` folder in production, or via Vite proxy in dev.
+*   **Scheduler**: Originally "Hybrid" (Push/Pull), now strictly a helper for the Pull-based `wait_for_prompt` mechanism.
+*   **Worktree Tooling**: Need to implement/standardize `create_worktree` MCP tool with enforced branch naming conventions.
 
 ---
 
