@@ -1,10 +1,22 @@
 import { EventEmitter } from 'events';
-import { db } from './db.js';
+import type { Database } from 'better-sqlite3';
 
 /**
  * Event bus for real-time notifications (delegation, task completion, etc.)
  */
 export const eventBus = new EventEmitter();
+
+// Database instance for persistence (set via initEventLog)
+let eventDb: Database | null = null;
+
+/**
+ * Initialize the event log with a database instance.
+ * MUST be called before using emitActivity in production.
+ * Tests can skip this to avoid DB persistence.
+ */
+export function initEventLog(db: Database): void {
+  eventDb = db;
+}
 
 // Event types
 export interface DelegationEvent {
@@ -36,16 +48,18 @@ export const emitDelegation = (event: DelegationEvent) => {
 export const emitActivity = (category: ActivityEvent['category'], message: string, metadata?: Record<string, any>) => {
   const timestamp = Date.now();
 
-  // Persist to DB
-  try {
-    db.prepare('INSERT INTO logs (timestamp, category, message, metadata) VALUES (?, ?, ?, ?)').run(
-      timestamp,
-      category,
-      message,
-      metadata ? JSON.stringify(metadata) : null
-    );
-  } catch (e) {
-    console.error('Failed to persist log:', e);
+  // Persist to DB only if initialized
+  if (eventDb) {
+    try {
+      eventDb.prepare('INSERT INTO logs (timestamp, category, message, metadata) VALUES (?, ?, ?, ?)').run(
+        timestamp,
+        category,
+        message,
+        metadata ? JSON.stringify(metadata) : null
+      );
+    } catch (e) {
+      console.error('Failed to persist log:', e);
+    }
   }
 
   eventBus.emit('activity', {

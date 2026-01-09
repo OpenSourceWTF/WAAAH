@@ -2,7 +2,7 @@
  * TaskQueue Interface - Defines the public API of the TaskQueue.
  * This interface enables easier testing and potential future decomposition.
  */
-import { Task, TaskStatus, AgentRole, EvictionSignal } from '@opensourcewtf/waaah-types';
+import { Task, TaskStatus, StandardCapability, EvictionSignal, SystemPrompt } from '@opensourcewtf/waaah-types';
 
 /**
  * Result of task acknowledgment
@@ -34,7 +34,7 @@ export interface HistoryOptions {
 /**
  * Task assignment result from waitForTask
  */
-export type WaitResult = Task | EvictionSignal | null;
+export type WaitResult = Task | EvictionSignal | SystemPrompt | null;
 
 /**
  * Interface for the TaskQueue - the core task orchestration component.
@@ -66,8 +66,8 @@ export interface ITaskQueue {
 
   // ===== Agent Waiting / Long-Polling =====
 
-  /** Wait for a task suitable for the agent */
-  waitForTask(agentId: string, role: AgentRole, timeoutMs?: number): Promise<WaitResult>;
+  /** Wait for a task suitable for the agent (based on capabilities) */
+  waitForTask(agentId: string, capabilities: StandardCapability[], timeoutMs?: number): Promise<WaitResult>;
 
   /** Wait for a specific task to complete */
   waitForTaskCompletion(taskId: string, timeoutMs?: number): Promise<Task | null>;
@@ -102,8 +102,8 @@ export interface ITaskQueue {
   /** Get task history with filters */
   getTaskHistory(options?: HistoryOptions): Task[];
 
-  /** Get agents currently waiting for tasks */
-  getWaitingAgents(): string[];
+  /** Get agents currently waiting for tasks with their capabilities */
+  getWaitingAgents(): Map<string, StandardCapability[]>;
 
   /** Check if an agent is waiting */
   isAgentWaiting(agentId: string): boolean;

@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { ToolHandler } from '../src/mcp/tools.js';
-import { AgentRegistry } from '../src/state/registry.js';
+import { AgentRepository } from '../src/state/agent-repository.js';
 import { TaskQueue } from '../src/state/queue.js';
 import { createTestContext, TestContext } from './harness.js';
 
 describe('ToolHandler', () => {
   let ctx: TestContext;
-  let registry: AgentRegistry;
+  let registry: AgentRepository;
   let queue: TaskQueue;
   let tools: ToolHandler;
 
@@ -31,16 +31,15 @@ describe('ToolHandler', () => {
       const agentId = uid();
       const result = await tools.register_agent({
         agentId,
-        role: 'developer',
         displayName: '@TestDev',
-        capabilities: ['typescript', 'testing']
+        capabilities: ['code-writing', 'test-writing']
       });
 
       expect(result.content[0].type).toBe('text');
       const data = JSON.parse(result.content[0].text);
       expect(data.registered).toBe(true);
       expect(data.agentId).toBe(agentId);
-      expect(data.role).toBe('developer');
+      expect(data.capabilities).toContain('code-writing');
     });
 
     it('returns error for invalid input', async () => {
@@ -52,7 +51,7 @@ describe('ToolHandler', () => {
   describe('wait_for_prompt', () => {
     it('returns timeout when no task available', async () => {
       const agentId = uid();
-      registry.register({ id: agentId, role: 'developer' });
+      registry.register({ id: agentId, displayName: '@TestDev', capabilities: ['code-writing'] });
 
       const result = await tools.wait_for_prompt({
         agentId,
@@ -66,7 +65,7 @@ describe('ToolHandler', () => {
     it('returns task when available', async () => {
       const agentId = uid();
       const taskId = `task-${Date.now()}-${Math.random().toString(36).substring(7)}`;
-      registry.register({ id: agentId, role: 'developer' });
+      registry.register({ id: agentId, displayName: '@TestDev', capabilities: ['code-writing'] });
 
       // Enqueue a task first
       queue.enqueue({
@@ -99,7 +98,7 @@ describe('ToolHandler', () => {
         command: 'execute_prompt',
         prompt: 'Test',
         from: { type: 'user', id: 'u1', name: 'User' },
-        to: { role: 'developer' },
+        to: { agentId: 'test-dev' },
         priority: 'normal',
         status: 'ASSIGNED',
         createdAt: Date.now()
@@ -123,7 +122,7 @@ describe('ToolHandler', () => {
         command: 'execute_prompt',
         prompt: 'Test',
         from: { type: 'user', id: 'u1', name: 'User' },
-        to: { role: 'developer' },
+        to: { agentId: 'test-dev' },
         priority: 'normal',
         status: 'ASSIGNED',
         createdAt: Date.now()
@@ -153,13 +152,13 @@ describe('ToolHandler', () => {
       expect(result.content[0].text).toContain('not found');
     });
 
-    it('returns permission denied when source lacks delegation rights', async () => {
+    it('creates task when target agent is valid', async () => {
       const sourceId = uid();
       const targetId = uid();
 
-      // Register agents - developer role typically can't delegate
-      registry.register({ id: sourceId, role: 'developer', displayName: '@TestDev1', capabilities: [] });
-      registry.register({ id: targetId, role: 'test-engineer', displayName: '@TestEng1', capabilities: [] });
+      // Register both agents with capabilities
+      registry.register({ id: sourceId, displayName: '@TestDev1', capabilities: ['code-writing'] });
+      registry.register({ id: targetId, displayName: '@TestEng1', capabilities: ['test-writing'] });
 
       const result = await tools.assign_task({
         targetAgentId: targetId,
@@ -167,8 +166,8 @@ describe('ToolHandler', () => {
         sourceAgentId: sourceId
       });
 
-      // Either permission denied or some other error - both valid behaviors
-      expect(result.isError).toBe(true);
+      // Now should work since delegation permissions are removed
+      expect(result.content[0].text).toContain('delegated');
     });
 
     it('blocks rm -rf attacks in delegation', async () => {
@@ -191,13 +190,13 @@ describe('ToolHandler', () => {
       expect(Array.isArray(agents)).toBe(true);
     });
 
-    it('filters by role correctly', async () => {
-      const result = await tools.list_agents({ role: 'developer' });
+    it('filters by capability correctly', async () => {
+      const result = await tools.list_agents({ capability: 'code-writing' });
       const agents = JSON.parse(result.content[0].text);
 
-      // All returned should be developers (or empty if none exist)
+      // All returned should have code-writing capability (or empty if none exist)
       if (agents.length > 0) {
-        expect(agents.every((a: any) => a.role === 'developer')).toBe(true);
+        expect(agents.every((a: any) => a.capabilities?.includes('code-writing'))).toBe(true);
       }
     });
   });
@@ -212,7 +211,7 @@ describe('ToolHandler', () => {
 
     it('returns status for recently active agent', async () => {
       const agentId = uid();
-      registry.register({ id: agentId, role: 'developer', displayName: '@StatusTest', capabilities: [] });
+      registry.register({ id: agentId, displayName: '@StatusTest', capabilities: ['code-writing'] });
       registry.heartbeat(agentId);
 
       const result = await tools.get_agent_status({ agentId });
@@ -228,7 +227,7 @@ describe('ToolHandler', () => {
     it('acknowledges task successfully when in PENDING_ACK state', async () => {
       const agentId = uid();
       const taskId = `task-${Date.now()}-${Math.random().toString(36).substring(7)}`;
-      registry.register({ id: agentId, role: 'developer' });
+      registry.register({ id: agentId, displayName: '@TestDev', capabilities: ['code-writing'] });
 
       queue.enqueue({
         id: taskId,
@@ -242,7 +241,7 @@ describe('ToolHandler', () => {
       });
 
       // Wait for task transitions to PENDING_ACK
-      await queue.waitForTask(agentId, 'developer', 100);
+      await queue.waitForTask(agentId, ['code-writing'], 100);
 
       const result = await tools.ack_task({
         taskId,
@@ -266,7 +265,7 @@ describe('ToolHandler', () => {
   describe('admin_update_agent', () => {
     it.skip('updates agent properties', async () => {
       const agentId = uid();
-      registry.register({ id: agentId, role: 'developer', displayName: '@OldName' });
+      registry.register({ id: agentId, displayName: '@OldName', capabilities: ['code-writing'] });
 
       const result = await tools.admin_update_agent({
         agentId,

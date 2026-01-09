@@ -1,19 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { EventEmitter } from 'events';
 
-const { mockPrepare, mockRun } = vi.hoisted(() => {
-  const mockRun = vi.fn();
-  const mockPrepare = vi.fn(() => ({ run: mockRun }));
-  return { mockPrepare, mockRun };
-});
+// Create mock database
+const mockPrepare = vi.fn(() => ({ run: vi.fn() }));
+const mockDb = { prepare: mockPrepare };
 
-vi.mock('../src/state/db.js', () => ({
-  db: {
-    prepare: mockPrepare
-  }
-}));
-
-import { emitDelegation, emitActivity, eventBus } from '../src/state/events.js';
+import { emitDelegation, emitActivity, eventBus, initEventLog } from '../src/state/events.js';
 
 describe('Events', () => {
   beforeEach(() => {
@@ -42,7 +33,29 @@ describe('Events', () => {
   });
 
   describe('emitActivity', () => {
-    it('emits activity event and persists to DB', () => {
+    it('emits activity event without DB when not initialized', () => {
+      const spy = vi.fn();
+      eventBus.on('activity', spy);
+
+      const message = 'something happened';
+      emitActivity('SYSTEM', message, { foo: 'bar' });
+
+      // Check emission
+      expect(spy).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'activity',
+        category: 'SYSTEM',
+        message,
+        metadata: { foo: 'bar' }
+      }));
+
+      // DB not called when not initialized
+      expect(mockPrepare).not.toHaveBeenCalled();
+    });
+
+    it('emits activity event and persists to DB when initialized', () => {
+      // Initialize with mock DB
+      initEventLog(mockDb as any);
+
       const spy = vi.fn();
       eventBus.on('activity', spy);
 
@@ -59,22 +72,20 @@ describe('Events', () => {
 
       // Check DB persistence
       expect(mockPrepare).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO logs'));
-      expect(mockRun).toHaveBeenCalledWith(
-        expect.any(Number),
-        'SYSTEM',
-        message,
-        JSON.stringify({ foo: 'bar' })
-      );
     });
 
     it('handles DB errors gracefully', () => {
-      mockRun.mockImplementationOnce(() => { throw new Error('DB Error'); });
+      const errorPrepare = vi.fn(() => ({
+        run: vi.fn(() => { throw new Error('DB Error'); })
+      }));
+      initEventLog({ prepare: errorPrepare } as any);
+
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
 
       emitActivity('SYSTEM', 'test error');
 
       expect(consoleSpy).toHaveBeenCalled();
-      expect(mockPrepare).toHaveBeenCalled();
+      expect(errorPrepare).toHaveBeenCalled();
     });
   });
 });

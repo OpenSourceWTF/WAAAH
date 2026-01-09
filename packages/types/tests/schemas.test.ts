@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
-  AgentRole,
+  StandardCapability,
+  ALL_CAPABILITIES,
   TaskStatus,
   registerAgentSchema,
   waitForPromptSchema,
@@ -13,17 +14,26 @@ import {
   TOOL_NAMES
 } from '../src/index.js';
 
-describe('AgentRole', () => {
-  it('accepts valid roles', () => {
-    expect(AgentRole.parse('project-manager')).toBe('project-manager');
-    expect(AgentRole.parse('full-stack-engineer')).toBe('full-stack-engineer');
-    expect(AgentRole.parse('developer')).toBe('developer');
+describe('StandardCapability', () => {
+  it('accepts valid capabilities', () => {
+    expect(StandardCapability.parse('spec-writing')).toBe('spec-writing');
+    expect(StandardCapability.parse('code-writing')).toBe('code-writing');
+    expect(StandardCapability.parse('test-writing')).toBe('test-writing');
+    expect(StandardCapability.parse('doc-writing')).toBe('doc-writing');
   });
 
-  it('rejects invalid roles', () => {
-    expect(() => AgentRole.parse('invalid-role')).toThrow();
-    expect(() => AgentRole.parse('')).toThrow();
-    expect(() => AgentRole.parse(123)).toThrow();
+  it('rejects invalid capabilities', () => {
+    expect(() => StandardCapability.parse('invalid-capability')).toThrow();
+    expect(() => StandardCapability.parse('')).toThrow();
+    expect(() => StandardCapability.parse(123)).toThrow();
+  });
+
+  it('exports ALL_CAPABILITIES constant', () => {
+    expect(ALL_CAPABILITIES).toContain('spec-writing');
+    expect(ALL_CAPABILITIES).toContain('code-writing');
+    expect(ALL_CAPABILITIES).toContain('test-writing');
+    expect(ALL_CAPABILITIES).toContain('doc-writing');
+    expect(ALL_CAPABILITIES.length).toBe(4);
   });
 });
 
@@ -39,36 +49,43 @@ describe('TaskStatus', () => {
   });
 });
 
-// TaskPriority is inline in assignTaskSchema, not a standalone export
-// Removed standalone TaskPrioritySchema tests
-
 describe('registerAgentSchema', () => {
-  it('validates complete input', () => {
+  it('validates complete input with capabilities', () => {
     const result = registerAgentSchema.parse({
       agentId: 'test-agent',
-      role: 'developer',
       displayName: '@Test',
-      capabilities: ['coding', 'testing']
+      capabilities: ['code-writing', 'test-writing']
     });
     expect(result.agentId).toBe('test-agent');
+    expect(result.capabilities).toEqual(['code-writing', 'test-writing']);
   });
 
-  it('applies defaults for optional fields', () => {
-    const result = registerAgentSchema.parse({
+  it('requires at least one capability', () => {
+    expect(() => registerAgentSchema.parse({
       agentId: 'test-agent',
-      role: 'developer',
-      displayName: '@Test'
-    });
-    // capabilities is optional, not defaulted to []
-    expect(result.capabilities).toBeUndefined();
+      displayName: '@Test',
+      capabilities: []
+    })).toThrow();
   });
 
   it('rejects empty agentId', () => {
     expect(() => registerAgentSchema.parse({
       agentId: '',
-      role: 'developer',
-      displayName: '@Test'
+      displayName: '@Test',
+      capabilities: ['code-writing']
     })).toThrow();
+  });
+
+  it('accepts workspaceContext', () => {
+    const result = registerAgentSchema.parse({
+      agentId: 'test-agent',
+      capabilities: ['code-writing'],
+      workspaceContext: {
+        type: 'local',
+        repoId: 'OpenSourceWTF/WAAAH'
+      }
+    });
+    expect(result.workspaceContext?.repoId).toBe('OpenSourceWTF/WAAAH');
   });
 });
 
@@ -115,19 +132,31 @@ describe('sendResponseSchema', () => {
 });
 
 describe('assignTaskSchema', () => {
-  it('validates delegation request with defaults', () => {
+  it('validates with defaults', () => {
     const result = assignTaskSchema.parse({
-      targetAgentId: 'fullstack-1',
-      sourceAgentId: 'boss-1',
       prompt: 'Build a feature'
     });
     expect(result.priority).toBe('normal');
   });
 
+  it('accepts requiredCapabilities', () => {
+    const result = assignTaskSchema.parse({
+      prompt: 'Write tests',
+      requiredCapabilities: ['test-writing']
+    });
+    expect(result.requiredCapabilities).toEqual(['test-writing']);
+  });
+
+  it('accepts workspaceId for affinity', () => {
+    const result = assignTaskSchema.parse({
+      prompt: 'Fix bug in WAAAH',
+      workspaceId: 'OpenSourceWTF/WAAAH'
+    });
+    expect(result.workspaceId).toBe('OpenSourceWTF/WAAAH');
+  });
+
   it('rejects empty prompt', () => {
     expect(() => assignTaskSchema.parse({
-      targetAgentId: 'fullstack-1',
-      sourceAgentId: 'boss-1',
       prompt: ''
     })).toThrow();
   });
@@ -138,9 +167,9 @@ describe('listAgentsSchema', () => {
     expect(listAgentsSchema.parse({})).toBeDefined();
   });
 
-  it('accepts role filter', () => {
-    const result = listAgentsSchema.parse({ role: 'developer' });
-    expect(result.role).toBe('developer');
+  it('accepts capability filter', () => {
+    const result = listAgentsSchema.parse({ capability: 'code-writing' });
+    expect(result.capability).toBe('code-writing');
   });
 });
 

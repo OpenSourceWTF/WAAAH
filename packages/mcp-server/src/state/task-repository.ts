@@ -51,29 +51,29 @@ export class TaskRepository implements ITaskRepository {
 
   insert(task: Task): void {
     const stmt = this.database.prepare(`
-      INSERT INTO tasks (id, status, prompt, priority, fromAgentId, fromAgentName, toAgentId, toAgentRole, 
-        assignedTo, context, response, messages, history, createdAt, completedAt, spec, workspace)
-      VALUES (@id, @status, @prompt, @priority, @fromAgentId, @fromAgentName, @toAgentId, @toAgentRole,
-        @assignedTo, @context, @response, @messages, @history, @createdAt, @completedAt, @spec, @workspace)
+      INSERT INTO tasks (id, status, prompt, title, priority, fromAgentId, fromAgentName, toAgentId, toRequiredCapabilities, toWorkspaceId,
+        assignedTo, context, response, dependencies, history, createdAt, completedAt)
+      VALUES (@id, @status, @prompt, @title, @priority, @fromAgentId, @fromAgentName, @toAgentId, @toRequiredCapabilities, @toWorkspaceId,
+        @assignedTo, @context, @response, @dependencies, @history, @createdAt, @completedAt)
     `);
     stmt.run({
       id: task.id,
       status: task.status || 'QUEUED',
       prompt: task.prompt,
+      title: task.title || null,
       priority: task.priority || 'normal',
       fromAgentId: task.from?.id || null,
       fromAgentName: task.from?.name || null,
-      toAgentId: task.to?.id || null,
-      toAgentRole: task.to?.role || null,
+      toAgentId: task.to?.agentId || null,
+      toRequiredCapabilities: task.to?.requiredCapabilities ? JSON.stringify(task.to.requiredCapabilities) : null,
+      toWorkspaceId: task.to?.workspaceId || null,
       assignedTo: task.assignedTo || null,
       context: task.context ? JSON.stringify(task.context) : null,
       response: task.response ? JSON.stringify(task.response) : null,
-      messages: task.messages ? JSON.stringify(task.messages) : '[]',
+      dependencies: task.dependencies ? JSON.stringify(task.dependencies) : '[]',
       history: task.history ? JSON.stringify(task.history) : '[]',
       createdAt: task.createdAt || Date.now(),
-      completedAt: task.completedAt || null,
-      spec: task.spec || null,
-      workspace: task.workspace || null
+      completedAt: task.completedAt || null
     });
   }
 
@@ -81,27 +81,25 @@ export class TaskRepository implements ITaskRepository {
     const stmt = this.database.prepare(`
       UPDATE tasks SET 
         status = @status, 
+        title = @title,
         assignedTo = @assignedTo,
         context = @context, 
         response = @response, 
-        messages = @messages, 
+        dependencies = @dependencies, 
         history = @history,
-        completedAt = @completedAt,
-        spec = @spec,
-        workspace = @workspace
+        completedAt = @completedAt
       WHERE id = @id
     `);
     stmt.run({
       id: task.id,
       status: task.status,
+      title: task.title || null,
       assignedTo: task.assignedTo || null,
       context: task.context ? JSON.stringify(task.context) : null,
       response: task.response ? JSON.stringify(task.response) : null,
-      messages: task.messages ? JSON.stringify(task.messages) : '[]',
+      dependencies: task.dependencies ? JSON.stringify(task.dependencies) : '[]',
       history: task.history ? JSON.stringify(task.history) : '[]',
-      completedAt: task.completedAt || null,
-      spec: task.spec || null,
-      workspace: task.workspace || null
+      completedAt: task.completedAt || null
     });
   }
 
@@ -182,7 +180,14 @@ export class TaskRepository implements ITaskRepository {
     if (!task) return;
 
     const messages = task.messages || [];
-    messages.push({ role, content, timestamp: Date.now(), metadata });
+    messages.push({
+      id: `msg-${Date.now()}`,
+      taskId,
+      role: role as 'user' | 'agent' | 'system',
+      content,
+      timestamp: Date.now(),
+      metadata
+    });
 
     this.database.prepare('UPDATE tasks SET messages = ? WHERE id = ?')
       .run(JSON.stringify(messages), taskId);
@@ -198,23 +203,33 @@ export class TaskRepository implements ITaskRepository {
   }
 
   private mapRowToTask(row: any): Task {
+    let requiredCapabilities = undefined;
+    if (row.toRequiredCapabilities) {
+      try {
+        requiredCapabilities = JSON.parse(row.toRequiredCapabilities);
+      } catch { /* ignore */ }
+    }
     return {
       id: row.id,
       command: 'execute_prompt', // Default command
       prompt: row.prompt,
+      title: row.title,
       status: row.status as TaskStatus,
       priority: row.priority || 'normal',
       from: row.fromAgentId ? { type: 'agent', id: row.fromAgentId, name: row.fromAgentName } : { type: 'user', id: 'system', name: 'System' },
-      to: { role: row.toAgentRole || undefined, id: row.toAgentId || undefined, agentId: row.toAgentId || row.assignedTo || undefined },
+      to: {
+        agentId: row.toAgentId || row.assignedTo || undefined,
+        requiredCapabilities,
+        workspaceId: row.toWorkspaceId || undefined
+      },
       assignedTo: row.assignedTo,
       context: row.context ? JSON.parse(row.context) : undefined,
       response: row.response ? JSON.parse(row.response) : undefined,
       messages: row.messages ? JSON.parse(row.messages) : [],
+      dependencies: row.dependencies ? JSON.parse(row.dependencies) : [],
       history: row.history ? JSON.parse(row.history) : [],
       createdAt: row.createdAt,
-      completedAt: row.completedAt,
-      spec: row.spec,
-      workspace: row.workspace
-    } as Task;
+      completedAt: row.completedAt
+    };
   }
 }

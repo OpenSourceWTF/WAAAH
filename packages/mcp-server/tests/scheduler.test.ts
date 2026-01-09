@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { TaskQueue } from '../src/state/queue.js';
+import { HybridScheduler } from '../src/state/scheduler.js';
 import { Task } from '@opensourcewtf/waaah-types';
 import { createTestContext, TestContext } from './harness.js';
 
@@ -9,7 +10,7 @@ function mockTask(overrides: Partial<Task> = {}): Task {
     command: 'execute_prompt',
     prompt: 'Test prompt',
     from: { type: 'user', id: 'test-user', name: 'Test User' },
-    to: { role: 'developer' },
+    to: { requiredCapabilities: ['code-writing'] },
     priority: 'normal',
     status: 'QUEUED',
     createdAt: Date.now(),
@@ -37,21 +38,20 @@ describe('HybridScheduler', () => {
       const task = mockTask({ id: 'stuck-task' });
       queue.enqueue(task);
 
-      // Manually set to PENDING_ACK with old timestamp
+      // Update task status to PENDING_ACK with old ackSentAt time (DB-backed)
       queue.updateStatus('stuck-task', 'PENDING_ACK');
-      queue['pendingAcks'].set('stuck-task', {
-        taskId: 'stuck-task',
-        agentId: 'agent-1',
-        sentAt: Date.now() - 31000 // 31s ago (> 30s timeout)
-      });
+      // Set DB-backed pending ACK state with old timestamp
+      (ctx.db as any).prepare(
+        'UPDATE tasks SET pendingAckAgentId = ?, ackSentAt = ? WHERE id = ?'
+      ).run('agent-1', Date.now() - 31000, 'stuck-task'); // 31s ago (> 30s timeout)
 
-      // Run private method via any cast or just run cycle
-      // @ts-ignore
-      queue.requeueStuckTasks();
+      // Start the scheduler - running a cycle will trigger requeueStuckTasks
+      queue.startScheduler(100);
+      vi.advanceTimersByTime(150);
 
       const updated = queue.getTask('stuck-task');
       expect(updated?.status).toBe('QUEUED');
-      expect(queue['pendingAcks'].has('stuck-task')).toBe(false);
+
     });
 
     it('ignores tasks in PENDING_ACK for < 30s', () => {
@@ -59,14 +59,14 @@ describe('HybridScheduler', () => {
       queue.enqueue(task);
 
       queue.updateStatus('fresh-task', 'PENDING_ACK');
-      queue['pendingAcks'].set('fresh-task', {
-        taskId: 'fresh-task',
-        agentId: 'agent-1',
-        sentAt: Date.now() - 10000 // 10s ago
-      });
+      // Set DB-backed pending ACK state with recent timestamp
+      (ctx.db as any).prepare(
+        'UPDATE tasks SET pendingAckAgentId = ?, ackSentAt = ? WHERE id = ?'
+      ).run('agent-1', Date.now() - 10000, 'fresh-task'); // 10s ago
 
-      // @ts-ignore
-      queue.requeueStuckTasks();
+      // Start the scheduler
+      queue.startScheduler(100);
+      vi.advanceTimersByTime(150);
 
       const updated = queue.getTask('fresh-task');
       expect(updated?.status).toBe('PENDING_ACK');
@@ -78,7 +78,7 @@ describe('HybridScheduler', () => {
       const task = mockTask({
         id: 'queued-task',
         priority: 'normal',
-        to: { role: 'developer' }
+        to: { requiredCapabilities: ['code-writing'] }
       });
       queue.enqueue(task);
 
@@ -86,11 +86,11 @@ describe('HybridScheduler', () => {
       expect(queue.getTask('queued-task')?.status).toBe('QUEUED');
 
       // Start an agent waiting
-      const waitPromise = queue.waitForTask('agent-1', 'developer', 10000);
+      const waitPromise = queue.waitForTask('agent-1', ['code-writing'], 10000);
 
-      // Trigger assignment manually
-      // @ts-ignore
-      queue.assignPendingTasks();
+      // Start scheduler to trigger assignment
+      queue.startScheduler(100);
+      vi.advanceTimersByTime(150);
 
       const assignedTask = await waitPromise;
       expect(assignedTask).not.toBeNull();
@@ -101,22 +101,23 @@ describe('HybridScheduler', () => {
       }
     });
 
-    it('respects role matching for task assignment', async () => {
+    it('respects capability matching for task assignment', async () => {
       const task = mockTask({
         id: 'tester-task',
         priority: 'normal',
-        to: { role: 'test-engineer' }
+        to: { requiredCapabilities: ['test-writing'] }
       });
       queue.enqueue(task);
 
-      // Developer waiting should NOT get it
-      const devWaitPromise = queue.waitForTask('dev-agent', 'developer', 1000);
+      // Code-writer waiting should NOT get it
+      const devWaitPromise = queue.waitForTask('dev-agent', ['code-writing'], 1000);
 
-      // Tester waiting should get it
-      const testerWaitPromise = queue.waitForTask('test-agent', 'test-engineer', 1000);
+      // Test-writer waiting should get it
+      const testerWaitPromise = queue.waitForTask('test-agent', ['test-writing'], 1000);
 
-      // @ts-ignore
-      queue.assignPendingTasks();
+      // Start scheduler to trigger assignment
+      queue.startScheduler(100);
+      vi.advanceTimersByTime(150);
 
       const testerResult = await testerWaitPromise;
       if (testerResult && 'id' in testerResult) {
@@ -142,12 +143,13 @@ describe('HybridScheduler', () => {
       // Test would require mocking agents table responses
     });
   });
+
   describe('getAssignedTasksForAgent', () => {
     it('respects assignedTo field over legacy check', () => {
       const task = mockTask({
         id: 'reassigned-task',
         status: 'ASSIGNED',
-        to: { agentId: 'original-agent', role: 'developer' },
+        to: { agentId: 'original-agent', requiredCapabilities: ['code-writing'] },
         assignedTo: 'new-agent'
       });
       queue.enqueue(task);

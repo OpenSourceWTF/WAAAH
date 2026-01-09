@@ -2,7 +2,7 @@ export * from './schemas.js';
 export * from './mcp-tools.js';
 export * from './errors.js';
 
-import { AgentRole, TaskStatus, AgentConnectionStatus } from './schemas.js';
+import { StandardCapability, TaskStatus, AgentConnectionStatus } from './schemas.js';
 
 // ===== Entity Interfaces =====
 
@@ -12,14 +12,21 @@ import { AgentRole, TaskStatus, AgentConnectionStatus } from './schemas.js';
 export interface AgentIdentity {
   /** Unique ID of the agent (e.g. "fullstack-1") */
   id: string;
-  role: AgentRole;
+  /** Capabilities this agent has */
+  capabilities: StandardCapability[];
   state?: string;      // Current state summary (for resumption)
   displayName?: string;
-  capabilities: string[];
   status?: 'idle' | 'busy' | 'offline'; // made optional as it's computed
   lastSeen?: number; // timestamp
   color?: string; // For UI visualization
   currentTask?: string;
+  /** Workspace context for affinity matching */
+  workspaceContext?: {
+    type: 'local' | 'github';
+    repoId: string;
+    branch?: string;
+    path?: string;
+  };
 }
 
 /**
@@ -28,7 +35,7 @@ export interface AgentIdentity {
 export interface TaskMessage {
   id: string;
   taskId: string;
-  role: 'user' | 'agent' | 'system';
+  role: 'user' | 'agent' | 'system';  // This is message role, not agent role
   content: string;
   timestamp: number;
   metadata?: Record<string, unknown>;
@@ -50,8 +57,9 @@ export interface Task {
   };
   command?: string; // Optional command name (e.g. 'execute_prompt')
   to: {
-    agentId?: string;
-    role?: AgentRole;
+    agentId?: string;  // HINT: Preferred agent (adds score, not required)
+    requiredCapabilities?: StandardCapability[];  // Capabilities required
+    workspaceId?: string;  // Repository ID for workspace affinity
   };
   context?: Record<string, unknown>;
   createdAt: number;

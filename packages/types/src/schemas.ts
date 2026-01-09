@@ -3,21 +3,23 @@ import { z } from 'zod';
 // ===== Core Types =====
 
 /**
- * Valid roles for agents within the WAAAH system.
- * These roles determine the capabilities and responsibilities of an agent.
+ * Standard capabilities that agents can have.
+ * These are used for matching tasks to agents.
  */
-export const AgentRole = z.enum([
-  'boss',
-  'project-manager',
-  'full-stack-engineer',
-  'test-engineer',
-  'ops-engineer',
-  'designer',
-  'developer',
-  'code-monk',
-  'orchestrator'
+export const StandardCapability = z.enum([
+  'spec-writing',   // Planning, specifications, technical design
+  'code-writing',   // Code development, implementation
+  'test-writing',   // Testing, QA, verification
+  'doc-writing'     // Documentation, technical writing
 ]);
-export type AgentRole = z.infer<typeof AgentRole>;
+export type StandardCapability = z.infer<typeof StandardCapability>;
+
+/**
+ * All standard capabilities combined (for orchestrator agents)
+ */
+export const ALL_CAPABILITIES: StandardCapability[] = [
+  'spec-writing', 'code-writing', 'test-writing', 'doc-writing'
+];
 
 /**
  * Valid statuses for a task.
@@ -42,7 +44,35 @@ export type TaskStatus = z.infer<typeof TaskStatus>;
  */
 export type AgentConnectionStatus = 'OFFLINE' | 'WAITING' | 'PROCESSING';
 
-// ===== Constants =====
+/**
+ * Task priority levels.
+ */
+export const TaskPriority = z.enum(['normal', 'high', 'critical']);
+export type TaskPriority = z.infer<typeof TaskPriority>;
+
+// ===== Timing Constants =====
+
+/**
+ * Agent offline threshold - 5 minutes.
+ * Used to determine if an agent is considered offline/stale.
+ */
+export const AGENT_OFFLINE_THRESHOLD_MS = 5 * 60 * 1000;
+
+/**
+ * Default wait timeout for agent prompt polling (290s).
+ * Just under the 300s Antigravity hard limit.
+ */
+export const AGENT_WAIT_TIMEOUT_MS = 290 * 1000;
+
+/**
+ * Default timeout for waiting for task completion (300s).
+ */
+export const TASK_COMPLETION_TIMEOUT_MS = 300 * 1000;
+
+/**
+ * Cleanup interval for stale resources (5 minutes).
+ */
+export const CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
 
 /**
  * Default internal prompt timeout in seconds.
@@ -55,6 +85,13 @@ export const DEFAULT_PROMPT_TIMEOUT = 290; // Default to 290s (just under 300s l
  * Hard limit to prevent excessive blocking.
  */
 export const MAX_PROMPT_TIMEOUT = 300;
+
+// ===== Limits =====
+
+/**
+ * Default limit for log queries.
+ */
+export const DEFAULT_LOG_LIMIT = 100;
 
 // ===== Helper Factories =====
 
@@ -105,12 +142,12 @@ export type WorkspaceContext = z.infer<typeof workspaceContextSchema>;
 
 /**
  * Schema for register_agent tool arguments.
+ * Capabilities are the primary matching mechanism.
  */
 export const registerAgentSchema = z.object({
   agentId: z.string().min(1).describe("Unique identifier for the agent"),
-  role: AgentRole.describe("The role of the agent"),
   displayName: z.string().optional().describe("Human-readable name for the agent (auto-generated if not provided)"),
-  capabilities: z.array(z.string()).optional().describe("List of capabilities/tools the agent has"),
+  capabilities: z.array(StandardCapability).min(1).describe("Capabilities this agent has"),
   workspaceContext: workspaceContextSchema.optional().describe("Workspace the agent is working in")
 });
 export type RegisterAgentArgs = z.infer<typeof registerAgentSchema>;
@@ -138,17 +175,22 @@ export type SendResponseArgs = z.infer<typeof sendResponseSchema>;
 
 /**
  * Schema for assign_task tool arguments.
+ * Uses capabilities for matching, agentId as optional hint.
  */
 export const assignTaskSchema = z.object({
-  targetAgentId: z.string().min(1).optional().describe("The ID of the agent to assign the task to (optional if role provided)"),
-  targetRole: z.string().min(1).optional().describe("The role to target (optional if agentId provided)"),
+  /** Optional: preferred agent (adds score, not required) */
+  targetAgentId: z.string().min(1).optional().describe("HINT: Preferred agent ID (adds score, not required)"),
+  /** @deprecated Use requiredCapabilities instead */
+  targetRole: z.string().min(1).optional().describe("DEPRECATED: Ignored for matching"),
+  /** Required capabilities for the task */
+  requiredCapabilities: z.array(StandardCapability).optional().describe("Capabilities required to execute this task"),
+  /** Workspace ID for affinity matching */
+  workspaceId: z.string().optional().describe("Repository ID for workspace affinity (e.g., 'OpenSourceWTF/WAAAH')"),
   sourceAgentId: z.string().min(1).optional().default('Da Boss').describe("The ID of the agent assigning the task (defaults to 'Da Boss')"),
   prompt: z.string().min(1).describe("The task description/prompt"),
   context: z.record(z.unknown()).optional().describe("Additional context data for the task"),
   priority: z.enum(['high', 'normal', 'critical']).optional().default('normal').describe("Task priority"),
   dependencies: z.array(z.string()).optional().describe("List of Task IDs that must complete before this task starts")
-}).refine(data => data.targetAgentId || data.targetRole, {
-  message: "Either targetAgentId or targetRole must be provided"
 });
 export type AssignTaskArgs = z.infer<typeof assignTaskSchema>;
 
@@ -156,7 +198,7 @@ export type AssignTaskArgs = z.infer<typeof assignTaskSchema>;
  * Schema for list_agents tool arguments.
  */
 export const listAgentsSchema = z.object({
-  role: AgentRole.or(z.literal('any')).optional().describe("Filter agents by role")
+  capability: StandardCapability.optional().describe("Filter agents by capability")
 });
 export type ListAgentsArgs = z.infer<typeof listAgentsSchema>;
 
@@ -254,13 +296,14 @@ export type UpdateProgressArgs = z.infer<typeof updateProgressSchema>;
  */
 export const broadcastSystemPromptSchema = z.object({
   targetAgentId: z.string().optional().describe("Specific agent ID to target"),
-  targetRole: AgentRole.optional().describe("Target all agents with this role"),
+  targetCapability: StandardCapability.optional().describe("Target agents with this capability"),
   broadcast: z.boolean().optional().describe("If true, send to ALL agents"),
   promptType: z.enum(['WORKFLOW_UPDATE', 'EVICTION_NOTICE', 'CONFIG_UPDATE', 'SYSTEM_MESSAGE']).describe("Type of system prompt"),
   message: z.string().min(1).describe("Human-readable message"),
   payload: z.record(z.unknown()).optional().describe("Optional payload data"),
   priority: z.enum(['normal', 'high', 'critical']).optional().default('normal').describe("Urgency level")
-}).refine(data => data.targetAgentId || data.targetRole || data.broadcast, {
-  message: "Either targetAgentId, targetRole, or broadcast must be specified"
+}).refine(data => data.targetAgentId || data.targetCapability || data.broadcast, {
+  message: "Either targetAgentId, targetCapability, or broadcast must be specified"
 });
 export type BroadcastSystemPromptArgs = z.infer<typeof broadcastSystemPromptSchema>;
+

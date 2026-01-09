@@ -1,7 +1,8 @@
-import { AgentRegistry } from '../state/registry.js';
+import { AgentRepository } from '../state/agent-repository.js';
 import { TaskQueue } from '../state/queue.js';
 import { scanPrompt, getSecurityContext } from '../security/prompt-scanner.js';
 import { emitDelegation, emitActivity } from '../state/events.js';
+import { determineAgentStatus } from '../state/agent-status.js';
 import { exec } from 'child_process';
 import util from 'util';
 import path from 'path';
@@ -23,6 +24,7 @@ import {
   blockTaskSchema,
   answerTaskSchema,
   getTaskContextSchema,
+  AGENT_OFFLINE_THRESHOLD_MS,
   createWaitForPromptSchema,
   DEFAULT_PROMPT_TIMEOUT,
   MAX_PROMPT_TIMEOUT,
@@ -59,7 +61,7 @@ export {
  */
 export class ToolHandler {
   constructor(
-    private registry: AgentRegistry,
+    private registry: AgentRepository,
     private queue: TaskQueue
   ) { }
 
@@ -79,17 +81,14 @@ export class ToolHandler {
       const params = registerAgentSchema.parse(args);
       const finalAgentId = this.registry.register({
         id: params.agentId || `agent-${Date.now()}`,
-        role: params.role,
-        displayName: params.displayName || '', // Ensure string
-        capabilities: params.capabilities || []
+        displayName: params.displayName || '',
+        capabilities: params.capabilities,
+        workspaceContext: params.workspaceContext
       });
-
-      // Return permissions for this role
-      const canDelegateTo = this.registry.getAllowedDelegates(params.role);
 
       emitActivity('AGENT', `Agent ${params.displayName || finalAgentId} connected`, {
         agentId: finalAgentId,
-        role: params.role
+        capabilities: params.capabilities
       });
 
       return {
@@ -97,10 +96,9 @@ export class ToolHandler {
           type: 'text',
           text: JSON.stringify({
             registered: true,
-            agentId: finalAgentId, // Use the actual ID (may have been renamed)
+            agentId: finalAgentId,
             displayName: params.displayName,
-            role: params.role,
-            canDelegateTo
+            capabilities: params.capabilities
           })
         }]
       };
@@ -122,12 +120,12 @@ export class ToolHandler {
       console.log(`[Tool] Agent ${params.agentId} waiting for prompt (timeout: ${timeoutMs / 1000}s)...`);
 
       const agent = this.registry.get(params.agentId);
-      const role = agent?.role || 'developer';
+      const capabilities = agent?.capabilities || ['code-writing' as const];
 
       // Update heartbeat on each wait call (start of long-poll)
       this.registry.heartbeat(params.agentId);
 
-      const result = await this.queue.waitForTask(params.agentId, role, timeoutMs);
+      const result = await this.queue.waitForTask(params.agentId, capabilities, timeoutMs);
 
       // Update heartbeat again after wait completes (maintains "recent" status
       // during the gap before the agent calls wait_for_prompt again)
@@ -141,6 +139,15 @@ export class ToolHandler {
 
       // Check if it's an Eviction Signal
       if ('controlSignal' in result && result.controlSignal === 'EVICT') {
+        return {
+          content: [{
+            type: 'text', text: JSON.stringify(result)
+          }]
+        };
+      }
+
+      // Check if it's a System Prompt
+      if ('controlSignal' in result && (result as any).controlSignal === 'SYSTEM_PROMPT') {
         return {
           content: [{
             type: 'text', text: JSON.stringify(result)
@@ -229,7 +236,7 @@ export class ToolHandler {
 
   /**
    * Delegates a task to another agent.
-   * Enforces role-based permissions and security scanning.
+   * Uses capability-based matching.
    * 
    * @param args - The arguments for assign_task tool (assignTaskSchema).
    * @returns MCP Tool content with the new delegated task ID.
@@ -244,9 +251,8 @@ export class ToolHandler {
         this.registry.heartbeat(sourceAgent);
       }
 
-      // Resolve Target
+      // Resolve Target Agent (optional - if not provided, uses requiredCapabilities for matching)
       let targetAgentId: string | undefined;
-      let targetRole: string | undefined; // AgentRole type
       let targetDisplayName: string | undefined;
 
       // 1. Try ID (if targetAgentId is provided)
@@ -254,55 +260,21 @@ export class ToolHandler {
         const byId = this.registry.get(params.targetAgentId);
         if (byId) {
           targetAgentId = byId.id;
-          targetRole = byId.role;
           targetDisplayName = byId.displayName;
-        }
-      }
-
-      // 2. Try Display Name (if targetAgentId is provided but not found as ID)
-      if (!targetAgentId && params.targetAgentId) {
-        const byName = this.registry.getByDisplayName(params.targetAgentId);
-        if (byName) {
-          targetAgentId = byName.id;
-          targetRole = byName.role;
-          targetDisplayName = byName.displayName;
-        }
-      }
-
-      // 3. Try Role (Broadcast Mode) - either from explicit targetRole or from targetAgentId string
-      if (!targetAgentId) {
-        // First try explicit targetRole from params
-        const roleToTry = params.targetRole || params.targetAgentId;
-        if (roleToTry) {
-          // Check if the input string itself is a valid role that exists in the DB
-          // getByRole returns the most recent agent, proving the role exists.
-          const byRoleSample = this.registry.getByRole(roleToTry);
-          if (byRoleSample) {
-            targetRole = byRoleSample.role; // Use the canonical role from DB
-            targetDisplayName = `Role: ${targetRole}`;
-            // keeping targetAgentId undefined = BROADCAST to all agents of this role
+        } else {
+          // 2. Try Display Name
+          const byName = this.registry.getByDisplayName(params.targetAgentId);
+          if (byName) {
+            targetAgentId = byName.id;
+            targetDisplayName = byName.displayName;
           }
         }
       }
 
-      if (!targetRole) {
-        return {
-          content: [{ type: 'text', text: `Target agent or role "${params.targetAgentId}" not found` }],
-          isError: true
-        };
-      }
-
-      // Enforce delegation permissions
-      const sourceAgentObj = this.registry.get(sourceAgent);
-      if (sourceAgentObj) {
-        // We cast to any because AgentRole enum typings might be strict in the codebase 
-        const canDelegate = this.registry.canDelegate(sourceAgentObj.role, targetRole as any);
-        if (!canDelegate) {
-          return {
-            content: [{ type: 'text', text: `Permission denied: ${sourceAgentObj.role} cannot delegate to ${targetRole}` }],
-            isError: true
-          };
-        }
+      // If no specific target, task will be assigned based on requiredCapabilities
+      if (!targetAgentId && !params.requiredCapabilities?.length) {
+        // Default to any agent if no target and no capabilities specified
+        console.log(`[Tools] No target agent or capabilities specified, task will match any waiting agent`);
       }
 
       // Security: Scan prompt for attacks
@@ -321,15 +293,17 @@ export class ToolHandler {
       const firstLine = params.prompt.split('\n')[0].trim();
       const title = firstLine.length > 80 ? firstLine.substring(0, 77) + '...' : firstLine;
 
+      const sourceAgentObj = this.registry.get(sourceAgent);
       this.queue.enqueue({
         id: taskId,
         command: 'execute_prompt',
         prompt: params.prompt,
-        title, // Auto-generated from first line
+        title,
         from: { type: 'agent', id: sourceAgent, name: sourceAgentObj?.displayName || sourceAgent },
         to: {
-          agentId: targetAgentId, // If undefined, this is a broadcase
-          role: targetRole as any
+          agentId: targetAgentId,
+          requiredCapabilities: params.requiredCapabilities,
+          workspaceId: params.workspaceId
         },
         priority: params.priority || 'normal',
         status: 'QUEUED',
@@ -342,14 +316,16 @@ export class ToolHandler {
         dependencies: params.dependencies
       });
 
-      const logTarget = targetAgentId ? `${targetDisplayName}` : `Role: ${targetRole} (Broadcast)`;
+      const logTarget = targetAgentId
+        ? `${targetDisplayName || targetAgentId}`
+        : `Capabilities: [${params.requiredCapabilities?.join(', ') || 'any'}]`;
       console.log(`[Tools] ${sourceAgentObj?.displayName || sourceAgent} delegated to ${logTarget}: ${params.prompt.substring(0, 50)}...`);
 
       // Emit delegation event for real-time notifications (SSE stream)
       emitDelegation({
         taskId,
         from: sourceAgentObj?.displayName || sourceAgent,
-        to: targetDisplayName || targetRole || 'Unknown',
+        to: targetDisplayName || logTarget,
         prompt: params.prompt.length > 200 ? params.prompt.substring(0, 200) + '...' : params.prompt,
         priority: params.priority || 'normal',
         createdAt: Date.now()
@@ -362,7 +338,7 @@ export class ToolHandler {
   }
 
   /**
-   * Lists available agents, filtering by role if requested.
+   * Lists available agents, filtering by capability if requested.
    * 
    * @param args - The arguments for list_agents tool (listAgentsSchema).
    * @returns MCP Tool content with list of matching agents.
@@ -373,26 +349,19 @@ export class ToolHandler {
       const agents = this.registry.getAll();
       const waitingAgents = this.queue.getWaitingAgents();
 
-      const inputs = (params.role && params.role !== 'any')
-        ? agents.filter(a => a.role === params.role)
+      const inputs = params.capability
+        ? agents.filter(a => a.capabilities?.includes(params.capability!))
         : agents;
 
       const result = inputs.map(agent => {
         const assignedTasks = this.queue.getAssignedTasksForAgent(agent.id);
         const lastSeen = this.registry.getLastSeen(agent.id);
-        const isRecent = lastSeen && (Date.now() - lastSeen) < 5 * 60 * 1000;
-        const isWaiting = waitingAgents.includes(agent.id);
-
-        let status: 'OFFLINE' | 'WAITING' | 'PROCESSING' = 'OFFLINE';
-        if (assignedTasks.length > 0) {
-          status = 'PROCESSING';
-        } else if (isWaiting || isRecent) {
-          status = 'WAITING';
-        }
+        const isRecent = Boolean(lastSeen && (Date.now() - lastSeen) < AGENT_OFFLINE_THRESHOLD_MS);
+        const isWaiting = waitingAgents.has(agent.id);
+        const status = determineAgentStatus(assignedTasks, isWaiting, isRecent);
 
         return {
           id: agent.id,
-          role: agent.role,
           displayName: agent.displayName,
           capabilities: agent.capabilities,
           lastSeen,
@@ -429,17 +398,8 @@ export class ToolHandler {
       const isWaiting = this.queue.isAgentWaiting(params.agentId);
       const assignedTasks = this.queue.getAssignedTasksForAgent(params.agentId);
       const lastSeen = this.registry.getLastSeen(params.agentId);
-      const isRecent = lastSeen && (Date.now() - lastSeen) < 5 * 60 * 1000;
-
-      let status: 'OFFLINE' | 'WAITING' | 'PROCESSING' = 'OFFLINE';
-      if (assignedTasks.length > 0) {
-        status = 'PROCESSING';
-      } else if (isWaiting) {
-        status = 'WAITING';
-      } else if (isRecent) {
-        // Recently seen but not actively waiting - might be between polls
-        status = 'WAITING';
-      }
+      const isRecent = Boolean(lastSeen && (Date.now() - lastSeen) < AGENT_OFFLINE_THRESHOLD_MS);
+      const status = determineAgentStatus(assignedTasks, isWaiting, isRecent);
 
       return {
         content: [{
@@ -447,7 +407,7 @@ export class ToolHandler {
             agentId: agent.id,
             displayName: agent.displayName,
             status,
-            role: agent.role,
+            capabilities: agent.capabilities,
             lastSeen,
             currentTasks: assignedTasks.map(t => t.id)
           })
@@ -760,9 +720,11 @@ export class ToolHandler {
       if (params.broadcast) {
         const allAgents = this.registry.getAll();
         targetAgents.push(...allAgents.map((a: { id: string }) => a.id));
-      } else if (params.targetRole) {
-        const roleAgents = this.registry.getAll().filter((a: { role: string }) => a.role === params.targetRole);
-        targetAgents.push(...roleAgents.map((a: { id: string }) => a.id));
+      } else if (params.targetCapability) {
+        const capAgents = this.registry.getAll().filter((a: { capabilities?: string[] }) =>
+          a.capabilities?.includes(params.targetCapability!)
+        );
+        targetAgents.push(...capAgents.map((a: { id: string }) => a.id));
       } else if (params.targetAgentId) {
         targetAgents.push(params.targetAgentId);
       }

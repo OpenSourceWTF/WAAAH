@@ -6,12 +6,12 @@ import express from 'express';
 import bodyParser from 'body-parser';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { AgentRegistry } from './state/registry.js';
-import { TaskQueue } from './state/queue.js';
-import { db } from './state/db.js';
 import { ToolHandler } from './mcp/tools.js';
 import { scanPrompt, getSecurityContext } from './security/prompt-scanner.js';
-import { eventBus, emitActivity } from './state/events.js';
+import { eventBus, emitActivity, initEventLog } from './state/events.js';
+import { createProductionContext } from './state/context.js';
+import { AGENT_OFFLINE_THRESHOLD_MS, CLEANUP_INTERVAL_MS } from '@opensourcewtf/waaah-types';
+import { determineAgentStatus } from './state/agent-status.js';
 import path from 'path';
 import { exec } from 'child_process';
 import util from 'util';
@@ -25,8 +25,14 @@ const PORT = process.env.WAAAH_PORT || process.env.PORT || 3000;
 const API_KEY = process.env.WAAAH_API_KEY;
 const WORKSPACE_ROOT = process.env.WORKSPACE_ROOT || process.cwd();
 
-const registry = new AgentRegistry(db);
-const queue = new TaskQueue(db);
+// Create production context with all dependencies
+const ctx = createProductionContext();
+
+// Initialize event logging with database from context
+initEventLog(ctx.db);
+
+// Use services from context
+const { registry, queue } = ctx;
 queue.startScheduler();
 
 // Track active bot connections (SSE streams)
@@ -118,7 +124,7 @@ app.post('/admin/enqueue', (req, res) => {
     command: 'execute_prompt',
     prompt,
     from: { type: 'user', id: 'admin', name: 'AdminUser' },
-    to: { agentId, role: role || 'developer' },
+    to: { agentId },
     priority: priority || 'normal',
     status: 'QUEUED',
     createdAt: Date.now(),
@@ -130,25 +136,30 @@ app.post('/admin/enqueue', (req, res) => {
   res.json({ success: true, taskId });
 });
 
-app.get('/admin/tasks', (req, res) => {
-  // Only return active tasks to prevent payload explosion
-  const allTasks = queue.getAll();
-  const activeTasks = allTasks.filter(t => !['COMPLETED', 'FAILED', 'BLOCKED', 'CANCELLED'].includes(t.status));
-  res.json(activeTasks);
-});
-
 /**
- * GET /admin/tasks/history
- * Retrieves task history from database with filtering.
+ * GET /admin/tasks
+ * Retrieves tasks with optional filtering.
+ * All tasks are now DB-backed, so this replaces both the old /admin/tasks and /admin/tasks/history.
  * 
- * @query status - Filter by status (single or comma-separated)
+ * @query status - Filter by status (single or comma-separated, e.g., 'QUEUED,ASSIGNED')
  * @query agentId - Filter by assigned agent
  * @query limit - Max results (default 50)
  * @query offset - Pagination offset (default 0)
  * @query q - Fuzzy search term
+ * @query active - If 'true', only return active (non-terminal) tasks (backward compatibility)
  */
-app.get('/admin/tasks/history', (req, res) => {
-  const { status, agentId, limit, offset, q } = req.query;
+app.get('/admin/tasks', (req, res) => {
+  const { status, agentId, limit, offset, q, active } = req.query;
+
+  // Backward compatibility: if active=true, only return non-terminal tasks
+  if (active === 'true') {
+    const allTasks = queue.getAll();
+    const activeTasks = allTasks.filter(t => !['COMPLETED', 'FAILED', 'BLOCKED', 'CANCELLED'].includes(t.status));
+    res.json(activeTasks);
+    return;
+  }
+
+  // Default: return filtered tasks from database
   const tasks = queue.getTaskHistory({
     status: status as string,
     agentId: agentId as string,
@@ -157,6 +168,16 @@ app.get('/admin/tasks/history', (req, res) => {
     search: q as string
   });
   res.json(tasks);
+});
+
+/**
+ * @deprecated Use /admin/tasks with query params instead
+ * Kept for backward compatibility, redirects to consolidated endpoint.
+ */
+app.get('/admin/tasks/history', (req, res) => {
+  // Redirect to the main tasks endpoint with the same query params
+  const queryStr = req.url.includes('?') ? req.url.split('?')[1] : '';
+  res.redirect(301, `/admin/tasks${queryStr ? '?' + queryStr : ''}`);
 });
 
 /**
@@ -408,26 +429,18 @@ app.get('/admin/agents/status', async (req, res) => {
   const result = agents.map(agent => {
     const assignedTasks = queue.getAssignedTasksForAgent(agent.id);
     const lastSeen = registry.getLastSeen(agent.id);
-    const isRecent = lastSeen && (Date.now() - lastSeen) < 5 * 60 * 1000;
-    const isWaiting = waitingAgents.includes(agent.id);
-
-    let status: 'OFFLINE' | 'WAITING' | 'PROCESSING' = 'OFFLINE';
-    if (assignedTasks.length > 0) {
-      status = 'PROCESSING';
-    } else if (isWaiting || isRecent) {
-      status = 'WAITING';
-    }
+    const isRecent = Boolean(lastSeen && (Date.now() - lastSeen) < AGENT_OFFLINE_THRESHOLD_MS);
+    const isWaiting = waitingAgents.has(agent.id);
+    const status = determineAgentStatus(assignedTasks, isWaiting, isRecent);
 
     return {
       id: agent.id,
       displayName: agent.displayName,
-      role: agent.role,
       status,
       lastSeen,
       currentTasks: assignedTasks.map(t => t.id),
       // Extended metadata for expandable agent cards
       capabilities: agent.capabilities || [],
-      createdAt: agent.createdAt,
       color: agent.color
     };
   });
@@ -522,7 +535,6 @@ if (server) {
 }
 
 // Periodic cleanup of offline agents (every 5 minutes)
-const CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
 setInterval(() => {
   // Prevent cleaning up agents that are currently assigned tasks
   const busyAgents = queue.getBusyAgentIds();
@@ -531,7 +543,7 @@ setInterval(() => {
   const cutoff = Date.now() - CLEANUP_INTERVAL_MS;
   const all = registry.getAll();
 
-  const protectedAgents = new Set([...busyAgents, ...queue.getWaitingAgents()]);
+  const protectedAgents = new Set([...busyAgents, ...queue.getWaitingAgents().keys()]);
 
   for (const a of all) {
     if (a.lastSeen && a.lastSeen < cutoff && !protectedAgents.has(a.id)) {

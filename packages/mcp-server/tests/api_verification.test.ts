@@ -1,50 +1,81 @@
 import request from 'supertest';
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { app, server } from '../src/server';
 
-// Mock dependencies
-vi.mock('../src/state/queue.js', () => {
-  return {
-    TaskQueue: vi.fn().mockImplementation(function () {
-      return {
-        getAll: vi.fn().mockReturnValue([]),
-        getTaskHistory: vi.fn(),
-        getTask: vi.fn(),
-        getTaskFromDB: vi.fn(),
-        cancelTask: vi.fn((id) => {
+// Mock context.js to use test context (in-memory) with proper mocks
+vi.mock('../src/state/context.js', () => {
+  const Database = require('better-sqlite3');
+
+  const createContext = () => {
+    const db = new Database(':memory:');
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS agents (id TEXT PRIMARY KEY, role TEXT, displayName TEXT, capabilities TEXT, lastSeen INTEGER, createdAt INTEGER, eviction_requested BOOLEAN DEFAULT 0, eviction_reason TEXT, canDelegateTo TEXT, color TEXT);
+      CREATE TABLE IF NOT EXISTS tasks (id TEXT PRIMARY KEY, status TEXT, prompt TEXT, title TEXT, priority TEXT, fromAgentId TEXT, toAgentId TEXT, toAgentRole TEXT, context TEXT, response TEXT, createdAt INTEGER, completedAt INTEGER, assignedTo TEXT, dependencies TEXT, history TEXT, fromAgentName TEXT);
+      CREATE TABLE IF NOT EXISTS logs (id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp INTEGER, category TEXT, message TEXT, metadata TEXT);
+      CREATE TABLE IF NOT EXISTS aliases (alias TEXT PRIMARY KEY, agentId TEXT);
+    `);
+
+    // Insert test logs
+    const insertLog = db.prepare('INSERT INTO logs (timestamp, category, message, metadata) VALUES (?, ?, ?, ?)');
+    insertLog.run(123, 'SYSTEM', 'Test Log 1', '{}');
+    insertLog.run(124, 'AGENT', 'Test Log 2', '{}');
+
+    return {
+      db,
+      registry: {
+        getAll: () => [{ id: 'agent-1', status: 'WAITING', role: 'developer', displayName: '@Agent1' }],
+        cleanup: () => { },
+        requestEviction: (id: string) => id === 'agent-1'
+      },
+      queue: {
+        startScheduler: () => { },
+        stopScheduler: () => { },
+        getAll: () => [],
+        on: () => { },
+        getBusyAgentIds: () => [],
+        getWaitingAgents: () => [],
+        getTaskHistory: () => [],
+        getTask: () => undefined,
+        getTaskFromDB: () => undefined,
+        cancelTask: (id: string) => {
           if (id === 'task-queued') return { success: true };
           if (id === 'task-completed') return { success: false, error: 'Cannot cancel completed task' };
           return { success: false, error: 'Task not found' };
-        }),
-        forceRetry: vi.fn(),
-        queueEviction: vi.fn(),
-        getStats: vi.fn().mockReturnValue({ total: 10, completed: 5 }),
-        getLogs: vi.fn((limit) => ([
+        },
+        forceRetry: () => { },
+        queueEviction: () => { },
+        getStats: () => ({ total: 10, completed: 5 }),
+        getLogs: () => [
           { timestamp: 123, category: 'SYSTEM', message: 'Test Log 1', metadata: {} },
           { timestamp: 124, category: 'AGENT', message: 'Test Log 2', metadata: {} }
-        ])),
-        on: vi.fn(),
-        getBusyAgentIds: vi.fn().mockReturnValue([]),
-        getWaitingAgents: vi.fn().mockReturnValue([]),
-        startScheduler: vi.fn(),
-        stopScheduler: vi.fn(),
-        clear: vi.fn()
-      };
-    })
+        ],
+        clear: () => { }
+      },
+      taskRepo: {},
+      agentRepo: {},
+      eventLog: {},
+      securityLog: {},
+      close: () => db.close(),
+      cleanup: () => db.close(),
+      isHealthy: () => true
+    };
+  };
+
+  return {
+    createProductionContext: createContext,
+    createTestContext: createContext
   };
 });
 
-vi.mock('../src/state/registry.js', () => {
-  return {
-    AgentRegistry: vi.fn().mockImplementation(function () {
-      return {
-        getAll: vi.fn().mockReturnValue([{ id: 'agent-1', status: 'WAITING' }]),
-        requestEviction: vi.fn((id) => id === 'agent-1'),
-        cleanup: vi.fn()
-      }
-    })
-  }
-});
+// Mock events to prevent DB writes
+vi.mock('../src/state/events.js', () => ({
+  eventBus: {
+    on: vi.fn(),
+    off: vi.fn(),
+    emit: vi.fn()
+  },
+  emitActivity: vi.fn(),
+  initEventLog: vi.fn()
+}));
 
 // Mock ToolHandler to avoid complex init
 vi.mock('../src/mcp/tools.js', () => {
@@ -67,16 +98,7 @@ vi.mock('../src/mcp/tools.js', () => {
   }
 });
 
-// Mock events to prevent DB writes
-vi.mock('../src/state/events.js', () => ({
-  eventBus: {
-    on: vi.fn(),
-    off: vi.fn(),
-    emit: vi.fn()
-  },
-  emitActivity: vi.fn()
-}));
-
+import { app, server } from '../src/server';
 
 describe('API Verification: Activity Feed & Controls', () => {
   afterEach(() => {
@@ -142,5 +164,4 @@ describe('API Verification: Activity Feed & Controls', () => {
       expect(res.status).toBe(404);
     });
   });
-
 });

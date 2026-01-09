@@ -10,7 +10,7 @@ function mockTask(overrides: Partial<Task> = {}): Task {
     command: 'execute_prompt',
     prompt: 'Test prompt',
     from: { type: 'user', id: 'test-user', name: 'Test User' },
-    to: { role: 'developer' },
+    to: { requiredCapabilities: ['code-writing'] },
     priority: 'normal',
     status: 'QUEUED',
     createdAt: Date.now(),
@@ -39,10 +39,10 @@ describe('TaskQueue', () => {
     });
 
     it('emits task event when waiting agent matches', async () => {
-      const task = mockTask({ id: 'emit-test-1', to: { role: 'developer' } });
+      const task = mockTask({ id: 'emit-test-1', to: { requiredCapabilities: ['code-writing'] } });
 
       // Start waiting for a task first (like an agent would)
-      const waitPromise = queue.waitForTask('test-agent', 'developer', 1000);
+      const waitPromise = queue.waitForTask('test-agent', ['code-writing'], 1000);
 
       // Give the listener time to register
       await new Promise(resolve => setTimeout(resolve, 10));
@@ -113,10 +113,10 @@ describe('TaskQueue', () => {
 
   describe('waitForTask', () => {
     it('resolves immediately if task exists for role', async () => {
-      const task = mockTask({ to: { role: 'developer' } });
+      const task = mockTask({ to: { requiredCapabilities: ['code-writing'] } });
       queue.enqueue(task);
 
-      const result = await queue.waitForTask('agent-1', 'developer', 1000);
+      const result = await queue.waitForTask('agent-1', ['code-writing'], 1000);
       expect(result).not.toBeNull();
       expect((result as Task)?.prompt).toBe('Test prompt');
     });
@@ -125,21 +125,21 @@ describe('TaskQueue', () => {
       const task = mockTask({ to: { agentId: 'specific-agent' } });
       queue.enqueue(task);
 
-      const result = await queue.waitForTask('specific-agent', 'developer', 1000);
+      const result = await queue.waitForTask('specific-agent', ['code-writing'], 1000);
       expect(result).not.toBeNull();
     });
 
     it('returns null on timeout when no task', async () => {
-      const result = await queue.waitForTask('no-task-agent', 'developer', 100);
+      const result = await queue.waitForTask('no-task-agent', ['code-writing'], 100);
       expect(result).toBeNull();
     });
 
     it('resolves when task enqueued during wait', async () => {
-      const waitPromise = queue.waitForTask('waiting-agent', 'developer', 5000);
+      const waitPromise = queue.waitForTask('waiting-agent', ['code-writing'], 5000);
 
       // Enqueue after a short delay
       setTimeout(() => {
-        queue.enqueue(mockTask({ to: { role: 'developer' } }));
+        queue.enqueue(mockTask({ to: { requiredCapabilities: ['code-writing'] } }));
       }, 50);
 
       const result = await waitPromise;
@@ -150,7 +150,7 @@ describe('TaskQueue', () => {
       const task = mockTask({ id: 'pending-ack-test' });
       queue.enqueue(task);
 
-      await queue.waitForTask('agent-1', 'developer', 1000);
+      await queue.waitForTask('agent-1', ['code-writing'], 1000);
       expect(queue.getTask('pending-ack-test')?.status).toBe('PENDING_ACK');
     });
   });
@@ -159,7 +159,7 @@ describe('TaskQueue', () => {
     it('transitions PENDING_ACK to ASSIGNED', async () => {
       const task = mockTask({ id: 'ack-test-1' });
       queue.enqueue(task);
-      await queue.waitForTask('agent-1', 'developer', 1000);
+      await queue.waitForTask('agent-1', ['code-writing'], 1000);
 
       const result = queue.ackTask('ack-test-1', 'agent-1');
       expect(result.success).toBe(true);
@@ -169,7 +169,7 @@ describe('TaskQueue', () => {
     it('rejects ACK from wrong agent', async () => {
       const task = mockTask({ id: 'wrong-agent-ack' });
       queue.enqueue(task);
-      await queue.waitForTask('agent-1', 'developer', 1000);
+      await queue.waitForTask('agent-1', ['code-writing'], 1000);
 
       const result = queue.ackTask('wrong-agent-ack', 'agent-2');
       expect(result.success).toBe(false);
@@ -185,7 +185,7 @@ describe('TaskQueue', () => {
     it('sets assignedTo property on the task', async () => {
       const task = mockTask({ id: 'assigned-to-test' });
       queue.enqueue(task);
-      await queue.waitForTask('assigned-agent', 'developer', 1000);
+      await queue.waitForTask('assigned-agent', ['code-writing'], 1000);
 
       queue.ackTask('assigned-to-test', 'assigned-agent');
 
@@ -257,7 +257,7 @@ describe('TaskQueue', () => {
 
     it('tracks agents during waitForTask', async () => {
       // Start a wait (will timeout quickly)
-      const waitPromise = queue.waitForTask('waiting-test-agent', 'developer', 100);
+      const waitPromise = queue.waitForTask('waiting-test-agent', ['code-writing'], 100);
 
       // Check if agent is in waiting list during the wait
       const waiting = queue.getWaitingAgents();
@@ -276,7 +276,7 @@ describe('TaskQueue', () => {
 
     it('tracks agent waiting state during waitForTask', async () => {
       // Start a wait
-      const waitPromise = queue.waitForTask('is-waiting-test', 'developer', 100);
+      const waitPromise = queue.waitForTask('is-waiting-test', ['code-writing'], 100);
 
       // During wait, should be marked as waiting
       const duringWait = queue.isAgentWaiting('is-waiting-test');
@@ -301,7 +301,7 @@ describe('TaskQueue', () => {
       queue.enqueue(task);
 
       // Wait for task to be picked up
-      await queue.waitForTask('assigned-agent', 'developer', 100);
+      await queue.waitForTask('assigned-agent', ['code-writing'], 100);
 
       // ACK the task to move to ASSIGNED
       queue.ackTask('assigned-test-1', 'assigned-agent');
@@ -327,7 +327,7 @@ describe('TaskQueue', () => {
       queue.enqueue(task);
 
       // Move to PENDING_ACK
-      await queue.waitForTask('agent-1', 'developer', 100);
+      await queue.waitForTask('agent-1', ['code-writing'], 100);
       expect(queue.getTask('cancel-pending-ack-test')?.status).toBe('PENDING_ACK');
 
       const result = queue.cancelTask('cancel-pending-ack-test');
@@ -366,7 +366,7 @@ describe('TaskQueue', () => {
 
         const updated = queue.getTask('retry-assigned-test');
         expect(updated?.status).toBe('QUEUED');
-        expect(updated?.assignedTo).toBeUndefined();
+        expect(updated?.assignedTo).toBeFalsy(); // SQLite returns null, not undefined
       });
 
       it('retries a CANCELLED task', () => {
@@ -393,7 +393,7 @@ describe('TaskQueue', () => {
         const task = mockTask({ id: 'retry-pending-test' });
         queue.enqueue(task);
         // Move to PENDING_ACK
-        await queue.waitForTask('agent-1', 'developer', 100);
+        await queue.waitForTask('agent-1', ['code-writing'], 100);
 
         const result = queue.forceRetry('retry-pending-test');
         expect(result.success).toBe(true);

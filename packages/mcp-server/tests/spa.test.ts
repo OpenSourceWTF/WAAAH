@@ -19,9 +19,11 @@ vi.mock('../src/state/queue.js', () => {
         startScheduler: vi.fn(),
         stopScheduler: vi.fn(),
         getAll: vi.fn().mockReturnValue([]),
+        getTaskHistory: vi.fn().mockReturnValue([]),
         on: vi.fn(),
         off: vi.fn(),
         getBusyAgentIds: vi.fn().mockReturnValue([]),
+        getWaitingAgents: vi.fn().mockReturnValue([]),
         getTask: vi.fn(),
         getTaskFromDB: vi.fn()
       }
