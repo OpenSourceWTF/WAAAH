@@ -4,7 +4,7 @@ import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { XCircle, RefreshCw, History, X, Clock, User, FileText, Settings, MessageSquare } from "lucide-react";
+import { XCircle, RefreshCw, History, X, Clock, User, FileText, Settings, MessageSquare, CheckCircle } from "lucide-react";
 
 interface Task {
   id: string;
@@ -29,6 +29,7 @@ interface KanbanBoardProps {
   cancelledTasks: Task[];
   onCancelTask: (e: React.MouseEvent, id: string) => void;
   onRetryTask: (e: React.MouseEvent, id: string) => void;
+  onApproveTask: (e: React.MouseEvent, id: string) => void;
   onViewHistory: () => void;
   onTaskClick?: (task: Task) => void;
 }
@@ -56,7 +57,7 @@ const COLUMNS = [
   { id: 'CANCELLED', label: 'CANCELLED', statuses: ['CANCELLED', 'FAILED'] }
 ];
 
-export const KanbanBoard = React.memo(function KanbanBoard({ tasks, completedTasks, cancelledTasks, onCancelTask, onRetryTask, onViewHistory }: KanbanBoardProps) {
+export const KanbanBoard = React.memo(function KanbanBoard({ tasks, completedTasks, cancelledTasks, onCancelTask, onRetryTask, onApproveTask, onViewHistory }: KanbanBoardProps) {
   // Expanded card state - null means no card expanded
   const [expandedTask, setExpandedTask] = useState<Task | null>(null);
 
@@ -177,6 +178,7 @@ export const KanbanBoard = React.memo(function KanbanBoard({ tasks, completedTas
     const latestProgress = progressUpdates.length > 0 ? progressUpdates[progressUpdates.length - 1] : null;
     const canCancel = ['QUEUED', 'ASSIGNED', 'PENDING_ACK', 'PROCESSING', 'IN_PROGRESS'].includes(task.status);
     const canRetry = ['FAILED', 'CANCELLED', 'ASSIGNED', 'QUEUED', 'PENDING_ACK'].includes(task.status);
+    const canApprove = ['REVIEW', 'IN_REVIEW', 'PENDING_RES', 'BLOCKED'].includes(task.status);
 
     return (
       <div
@@ -389,8 +391,18 @@ export const KanbanBoard = React.memo(function KanbanBoard({ tasks, completedTas
         </Tabs>
 
         {/* Action Footer */}
-        {(canCancel || canRetry) && (
+        {(canCancel || canRetry || canApprove) && (
           <div className="flex justify-end gap-2 p-4 border-t border-primary/20 bg-primary/5 flex-shrink-0">
+            {canApprove && (
+              <Button
+                variant="default"
+                size="sm"
+                className="h-8 gap-2 font-mono uppercase bg-green-600 hover:bg-green-700 text-white border-green-800"
+                onClick={(e) => { onApproveTask(e, task.id); handleCloseExpanded(); }}
+              >
+                <CheckCircle className="h-4 w-4" /> Approve
+              </Button>
+            )}
             {canRetry && (
               <Button
                 variant="outline"
