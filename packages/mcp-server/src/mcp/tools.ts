@@ -86,6 +86,7 @@ export class ToolHandler {
       const finalAgentId = this.registry.register({
         id: params.agentId || `agent-${Date.now()}`,
         displayName,
+        role: params.role,
         capabilities: params.capabilities,
         workspaceContext: params.workspaceContext
       });
@@ -379,6 +380,7 @@ export class ToolHandler {
         return {
           id: agent.id,
           displayName: agent.displayName,
+          role: agent.role,
           capabilities: agent.capabilities,
           lastSeen,
           status,
@@ -697,9 +699,10 @@ export class ToolHandler {
   /**
    * Updates progress for a task with an observation message.
    * Serves as both a timeline update and an agent heartbeat.
+   * Also returns any unread user comments for the agent to process (mailbox feature).
    * 
    * @param args - The arguments for update_progress tool (updateProgressSchema).
-   * @returns MCP Tool content confirming progress recorded.
+   * @returns MCP Tool content with progress recorded status and any unread comments.
    */
   async update_progress(args: unknown) {
     try {
@@ -712,13 +715,29 @@ export class ToolHandler {
       this.queue.addMessage(params.taskId, 'agent', params.message, {
         phase: params.phase,
         percentage: params.percentage,
-        agentId: params.agentId
-      });
+        agentId: params.agentId,
+        messageType: 'progress'
+      }, true, 'progress');
 
       console.log(`[Tool] Progress update for ${params.taskId}: ${params.phase || 'N/A'} - ${params.message.substring(0, 50)}...`);
 
+      // Fetch unread user comments (mailbox feature)
+      const unreadComments = this.queue.getUnreadComments(params.taskId);
+
+      // Mark comments as read now that they're being delivered
+      if (unreadComments.length > 0) {
+        this.queue.markCommentsAsRead(params.taskId);
+        console.log(`[Tool] Delivering ${unreadComments.length} unread comments to agent for task ${params.taskId}`);
+      }
+
       return {
-        content: [{ type: 'text', text: 'Progress recorded' }]
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            recorded: true,
+            unreadComments: unreadComments.length > 0 ? unreadComments : undefined
+          })
+        }]
       };
     } catch (e) { return this.handleError(e); }
   }

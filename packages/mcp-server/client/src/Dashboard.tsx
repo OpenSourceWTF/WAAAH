@@ -284,6 +284,36 @@ export function Dashboard() {
     }
   }, []);
 
+  const handleSendComment = useCallback(async (taskId: string, content: string, replyTo?: string) => {
+    try {
+      const res = await fetch(`/admin/tasks/${taskId}/comments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content, replyTo })
+      });
+      if (!res.ok) throw new Error('Failed to send comment');
+      console.log(`Comment sent to task ${taskId}${replyTo ? ` (reply to ${replyTo})` : ''}`);
+      fetchData(); // Refresh to show new comment
+    } catch (error) {
+      console.error("Failed to send comment", error);
+    }
+  }, []);
+
+  const handleAddReviewComment = useCallback(async (taskId: string, filePath: string, lineNumber: number | null, content: string) => {
+    try {
+      const res = await fetch(`/admin/tasks/${taskId}/review-comments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filePath, lineNumber, content })
+      });
+      if (!res.ok) throw new Error('Failed to add review comment');
+      console.log(`Review comment added to ${filePath}:${lineNumber || 'file'}`);
+      fetchData(); // Refresh to show new comment
+    } catch (error) {
+      console.error("Failed to add review comment", error);
+    }
+  }, []);
+
   // Task click handler removed - KanbanBoard handles expansion inline
 
   // handleApproveReview, handleRejectReview, handleAddComment removed - KanbanBoard handles actions
@@ -588,6 +618,8 @@ export function Dashboard() {
                   onRetryTask={handleRetryTask}
                   onApproveTask={handleApproveTask}
                   onRejectTask={handleRejectTask}
+                  onSendComment={handleSendComment}
+                  onAddReviewComment={handleAddReviewComment}
                   onViewHistory={handleViewHistory}
                 />
               </TabsContent>

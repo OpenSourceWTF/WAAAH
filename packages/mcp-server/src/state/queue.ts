@@ -306,21 +306,52 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
 
   // ===== Messages =====
 
-  addMessage(taskId: string, role: 'user' | 'agent' | 'system', content: string, metadata?: Record<string, unknown>): void {
-    const id = crypto.randomUUID();
-    const timestamp = Date.now();
-
+  addMessage(
+    taskId: string,
+    role: 'user' | 'agent' | 'system',
+    content: string,
+    metadata?: Record<string, unknown>,
+    isRead: boolean = true,
+    messageType?: 'comment' | 'review_feedback' | 'progress' | 'block_event',
+    replyTo?: string
+  ): void {
     try {
-      this.repo.addMessage(taskId, role, content, metadata);
-      console.log(`[Queue] Added message to task ${taskId} from ${role}`);
-
-      const task = this.repo.getById(taskId);
-      if (task) {
-        if (!task.messages) task.messages = [];
-        task.messages.push({ id, taskId, role, content, timestamp, metadata });
-      }
+      this.repo.addMessage(taskId, role, content, metadata, isRead, replyTo);
+      console.log(`[Queue] Added message to task ${taskId} from ${role} (isRead: ${isRead}, type: ${messageType || 'default'}${replyTo ? `, replyTo: ${replyTo}` : ''})`);
     } catch (e: any) {
       console.error(`[Queue] Failed to add message to task ${taskId}: ${e.message}`);
+    }
+  }
+
+  /**
+   * Add a user comment to a task (starts as unread for agent pickup).
+   * Used for the mailbox feature - live comments during task execution.
+   */
+  addUserComment(taskId: string, content: string, replyTo?: string): void {
+    this.addMessage(taskId, 'user', content, { messageType: 'comment' }, false, 'comment', replyTo);
+  }
+
+  /**
+   * Get unread user comments for a task (mailbox feature).
+   */
+  getUnreadComments(taskId: string): Array<{ id: string; content: string; timestamp: number; metadata?: Record<string, any> }> {
+    try {
+      return this.repo.getUnreadComments(taskId);
+    } catch (e: any) {
+      console.error(`[Queue] Failed to get unread comments for task ${taskId}: ${e.message}`);
+      return [];
+    }
+  }
+
+  /**
+   * Mark all unread comments as read for a task.
+   */
+  markCommentsAsRead(taskId: string): number {
+    try {
+      return this.repo.markCommentsAsRead(taskId);
+    } catch (e: any) {
+      console.error(`[Queue] Failed to mark comments as read for task ${taskId}: ${e.message}`);
+      return 0;
     }
   }
 
@@ -653,8 +684,10 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
   }
 
   /** Get tasks assigned to an agent */
+  /** Get tasks assigned to an agent (Active only) */
   getAssignedTasksForAgent(agentId: string): Task[] {
-    return this.repo.getByAssignedTo(agentId);
+    const all = this.repo.getByAssignedTo(agentId);
+    return all.filter(t => !['COMPLETED', 'FAILED', 'CANCELLED', 'BLOCKED'].includes(t.status));
   }
 
   /** Get agent's last seen timestamp from database */

@@ -33,10 +33,15 @@ export class AgentRepository implements IAgentRepository {
     }
 
     const stmt = this.db.prepare(`
-      INSERT INTO agents (id, displayName, color, capabilities, workspaceContext, lastSeen, createdAt)
-      VALUES (@id, @displayName, @color, @capabilities, @workspaceContext, @lastSeen, @createdAt)
+      INSERT INTO agents (id, displayName, role, color, capabilities, workspaceContext, lastSeen, createdAt)
+      VALUES (@id, @displayName, @role, @color, @capabilities, @workspaceContext, @lastSeen, @createdAt)
       ON CONFLICT(id) DO UPDATE SET
         displayName = excluded.displayName,
+        color = COALESCE(excluded.color, agents.color),
+        capabilities = excluded.capabilities,
+        workspaceContext = excluded.workspaceContext,
+        displayName = excluded.displayName,
+        role = excluded.role,
         color = COALESCE(excluded.color, agents.color),
         capabilities = excluded.capabilities,
         workspaceContext = excluded.workspaceContext,
@@ -46,6 +51,7 @@ export class AgentRepository implements IAgentRepository {
     stmt.run({
       id: agent.id,
       displayName: agent.displayName,
+      role: agent.role || null,
       color: agent.color || null,
       capabilities: JSON.stringify(agent.capabilities),
       workspaceContext: agent.workspaceContext ? JSON.stringify(agent.workspaceContext) : null,
@@ -194,6 +200,7 @@ export class AgentRepository implements IAgentRepository {
     return {
       id: row.id,
       displayName: row.displayName,
+      role: row.role || undefined,
       capabilities: row.capabilities ? JSON.parse(row.capabilities) : [],
       color: row.color || undefined,
       lastSeen: row.lastSeen || undefined,

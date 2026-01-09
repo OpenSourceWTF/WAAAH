@@ -74,6 +74,7 @@ export function initializeSchema(db: Database.Database): void {
     CREATE TABLE IF NOT EXISTS agents (
       id TEXT PRIMARY KEY,
       displayName TEXT NOT NULL,
+      role TEXT,
       color TEXT,
       capabilities TEXT, -- JSON array of StandardCapability
       workspaceContext TEXT, -- JSON object with type, repoId, branch, path
@@ -155,6 +156,22 @@ export function initializeSchema(db: Database.Database): void {
       createdAt INTEGER NOT NULL
     );
 
+    -- Review comments for code review (line-level feedback)
+    CREATE TABLE IF NOT EXISTS review_comments (
+      id TEXT PRIMARY KEY,
+      taskId TEXT NOT NULL,
+      filePath TEXT NOT NULL,
+      lineNumber INTEGER,           -- null for file-level comments
+      content TEXT NOT NULL,
+      authorRole TEXT NOT NULL,     -- 'user' | 'agent'
+      authorId TEXT,
+      threadId TEXT,                -- links replies together (parent comment id)
+      resolved BOOLEAN DEFAULT 0,
+      resolvedBy TEXT,
+      createdAt INTEGER NOT NULL,
+      FOREIGN KEY(taskId) REFERENCES tasks(id) ON DELETE CASCADE
+    );
+
     -- Indexes
     CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
     CREATE INDEX IF NOT EXISTS idx_tasks_pending_ack ON tasks(status, pendingAckAgentId) WHERE status = 'PENDING_ACK';
@@ -164,6 +181,8 @@ export function initializeSchema(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_task_messages_taskId ON task_messages(taskId);
     CREATE INDEX IF NOT EXISTS idx_agents_waiting ON agents(waitingSince) WHERE waitingSince IS NOT NULL;
     CREATE INDEX IF NOT EXISTS idx_system_prompts_agent ON system_prompts(agentId);
+    CREATE INDEX IF NOT EXISTS idx_review_comments_taskId ON review_comments(taskId);
+    CREATE INDEX IF NOT EXISTS idx_review_comments_threadId ON review_comments(threadId);
   `);
 
   // Run migrations for existing databases
@@ -216,7 +235,9 @@ function runMigrations(db: Database.Database): void {
     { column: 'waitingCapabilities', sql: 'ALTER TABLE agents ADD COLUMN waitingCapabilities TEXT' },
     { column: 'waitingSince', sql: 'ALTER TABLE agents ADD COLUMN waitingSince INTEGER' },
     // Workspace context (V7)
-    { column: 'workspaceContext', sql: 'ALTER TABLE agents ADD COLUMN workspaceContext TEXT' }
+    { column: 'workspaceContext', sql: 'ALTER TABLE agents ADD COLUMN workspaceContext TEXT' },
+    // Role (Added to fix UI display)
+    { column: 'role', sql: 'ALTER TABLE agents ADD COLUMN role TEXT' }
   ];
 
   for (const migration of agentMigrations) {

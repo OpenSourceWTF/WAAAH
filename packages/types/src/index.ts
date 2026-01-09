@@ -16,6 +16,7 @@ export interface AgentIdentity {
   capabilities: StandardCapability[];
   state?: string;      // Current state summary (for resumption)
   displayName?: string;
+  role?: string;
   status?: 'idle' | 'busy' | 'offline'; // made optional as it's computed
   lastSeen?: number; // timestamp
   color?: string; // For UI visualization
@@ -38,6 +39,9 @@ export interface TaskMessage {
   role: 'user' | 'agent' | 'system';  // This is message role, not agent role
   content: string;
   timestamp: number;
+  isRead?: boolean;  // For mailbox: user comments start unread
+  messageType?: 'comment' | 'review_feedback' | 'progress' | 'block_event'; // Distinguishes comment types
+  replyTo?: string;  // For threading: references parent message ID
   metadata?: Record<string, unknown>;
 }
 

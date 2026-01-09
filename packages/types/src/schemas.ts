@@ -147,6 +147,7 @@ export type WorkspaceContext = z.infer<typeof workspaceContextSchema>;
 export const registerAgentSchema = z.object({
   agentId: z.string().min(1).describe("Unique identifier for the agent"),
   displayName: z.string().optional().describe("Human-readable name for the agent (auto-generated if not provided)"),
+  role: z.string().optional().describe("Role of the agent (e.g., 'full-stack-engineer')"),
   capabilities: z.array(StandardCapability).min(1).describe("Capabilities this agent has"),
   workspaceContext: workspaceContextSchema.optional().describe("Workspace the agent is working in")
 });

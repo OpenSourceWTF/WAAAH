@@ -258,10 +258,10 @@ app.post('/admin/tasks/:taskId/retry', (req, res) => {
   res.json({ success: true, taskId });
 });
 
-// Add comment to a task
+// Add comment to a task (mailbox feature - starts unread for agent pickup)
 app.post('/admin/tasks/:taskId/comments', (req, res) => {
   const { taskId } = req.params;
-  const { content } = req.body;
+  const { content, replyTo } = req.body;
 
   if (!content || typeof content !== 'string') {
     res.status(400).json({ error: 'Missing or invalid comment content' });
@@ -269,7 +269,8 @@ app.post('/admin/tasks/:taskId/comments', (req, res) => {
   }
 
   try {
-    queue.addMessage(taskId, 'user', content);
+    queue.addUserComment(taskId, content, replyTo);
+    console.log(`[API] User comment added to task ${taskId} (unread)${replyTo ? ` replying to ${replyTo}` : ''}`);
     res.json({ success: true });
   } catch (e: any) {
     console.error(`Failed to add comment to task ${taskId}:`, e.message);
@@ -323,23 +324,22 @@ app.post('/admin/tasks/:taskId/approve', async (req, res) => {
   }
 });
 
-// POST Reject
+// POST Reject - feedback is now optional (comments serve as feedback)
 app.post('/admin/tasks/:taskId/reject', async (req, res) => {
   const { taskId } = req.params;
   const { feedback } = req.body;
 
-  if (!feedback) {
-    res.status(400).json({ error: 'Feedback is required for rejection' });
-    return;
-  }
-
   try {
     console.log(`[Review] Rejecting task ${taskId}...`);
 
-    // 1. Add Feedback Comment
-    queue.addMessage(taskId, 'user', `Task Rejected: ${feedback}`);
+    // Add rejection summary if provided
+    if (feedback) {
+      queue.addMessage(taskId, 'user', `Task Rejected: ${feedback}`);
+    } else {
+      queue.addMessage(taskId, 'system', 'Task rejected. See review comments for details.');
+    }
 
-    // 2. Update Status -> IN_PROGRESS (Allows Agent to Resume)
+    // Update Status -> IN_PROGRESS (Allows Agent to Resume)
     // Do NOT delete worktree - Agent will resume work there
     queue.updateStatus(taskId, 'IN_PROGRESS');
 
@@ -347,6 +347,87 @@ app.post('/admin/tasks/:taskId/reject', async (req, res) => {
   } catch (e: any) {
     console.error(`Reject failed for ${taskId}:`, e.message);
     res.status(500).json({ error: 'Failed to reject task', details: e.message });
+  }
+});
+
+// ===== Review Comments API =====
+
+// GET Review Comments for a task
+app.get('/admin/tasks/:taskId/review-comments', async (req, res) => {
+  const { taskId } = req.params;
+
+  try {
+    const comments = ctx.db.prepare(`
+      SELECT * FROM review_comments 
+      WHERE taskId = ? 
+      ORDER BY createdAt ASC
+    `).all(taskId);
+
+    res.json(comments);
+  } catch (e: any) {
+    console.error(`Failed to get review comments for ${taskId}:`, e.message);
+    res.status(500).json({ error: 'Failed to get review comments', details: e.message });
+  }
+});
+
+// POST Add Review Comment
+app.post('/admin/tasks/:taskId/review-comments', async (req, res) => {
+  const { taskId } = req.params;
+  const { filePath, lineNumber, content, threadId } = req.body;
+
+  if (!filePath || !content) {
+    res.status(400).json({ error: 'filePath and content are required' });
+    return;
+  }
+
+  try {
+    const id = `rc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+    ctx.db.prepare(`
+      INSERT INTO review_comments (id, taskId, filePath, lineNumber, content, authorRole, authorId, threadId, resolved, createdAt)
+      VALUES (?, ?, ?, ?, ?, 'user', 'dashboard', ?, 0, ?)
+    `).run(id, taskId, filePath, lineNumber || null, content, threadId || null, Date.now());
+
+    console.log(`[Review] Added comment ${id} on ${filePath}:${lineNumber || 'file'}`);
+
+    res.json({ success: true, id });
+  } catch (e: any) {
+    console.error(`Failed to add review comment:`, e.message);
+    res.status(500).json({ error: 'Failed to add review comment', details: e.message });
+  }
+});
+
+// POST Resolve Review Comment
+app.post('/admin/tasks/:taskId/review-comments/:commentId/resolve', async (req, res) => {
+  const { taskId, commentId } = req.params;
+  const { response } = req.body;
+
+  try {
+    // Mark comment as resolved
+    ctx.db.prepare(`
+      UPDATE review_comments 
+      SET resolved = 1, resolvedBy = 'agent'
+      WHERE id = ? AND taskId = ?
+    `).run(commentId, taskId);
+
+    // If agent provided a response, add it as a reply
+    if (response) {
+      const replyId = `rc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const parentComment = ctx.db.prepare('SELECT filePath, lineNumber FROM review_comments WHERE id = ?').get(commentId) as any;
+
+      if (parentComment) {
+        ctx.db.prepare(`
+          INSERT INTO review_comments (id, taskId, filePath, lineNumber, content, authorRole, authorId, threadId, resolved, createdAt)
+          VALUES (?, ?, ?, ?, ?, 'agent', 'agent', ?, 1, ?)
+        `).run(replyId, taskId, parentComment.filePath, parentComment.lineNumber, response, commentId, Date.now());
+      }
+    }
+
+    console.log(`[Review] Resolved comment ${commentId}`);
+    res.json({ success: true });
+  } catch (e: any) {
+    console.error(`Failed to resolve comment:`, e.message);
+    res.status(500).json({ error: 'Failed to resolve review comment', details: e.message });
   }
 });
 

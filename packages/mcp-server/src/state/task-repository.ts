@@ -27,9 +27,13 @@ export interface ITaskRepository {
   /** Get queue statistics */
   getStats(): { total: number; byStatus: Record<string, number> };
   /** Add a message to a task */
-  addMessage(taskId: string, role: string, content: string, metadata?: Record<string, any>): void;
+  addMessage(taskId: string, role: string, content: string, metadata?: Record<string, any>, isRead?: boolean, replyTo?: string): void;
   /** Get messages for a task */
-  getMessages(taskId: string): Array<{ role: string; content: string; timestamp: number; metadata?: Record<string, any> }>;
+  getMessages(taskId: string): Array<{ role: string; content: string; timestamp: number; isRead?: boolean; metadata?: Record<string, any> }>;
+  /** Get unread user comments for a task */
+  getUnreadComments(taskId: string): Array<{ id: string; content: string; timestamp: number; metadata?: Record<string, any> }>;
+  /** Mark all unread comments as read */
+  markCommentsAsRead(taskId: string): number;
   /** Clear all tasks (for testing) */
   clearAll(): void;
   /** Access to underlying database (for logging etc) */
@@ -175,17 +179,19 @@ export class TaskRepository implements ITaskRepository {
     return { total, byStatus };
   }
 
-  addMessage(taskId: string, role: string, content: string, metadata?: Record<string, any>): void {
+  addMessage(taskId: string, role: string, content: string, metadata?: Record<string, any>, isRead: boolean = true, replyTo?: string): void {
     const task = this.getById(taskId);
     if (!task) return;
 
     const messages = task.messages || [];
     messages.push({
-      id: `msg-${Date.now()}`,
+      id: `msg-${Date.now()}-${Math.random().toString(36).substring(7)}`,
       taskId,
       role: role as 'user' | 'agent' | 'system',
       content,
       timestamp: Date.now(),
+      isRead, // User comments start as unread (false), agent/system as read (true)
+      replyTo, // For threading: references parent message ID
       metadata
     });
 
@@ -193,7 +199,38 @@ export class TaskRepository implements ITaskRepository {
       .run(JSON.stringify(messages), taskId);
   }
 
-  getMessages(taskId: string): Array<{ role: string; content: string; timestamp: number; metadata?: Record<string, any> }> {
+  getUnreadComments(taskId: string): Array<{ id: string; content: string; timestamp: number; metadata?: Record<string, any> }> {
+    const task = this.getById(taskId);
+    if (!task || !task.messages) return [];
+
+    // Only return unread user comments (not review_feedback or other types)
+    return task.messages
+      .filter(m => m.role === 'user' && m.isRead === false && m.messageType === 'comment')
+      .map(m => ({ id: m.id, content: m.content, timestamp: m.timestamp, metadata: m.metadata }));
+  }
+
+  markCommentsAsRead(taskId: string): number {
+    const task = this.getById(taskId);
+    if (!task || !task.messages) return 0;
+
+    let count = 0;
+    const updatedMessages = task.messages.map(m => {
+      if (m.role === 'user' && m.isRead === false && m.messageType === 'comment') {
+        count++;
+        return { ...m, isRead: true };
+      }
+      return m;
+    });
+
+    if (count > 0) {
+      this.database.prepare('UPDATE tasks SET messages = ? WHERE id = ?')
+        .run(JSON.stringify(updatedMessages), taskId);
+    }
+
+    return count;
+  }
+
+  getMessages(taskId: string): Array<{ role: string; content: string; timestamp: number; isRead?: boolean; metadata?: Record<string, any> }> {
     const task = this.getById(taskId);
     return task?.messages || [];
   }
@@ -233,3 +270,4 @@ export class TaskRepository implements ITaskRepository {
     };
   }
 }
+

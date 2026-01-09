@@ -36,6 +36,7 @@ export type Database = BetterSqlite3Database;
 export interface AgentInput {
   id: string;
   displayName: string;
+  role?: string;
   capabilities: StandardCapability[];
   color?: string;
   workspaceContext?: {
