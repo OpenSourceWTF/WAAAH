@@ -140,6 +140,7 @@ We use SQLite (`mcp.db`) as the single source for all state.
 3.  **Git Worktree Mandate**:
     *   Agents MUST use `git worktree` for isolation.
     *   Flow: `create_worktree` (Standardized branch name) → Do Work → Commit → Push.
+    *   **Cleanup**: Agent MUST remove the worktree when task reaches `COMPLETED`.
     *   Main branch should remain clean.
 4.  **No Server Access to FS**: The MCP Server knows *about* the file system (via metadata) but cannot touch it directly.
 
