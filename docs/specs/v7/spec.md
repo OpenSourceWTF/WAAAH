@@ -34,6 +34,7 @@ WAAAH is an MCP-based agent orchestration system. V7 introduces:
 | S16 | Workflow State Machine Update | [16-workflow-state-machine-update.md](./16-workflow-state-machine-update.md) | TODO |
 | S17 | Spec-Driven Development | [17-spec-driven-development.md](./17-spec-driven-development.md) | TODO |
 | S18 | Circular Dependency Detection | [18-circular-dependency-detection.md](./18-circular-dependency-detection.md) | TODO |
+| S19 | Progress Heartbeat | [19-progress-heartbeat.md](./19-progress-heartbeat.md) | TODO |
 
 ## Execution Order (Parallel Safe)
 ```
@@ -47,4 +48,5 @@ S12 depends on S7.
 S17 depends on S4.
 S16 depends on S17.
 S18 standalone (can run in parallel with S1-S11).
+S19 standalone (can run in parallel with S1-S11).
 ```
