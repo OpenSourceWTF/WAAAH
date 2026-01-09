@@ -20,19 +20,59 @@ description: Orchestrator agent lifecycle - plan/build/verify/merge
 
 ---
 
+## ⚡ APPROVED DETECTION (CHECK FIRST!)
+
+**Before doing ANY work on a returning task, check if it's approved:**
+
+```bash
+# Does the worktree already exist?
+git worktree list | grep "feature-<TASK_ID>"
+```
+
+| Worktree Exists? | ctx.messages | Meaning | Action |
+|------------------|--------------|---------|--------|
+| ❌ No | — | Fresh task | PHASE 1 → PHASE 2 |
+| ✅ Yes | Empty `[]` | **APPROVED** | → PHASE 3 (Merge) |
+| ✅ Yes | Has content | Rejected | → Read feedback, PHASE 2 |
+
+> **⚠️ If worktree exists + empty messages = APPROVED. Merge immediately!**
+
+---
+
 ## STATUS ROUTING
 
-| Task Status | Your Action |
-|-------------|-------------|
-| QUEUED / ASSIGNED | → PHASE 1 (Plan) |
-| IN_PROGRESS (new) | → PHASE 2 (Build) |
-| QUEUED (with feedback) | → Read `task.messages` for user feedback, then PHASE 2 |
-| APPROVED | → PHASE 3 (Merge) |
-| BLOCKED + answer | → Resume PHASE 2 with answer |
-| CANCELLED | → Cleanup worktree, loop |
-| IN_REVIEW | → Do nothing, wait |
+**⚠️ CRITICAL: APPROVED Detection**
 
-> **Note**: Tasks returning from `IN_REVIEW` with feedback become `QUEUED` again. Check `task.messages` for user comments.
+The system may return tasks with `status: "ASSIGNED"` even when approved. You MUST check these conditions:
+
+```
+IS_APPROVED = (
+  ctx.status === "APPROVED"                           // Explicit approval
+  OR (worktree_exists(BRANCH) AND ctx.messages empty) // Re-assigned after review
+  OR ctx.wasApproved === true                         // Explicit flag if available
+)
+```
+
+**Worktree Existence Check:**
+```bash
+# Check if feature branch worktree exists
+git worktree list | grep "feature-<TASK_ID>"
+```
+- If worktree EXISTS and task is re-assigned → Likely APPROVED → PHASE 3
+- If worktree DOES NOT exist → Fresh task → PHASE 1/2
+
+| Task Status | Additional Check | Your Action |
+|-------------|------------------|-------------|
+| QUEUED / ASSIGNED (no worktree) | Fresh task | → PHASE 1 (Plan) |
+| QUEUED / ASSIGNED (worktree exists, no feedback) | **APPROVED** | → PHASE 3 (Merge) |
+| QUEUED / ASSIGNED (worktree exists, has feedback) | Rejected | → Read feedback, PHASE 2 |
+| IN_PROGRESS (new) | | → PHASE 2 (Build) |
+| APPROVED | | → PHASE 3 (Merge) |
+| BLOCKED + answer | | → Resume PHASE 2 with answer |
+| CANCELLED | | → Cleanup worktree, loop |
+| IN_REVIEW | | → Do nothing, wait |
+
+> **Note**: Tasks returning from `IN_REVIEW` with feedback become `QUEUED` again. Check `task.messages` for user comments. Empty `messages` array with existing worktree = APPROVED.
 
 ---
 
@@ -85,9 +125,41 @@ ack_task({ taskId: <TASK_ID>, agentId: <AGENT_ID> })
 ctx = get_task_context({ taskId: <TASK_ID> })
 ```
 
-### Step 4: ROUTE
+### Step 4: ROUTE (CRITICAL - Detect APPROVED)
 
-Use STATUS ROUTING table above → Execute appropriate PHASE
+**Before routing, check for worktree existence:**
+
+```bash
+WORKTREE_EXISTS=$(git worktree list | grep -c "feature-<TASK_ID>" || echo "0")
+```
+
+**Decision Tree:**
+
+```
+IF ctx.status === "APPROVED" OR ctx.status === "approved":
+  → PHASE 3 (Merge)
+
+ELSE IF ctx.status === "CANCELLED":
+  → Cleanup worktree, loop
+
+ELSE IF ctx.status === "IN_REVIEW":
+  → Do nothing, wait (loop back to Step 1)
+
+ELSE IF WORKTREE_EXISTS > 0:
+  # This is a returning task - was it approved or rejected?
+  IF ctx.messages is empty OR ctx.messages.length === 0:
+    # No feedback = APPROVED!
+    → PHASE 3 (Merge)
+  ELSE:
+    # Has feedback = Rejected, needs revision
+    → Read messages, PHASE 2 (Build - resume)
+
+ELSE:
+  # Fresh task - no worktree exists
+  → PHASE 1 (Plan) → PHASE 2 (Build)
+```
+
+> **⚠️ KEY INSIGHT**: If you previously submitted a task for review, and it comes back with an empty messages array, it was APPROVED. Do not restart work - proceed to merge!
 
 ---
 
@@ -207,7 +279,7 @@ update_progress({
 ### 2.4 Quality Gate
 
 Rate 1-10: Correctness? Code quality?
-**Both ≥8 → Continue. Otherwise → Fix.**
+**Both ≥9.5 → Continue. Otherwise → Fix.**
 
 ### 2.5 Documentation Phase (per S17)
 
@@ -228,12 +300,31 @@ After tests pass, add inline documentation:
 
 ### 2.6 **Submit for Review** (KEY STEP)
 
-```
-submit_review({ taskId: <TASK_ID>, message: "feat: <brief description>" })
-```
+1. **Generate Diffs**:
+   ```bash
+   # Create diffs.json structure
+   echo '{ "files": [] }' > diffs.json
+   
+   # For each changed file, append to json (agent implementation detail)
+   # Ideally:
+   # 1. git diff --name-only origin/main > changed_files.txt
+   # 2. Iterate and read 'git diff origin/main -- <file>'
+   # 3. Construct JSON: { "path": "...", "diff": "..." }
+   ```
+   **Requirement**: You MUST generate a JSON file containing the diffs of all changed files.
+
+2. **Send Response**:
+   ```
+   send_response({
+     taskId: <TASK_ID>,
+     status: "IN_REVIEW", 
+     message: "feat: <brief description>",
+     artifacts: ["<WORKTREE>/diffs.json"]
+   })
+   ```
 
 - **Success** → Status becomes IN_REVIEW → Loop to Step 1
-- **Failure** (tests fail) → Fix issues, retry submit_review
+- **Failure** (tests fail) → Fix issues, retry
 
 ---
 
@@ -317,14 +408,21 @@ MAIN LOOP:
   ├─ TIMEOUT → loop
   ├─ EVICT → exit
   ├─ SYSTEM_PROMPT → handle, loop
-  └─ TASK → ack_task → get_task_context → route by status:
-       ├─ QUEUED/ASSIGNED → PHASE 1 (plan) → PHASE 2 (build) → submit_review → loop
-       ├─ IN_PROGRESS → PHASE 2 → submit_review → loop
+  └─ TASK → ack_task → get_task_context → CHECK WORKTREE:
+  
+       ⚡ WORKTREE CHECK (CRITICAL):
+       git worktree list | grep "feature-<TASK_ID>"
+       ├─ Worktree EXISTS + empty messages → APPROVED → PHASE 3 (merge)
+       ├─ Worktree EXISTS + has messages  → Rejected → PHASE 2 (fix)
+       └─ Worktree MISSING               → Fresh    → PHASE 1 → PHASE 2
+
+       Route by check result:
+       ├─ Fresh task → PHASE 1 (plan) → PHASE 2 (build) → send_response(IN_REVIEW) → loop
        ├─ APPROVED → PHASE 3 (merge) → send_response(COMPLETED) → loop
        └─ CANCELLED → cleanup → loop
 
 KEY TOOLS:
-  submit_review = work done, await review
+  send_response(IN_REVIEW) = work done, await review
   send_response(COMPLETED) = ONLY after merge
   block_task = stuck, need help
 ```
@@ -340,6 +438,6 @@ KEY TOOLS:
 | `ack_task` | After task received |
 | `get_task_context` | Get task details |
 | `update_progress` | Every 5-10 edits |
-| `submit_review` | Work complete |
+| `send_response(IN_REVIEW)` | Work complete, request review |
 | `block_task` | When stuck |
 | `send_response(COMPLETED)` | **After merge only** |
