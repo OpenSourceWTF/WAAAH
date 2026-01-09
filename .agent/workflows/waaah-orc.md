@@ -176,7 +176,7 @@ If resuming (worktree exists from rejection): Just `cd <WORKTREE>`
 
 **⚠️ All file operations now use `<WORKTREE>` as base path.**
 
-### 2.3 Build Loop
+### 2.3 Build Loop (with Heartbeat per S19)
 
 ```
 FOR each acceptance criterion:
@@ -185,9 +185,24 @@ FOR each acceptance criterion:
   3. Implement code
   4. Run tests → Should pass
   
-  Every 5-10 edits:
-    update_progress({ taskId, agentId, phase: "EXECUTION", message: "...", percentage: 30-80 })
+  HEARTBEAT (Required per S19):
+  - Every 2-3 minutes OR after each criterion completion
+  - Call update_progress with meaningful summary
 ```
+
+**Progress Update Format:**
+```
+update_progress({
+  taskId: <TASK_ID>,
+  agentId: <AGENT_ID>,
+  phase: "EXECUTION",
+  message: "Completed auth middleware, starting login route tests",
+  percentage: 45,
+  challenges: ["Had to refactor session handling for JWT support"]
+})
+```
+
+> **⚠️ CRITICAL**: Regular heartbeats prove agent is active. Stale tasks (>5 min without update) appear stuck on Dashboard.
 
 ### 2.4 Quality Gate
 

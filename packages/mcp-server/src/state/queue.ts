@@ -404,11 +404,35 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
 
   /**
    * Finds a pending task suitable for an agent.
+   * Skips tasks with unsatisfied dependencies.
+   * Prioritizes tasks that were previously assigned to this agent (affinity on feedback).
    */
   private findPendingTaskForAgent(agentId: string, capabilities: StandardCapability[]): Task | undefined {
     const candidates = this.repo.getByStatuses(['QUEUED', 'APPROVED']);
 
-    candidates.sort((a: Task, b: Task) => {
+    // Filter out tasks with unsatisfied dependencies
+    const eligibleCandidates = candidates.filter(task => {
+      if (!task.dependencies || task.dependencies.length === 0) {
+        return true; // No dependencies - eligible
+      }
+      // Check all dependencies are COMPLETED
+      const allMet = task.dependencies.every(depId => {
+        const dep = this.getTask(depId) || this.getTaskFromDB(depId);
+        return dep && dep.status === 'COMPLETED';
+      });
+      if (!allMet) {
+        console.log(`[Queue] Skipping task ${task.id} - dependencies not satisfied`);
+      }
+      return allMet;
+    });
+
+    // Sort by: 1) Agent affinity (previously assigned to this agent), 2) Priority, 3) Age
+    eligibleCandidates.sort((a: Task, b: Task) => {
+      // Agent affinity first - tasks previously assigned to this agent get priority
+      const aAffinity = a.assignedTo === agentId ? 1 : 0;
+      const bAffinity = b.assignedTo === agentId ? 1 : 0;
+      if (aAffinity !== bAffinity) return bAffinity - aAffinity; // Affinity first
+
       const pScores: Record<string, number> = { critical: 3, high: 2, normal: 1 };
       const scoreA = pScores[a.priority] || 1;
       const scoreB = pScores[b.priority] || 1;
@@ -416,7 +440,7 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
       return a.createdAt - b.createdAt;
     });
 
-    for (const task of candidates) {
+    for (const task of eligibleCandidates) {
       if (task.to.agentId === agentId) return task;
       // Check if agent has required capabilities (exact match)
       const required = task.to.requiredCapabilities || [];

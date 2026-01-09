@@ -189,6 +189,10 @@ export const assignTaskSchema = z.object({
   sourceAgentId: z.string().min(1).optional().default('Da Boss').describe("The ID of the agent assigning the task (defaults to 'Da Boss')"),
   prompt: z.string().min(1).describe("The task description/prompt"),
   context: z.record(z.unknown()).optional().describe("Additional context data for the task"),
+  /** Optional: specification document text for spec-driven development (S17) */
+  spec: z.string().optional().describe("Raw text of specification document (e.g., spec.md contents)"),
+  /** Optional: task checklist text for spec-driven development (S17) */
+  tasks: z.string().optional().describe("Raw text of task checklist (e.g., tasks.md contents)"),
   priority: z.enum(['high', 'normal', 'critical']).optional().default('normal').describe("Task priority"),
   dependencies: z.array(z.string()).optional().describe("List of Task IDs that must complete before this task starts")
 });

@@ -246,17 +246,41 @@ export function findAndReserveAgent(queue: IMatcherQueue, task: Task): string | 
 
 /**
  * Finds a pending task suitable for an agent.
+ * Skips tasks with unsatisfied dependencies.
+ * Prioritizes tasks that were previously assigned to this agent (affinity on feedback).
  */
 export function findPendingTaskForAgent(
   queue: IMatcherQueue,
   agentId: string,
   capabilities: StandardCapability[],
-  workspaceContext?: WaitingAgent['workspaceContext']
+  workspaceContext?: WaitingAgent['workspaceContext'],
+  getTask?: (taskId: string) => Task | undefined
 ): Task | undefined {
   const candidates = queue.getByStatuses(['QUEUED', 'APPROVED']);
 
-  // Sort by priority and age
-  candidates.sort((a: Task, b: Task) => {
+  // Filter out tasks with unsatisfied dependencies
+  const eligibleCandidates = candidates.filter(task => {
+    if (!task.dependencies || task.dependencies.length === 0) {
+      return true; // No dependencies - eligible
+    }
+    // Check all dependencies are COMPLETED
+    const allMet = task.dependencies.every(depId => {
+      const dep = getTask ? getTask(depId) : undefined;
+      return dep && dep.status === 'COMPLETED';
+    });
+    if (!allMet) {
+      console.log(`[Matcher] Skipping task ${task.id} - dependencies not satisfied`);
+    }
+    return allMet;
+  });
+
+  // Sort by: 1) Agent affinity (previously assigned to this agent), 2) Priority, 3) Age
+  eligibleCandidates.sort((a: Task, b: Task) => {
+    // Agent affinity first - tasks previously assigned to this agent get priority
+    const aAffinity = a.assignedTo === agentId ? 1 : 0;
+    const bAffinity = b.assignedTo === agentId ? 1 : 0;
+    if (aAffinity !== bAffinity) return bAffinity - aAffinity; // Affinity first
+
     const pScores: Record<string, number> = { critical: 3, high: 2, normal: 1 };
     const scoreA = pScores[a.priority] || 1;
     const scoreB = pScores[b.priority] || 1;
@@ -272,7 +296,7 @@ export function findPendingTaskForAgent(
   };
 
   // Find first task this agent is eligible for
-  for (const task of candidates) {
+  for (const task of eligibleCandidates) {
     const score = scoreAgent(task, agent);
     if (score.eligible) {
       return task;
