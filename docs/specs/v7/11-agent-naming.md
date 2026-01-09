@@ -15,6 +15,7 @@ The scheduler uses ID for exact matching, displayName for user targeting, and ca
 - Add `displayName` to `registerAgentSchema`
 - Generate names like `methodical-builder-42` if no name provided
 - Verify uniqueness in the registry
+- **Workflow Usage**: Agents should capture and use `response.displayName` from registration for logging and identification
 
 ## Status
 DONE

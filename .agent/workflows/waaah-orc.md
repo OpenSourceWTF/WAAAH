@@ -41,13 +41,14 @@ description: Orchestrator agent lifecycle - plan/build/verify/merge
 1. **Register:**
    ```
    register_agent({
-     role: "orchestrator",
-     capabilities: ["planning", "coding", "testing", "orchestration"]
+     capabilities: ["code-writing", "spec-writing", "test-writing"]
    })
    ```
    If fails → Retry after 5 seconds, max 3 attempts, then exit.
 
-2. **Save** `<AGENT_ID>` from `response.agentId`
+2. **Save from response:**
+   - `<AGENT_ID>` from `response.agentId`
+   - `<DISPLAY_NAME>` from `response.displayName` (e.g., `methodical-builder-42`)
 
 3. **Go to** MAIN LOOP
 
