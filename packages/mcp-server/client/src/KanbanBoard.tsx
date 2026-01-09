@@ -164,7 +164,7 @@ export function KanbanBoard({ tasks, completedTasks, cancelledTasks, onCancelTas
 
     return (
       <div
-        className="absolute inset-0 z-20 bg-card border-2 border-primary flex flex-col animate-in zoom-in-95 duration-200 shadow-lg shadow-primary/30"
+        className="absolute inset-0 z-20 bg-card border-2 border-primary flex flex-col shadow-lg shadow-primary/30"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -405,7 +405,7 @@ export function KanbanBoard({ tasks, completedTasks, cancelledTasks, onCancelTas
       {/* Backdrop when expanded */}
       {expandedTask && (
         <div
-          className="absolute inset-0 z-10 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200"
+          className="absolute inset-0 z-10 bg-black/50 backdrop-blur-sm"
           onClick={handleCloseExpanded}
         />
       )}
