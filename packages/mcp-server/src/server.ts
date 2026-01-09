@@ -547,7 +547,8 @@ const VALID_TOOLS = [
   'list_agents', 'get_agent_status', 'ack_task', 'admin_update_agent',
   'wait_for_task', 'admin_evict_agent',
   'get_task_context', 'block_task', 'answer_task', 'update_progress',
-  'scaffold_plan', 'submit_review', 'broadcast_system_prompt'
+  'scaffold_plan', 'submit_review', 'broadcast_system_prompt',
+  'get_review_comments', 'resolve_review_comment'
 ] as const;
 
 type ToolName = typeof VALID_TOOLS[number];
@@ -573,7 +574,11 @@ app.post('/mcp/tools/:toolName', async (req, res) => {
     return;
   }
 
-  const result = await method.call(tools, args);
+  // Some tools need db access (review comment tools)
+  const dbDependentTools = ['get_review_comments', 'resolve_review_comment'];
+  const result = dbDependentTools.includes(toolName)
+    ? await (method as any).call(tools, args, ctx.db)
+    : await (method as any).call(tools, args);
   res.json(result);
 });
 

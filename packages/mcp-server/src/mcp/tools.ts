@@ -779,4 +779,82 @@ export class ToolHandler {
       };
     } catch (e) { return this.handleError(e); }
   }
+
+  /**
+   * Gets review comments for a task (for code review workflow).
+   * Returns unresolved comments by default.
+   */
+  async get_review_comments(args: unknown, db: any) {
+    try {
+      const { getReviewCommentsSchema } = await import('@opensourcewtf/waaah-types');
+      const params = getReviewCommentsSchema.parse(args);
+
+      let query = 'SELECT * FROM review_comments WHERE taskId = ?';
+      if (params.unresolvedOnly !== false) {
+        query += ' AND resolved = 0 AND threadId IS NULL';
+      }
+      query += ' ORDER BY createdAt ASC';
+
+      const comments = db.prepare(query).all(params.taskId);
+
+      console.log(`[Tool] Retrieved ${comments.length} review comments for task ${params.taskId}`);
+
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            comments: comments.map((c: any) => ({
+              id: c.id,
+              filePath: c.filePath,
+              lineNumber: c.lineNumber,
+              content: c.content,
+              authorRole: c.authorRole,
+              createdAt: c.createdAt,
+              resolved: Boolean(c.resolved)
+            }))
+          })
+        }]
+      };
+    } catch (e) { return this.handleError(e); }
+  }
+
+  /**
+   * Resolves a review comment (marks it as addressed).
+   * Optionally adds a response explaining the fix.
+   */
+  async resolve_review_comment(args: unknown, db: any) {
+    try {
+      const { resolveReviewCommentSchema } = await import('@opensourcewtf/waaah-types');
+      const params = resolveReviewCommentSchema.parse(args);
+
+      // Mark comment as resolved
+      db.prepare(`
+        UPDATE review_comments 
+        SET resolved = 1, resolvedBy = 'agent'
+        WHERE id = ? AND taskId = ?
+      `).run(params.commentId, params.taskId);
+
+      // If response provided, add it as a reply
+      if (params.response) {
+        const parentComment = db.prepare('SELECT filePath, lineNumber FROM review_comments WHERE id = ?').get(params.commentId) as any;
+
+        if (parentComment) {
+          const replyId = `rc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          db.prepare(`
+            INSERT INTO review_comments (id, taskId, filePath, lineNumber, content, authorRole, authorId, threadId, resolved, createdAt)
+            VALUES (?, ?, ?, ?, ?, 'agent', 'agent', ?, 1, ?)
+          `).run(replyId, params.taskId, parentComment.filePath, parentComment.lineNumber, params.response, params.commentId, Date.now());
+        }
+      }
+
+      console.log(`[Tool] Resolved review comment ${params.commentId} for task ${params.taskId}`);
+
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({ resolved: true, commentId: params.commentId })
+        }]
+      };
+    } catch (e) { return this.handleError(e); }
+  }
 }

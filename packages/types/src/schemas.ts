@@ -312,3 +312,23 @@ export const broadcastSystemPromptSchema = z.object({
 });
 export type BroadcastSystemPromptArgs = z.infer<typeof broadcastSystemPromptSchema>;
 
+/**
+ * Schema for get_review_comments tool arguments.
+ * Allows agents to retrieve unresolved review comments for a task.
+ */
+export const getReviewCommentsSchema = z.object({
+  taskId: z.string().min(1).describe("ID of the task to get review comments for"),
+  unresolvedOnly: z.boolean().optional().default(true).describe("Only return unresolved comments")
+});
+export type GetReviewCommentsArgs = z.infer<typeof getReviewCommentsSchema>;
+
+/**
+ * Schema for resolve_review_comment tool arguments.
+ * Allows agents to acknowledge and resolve review feedback.
+ */
+export const resolveReviewCommentSchema = z.object({
+  taskId: z.string().min(1).describe("ID of the task"),
+  commentId: z.string().min(1).describe("ID of the review comment to resolve"),
+  response: z.string().optional().describe("Optional response explaining the fix")
+});
+export type ResolveReviewCommentArgs = z.infer<typeof resolveReviewCommentSchema>;

@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback, useRef } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -70,83 +70,6 @@ const COLUMNS = [
   { id: 'DONE', label: 'DONE', statuses: ['COMPLETED'] },
   { id: 'CANCELLED', label: 'CANCELLED', statuses: ['CANCELLED', 'FAILED'] }
 ];
-
-// Message Input Component with Reply Support
-const MessageInput = ({
-  taskId,
-  onSend,
-  replyTo,
-  replyPreview,
-  onCancelReply
-}: {
-  taskId: string;
-  onSend: (taskId: string, content: string, replyTo?: string) => void;
-  replyTo?: string;
-  replyPreview?: string;
-  onCancelReply?: () => void;
-}) => {
-  const [message, setMessage] = useState('');
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  const handleSend = () => {
-    if (message.trim()) {
-      onSend(taskId, message.trim(), replyTo);
-      setMessage('');
-      onCancelReply?.();
-      inputRef.current?.focus();
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
-    if (e.key === 'Escape' && replyTo) {
-      onCancelReply?.();
-    }
-  };
-
-  return (
-    <div className="flex flex-col bg-primary/5 border-t border-primary/20">
-      {/* Reply Preview */}
-      {replyTo && replyPreview && (
-        <div className="flex items-center gap-2 px-3 py-1.5 bg-primary/10 border-b border-primary/20">
-          <CornerDownRight className="h-3 w-3 text-primary/60" />
-          <span className="text-[10px] text-primary/60 truncate flex-1">
-            Replying: {replyPreview.slice(0, 50)}{replyPreview.length > 50 ? '...' : ''}
-          </span>
-          <button
-            onClick={onCancelReply}
-            className="text-primary/40 hover:text-primary text-xs"
-          >
-            ×
-          </button>
-        </div>
-      )}
-      <div className="flex items-center gap-2 p-2">
-        <input
-          ref={inputRef}
-          type="text"
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={replyTo ? "Type a reply..." : "Type a comment..."}
-          className="flex-1 h-8 px-3 text-sm bg-black/30 border border-primary/30 text-foreground placeholder:text-primary/40 focus:outline-none focus:border-primary"
-        />
-        <Button
-          variant="default"
-          size="sm"
-          className="h-8 w-8 p-0 bg-primary hover:bg-primary/80"
-          onClick={handleSend}
-          disabled={!message.trim()}
-        >
-          <Send className="h-4 w-4" />
-        </Button>
-      </div>
-    </div>
-  );
-};
 
 export const KanbanBoard = React.memo(function KanbanBoard({ tasks, completedTasks, cancelledTasks, onCancelTask, onRetryTask, onApproveTask, onRejectTask, onSendComment, onAddReviewComment, onViewHistory }: KanbanBoardProps) {
   // Expanded card state - null means no card expanded
@@ -300,6 +223,12 @@ export const KanbanBoard = React.memo(function KanbanBoard({ tasks, completedTas
     // Reply state for threading
     const [replyToId, setReplyToId] = useState<string | null>(null);
     const replyToMsg = task.messages?.find(m => m.id === replyToId);
+
+    // Message input state (inline)
+    const [inputMessage, setInputMessage] = useState('');
+
+    // Expand state for full-height messages
+    const [messagesExpanded, setMessagesExpanded] = useState(false);
 
     const handleReply = (msgId: string) => {
       setReplyToId(msgId);
@@ -575,7 +504,7 @@ export const KanbanBoard = React.memo(function KanbanBoard({ tasks, completedTas
         </Tabs>
 
         {/* Messenger Section */}
-        <div className="border-t-2 border-primary/30 flex flex-col flex-shrink-0 max-h-[280px]">
+        <div className={`border-t-2 border-primary/30 flex flex-col flex-shrink-0 ${messagesExpanded ? 'flex-1 min-h-0' : 'max-h-[220px]'}`}>
           {/* Messenger Header */}
           <div className="flex items-center justify-between px-4 py-2 bg-primary/10 border-b border-primary/20">
             <div className="flex items-center gap-2">
@@ -587,60 +516,22 @@ export const KanbanBoard = React.memo(function KanbanBoard({ tasks, completedTas
                 </Badge>
               )}
             </div>
-            {/* Action Buttons inline */}
-            <div className="flex gap-2">
-              {canApprove && (
-                <Button
-                  variant="default"
-                  size="sm"
-                  className="h-7 gap-1 font-mono uppercase text-xs bg-green-600 hover:bg-green-700 text-white border-green-800"
-                  onClick={(e) => { onApproveTask(e, task.id); handleCloseExpanded(); }}
-                >
-                  <CheckCircle className="h-3 w-3" /> Approve
-                </Button>
-              )}
-              {canApprove && (
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  className="h-7 gap-1 font-mono uppercase text-xs bg-orange-600 hover:bg-orange-700 text-white border-orange-800"
-                  onClick={() => handleOpenRejectModal(task.id)}
-                >
-                  <XCircle className="h-3 w-3" /> Reject
-                </Button>
-              )}
-              {canRetry && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-7 gap-1 font-mono uppercase text-xs border-primary text-primary hover:bg-primary hover:text-black"
-                  onClick={(e) => { onRetryTask(e, task.id); handleCloseExpanded(); }}
-                >
-                  <RefreshCw className="h-3 w-3" /> Retry
-                </Button>
-              )}
-              {canCancel && (
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  className="h-7 gap-1 font-mono uppercase text-xs bg-red-600 hover:bg-red-700 text-white"
-                  onClick={(e) => { onCancelTask(e, task.id); handleCloseExpanded(); }}
-                >
-                  <XCircle className="h-3 w-3" /> Cancel
-                </Button>
-              )}
-            </div>
+            <button
+              onClick={() => setMessagesExpanded(!messagesExpanded)}
+              className="text-xs text-primary/60 hover:text-primary"
+            >
+              {messagesExpanded ? '↓ Collapse' : '↑ Expand'}
+            </button>
           </div>
 
-          {/* Message List */}
-          <div className="flex-1 overflow-y-auto p-3 space-y-2 bg-black/20 min-h-[80px] max-h-[150px]">
-            {(!task.messages || task.messages.filter(m => m.messageType === 'comment' || m.role === 'user' || (m.role === 'agent' && m.messageType === 'progress')).length === 0) ? (
+          {/* Message List - show ALL messages from users and agents */}
+          <div className={`flex-1 overflow-y-auto p-3 space-y-2 bg-black/20 ${messagesExpanded ? 'min-h-[200px]' : 'min-h-[60px] max-h-[100px]'}`}>
+            {(!task.messages || task.messages.length === 0) ? (
               <div className="text-center text-primary/40 text-xs py-4">
                 No messages yet. Send a comment below.
               </div>
             ) : (
               task.messages
-                .filter(m => m.messageType === 'comment' || m.role === 'user' || (m.role === 'agent' && m.messageType === 'progress'))
                 .sort((a, b) => a.timestamp - b.timestamp)
                 .map((msg, idx) => {
                   // Check if this message is a reply
@@ -674,13 +565,13 @@ export const KanbanBoard = React.memo(function KanbanBoard({ tasks, completedTas
                             {new Date(msg.timestamp).toLocaleTimeString()}
                           </span>
                           {msg.role === 'user' && msg.isRead === false && (
-                            <Circle className="h-2 w-2 fill-red-500 text-red-500" title="Unread - awaiting agent response" />
+                            <span title="Unread - awaiting agent response"><Circle className="h-2 w-2 fill-red-500 text-red-500" /></span>
                           )}
                           {msg.role === 'user' && msg.isRead === true && !hasAgentReply && (
-                            <Circle className="h-2 w-2 fill-yellow-500 text-yellow-500" title="Read - awaiting reply" />
+                            <span title="Read - awaiting reply"><Circle className="h-2 w-2 fill-yellow-500 text-yellow-500" /></span>
                           )}
                           {msg.role === 'user' && hasAgentReply && (
-                            <CheckCircle className="h-3 w-3 text-green-500" title="Agent responded" />
+                            <span title="Agent responded"><CheckCircle className="h-3 w-3 text-green-500" /></span>
                           )}
                         </div>
                         <p className="whitespace-pre-wrap break-words">{msg.content}</p>
@@ -700,14 +591,77 @@ export const KanbanBoard = React.memo(function KanbanBoard({ tasks, completedTas
             )}
           </div>
 
-          {/* Message Input */}
-          <MessageInput
-            taskId={task.id}
-            onSend={onSendComment}
-            replyTo={replyToId || undefined}
-            replyPreview={replyToMsg?.content}
-            onCancelReply={handleCancelReply}
-          />
+          {/* Message Input + Action Buttons */}
+          <div className="flex flex-col bg-primary/5 border-t border-primary/20">
+            {/* Reply Preview */}
+            {replyToId && replyToMsg && (
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-primary/10 border-b border-primary/20">
+                <CornerDownRight className="h-3 w-3 text-primary/60" />
+                <span className="text-[10px] text-primary/60 truncate flex-1">
+                  Replying: {replyToMsg.content.slice(0, 50)}{replyToMsg.content.length > 50 ? '...' : ''}
+                </span>
+                <button onClick={handleCancelReply} className="text-primary/40 hover:text-primary text-xs">×</button>
+              </div>
+            )}
+            <div className="flex items-center gap-2 p-2">
+              <input
+                type="text"
+                value={inputMessage}
+                onChange={(e) => setInputMessage(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey && inputMessage.trim()) {
+                    e.preventDefault();
+                    onSendComment(task.id, inputMessage.trim(), replyToId || undefined);
+                    setInputMessage('');
+                    handleCancelReply();
+                  }
+                  if (e.key === 'Escape' && replyToId) handleCancelReply();
+                }}
+                placeholder={replyToId ? "Type a reply..." : "Type a comment..."}
+                className="flex-1 h-8 px-3 text-sm bg-black/30 border border-primary/30 text-foreground placeholder:text-primary/40 focus:outline-none focus:border-primary"
+              />
+              <Button
+                variant="default"
+                size="sm"
+                className="h-8 w-8 p-0 bg-primary hover:bg-primary/80"
+                onClick={() => {
+                  if (inputMessage.trim()) {
+                    onSendComment(task.id, inputMessage.trim(), replyToId || undefined);
+                    setInputMessage('');
+                    handleCancelReply();
+                  }
+                }}
+                disabled={!inputMessage.trim()}
+              >
+                <Send className="h-4 w-4" />
+              </Button>
+              {/* Action buttons next to send */}
+              {canApprove && (
+                <Button variant="default" size="sm" className="h-8 gap-1 text-xs bg-green-600 hover:bg-green-700 text-white"
+                  onClick={(e) => { onApproveTask(e, task.id); handleCloseExpanded(); }}>
+                  <CheckCircle className="h-3 w-3" /> Approve
+                </Button>
+              )}
+              {canApprove && (
+                <Button variant="destructive" size="sm" className="h-8 gap-1 text-xs bg-orange-600 hover:bg-orange-700"
+                  onClick={() => handleOpenRejectModal(task.id)}>
+                  <XCircle className="h-3 w-3" /> Reject
+                </Button>
+              )}
+              {canRetry && (
+                <Button variant="outline" size="sm" className="h-8 gap-1 text-xs border-primary text-primary hover:bg-primary hover:text-black"
+                  onClick={(e) => { onRetryTask(e, task.id); handleCloseExpanded(); }}>
+                  <RefreshCw className="h-3 w-3" /> Retry
+                </Button>
+              )}
+              {canCancel && (
+                <Button variant="destructive" size="sm" className="h-8 gap-1 text-xs bg-red-600 hover:bg-red-700"
+                  onClick={(e) => { onCancelTask(e, task.id); handleCloseExpanded(); }}>
+                  <XCircle className="h-3 w-3" /> Cancel
+                </Button>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     );

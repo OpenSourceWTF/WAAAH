@@ -131,6 +131,46 @@ update_progress({
 # 4. Run tests, pass gates, re-submit
 ```
 
+### Line-Level Review Comments
+
+**Users can leave comments on specific lines of code. These are separate from regular rejection messages.**
+
+```
+# Check for review comments after rejection or when starting on a rejected task:
+comments = get_review_comments({ taskId: <TASK_ID> })
+
+# If comments exist, process each one:
+for (comment in comments.comments):
+  1. Navigate to comment.filePath:comment.lineNumber
+  2. Understand the feedback in comment.content
+  3. Make the requested change
+  4. Mark as resolved:
+     resolve_review_comment({
+       taskId: <TASK_ID>,
+       commentId: comment.id,
+       response: "Fixed: <brief description of fix>"
+     })
+```
+
+**Example:**
+```
+# Receive task with review comments
+comments = get_review_comments({ taskId: "task_123" })
+# comments.comments = [
+#   { id: "rc_123", filePath: "src/utils.ts", lineNumber: 42, content: "Add null check here" }
+# ]
+
+# Fix each issue
+# ... edit line 42 of src/utils.ts ...
+
+# Resolve the comment
+resolve_review_comment({
+  taskId: "task_123",
+  commentId: "rc_123",
+  response: "Added null check before accessing property"
+})
+```
+
 ---
 
 ## STARTUP
@@ -345,19 +385,30 @@ update_progress({
 
 > **⚠️ CRITICAL**: Regular heartbeats prove agent is active. Stale tasks (>5 min without update) appear stuck on Dashboard.
 
-### 2.3.2 📬 Processing User Comments (Mailbox)
+### 2.3.2 📬 Processing User Comments (Mailbox) - REQUIRED RESPONSES
 
-The `update_progress` response may contain unread user comments. **You MUST check and process these:**
+The `update_progress` response may contain unread user comments. **You MUST check and respond to these:**
 
 ```
 response = update_progress({ taskId, agentId, phase, message, percentage })
 
 IF response.unreadComments AND response.unreadComments.length > 0:
   FOR EACH comment in response.unreadComments:
-    # Treat comment.content as additional user guidance
-    # Incorporate into current work (e.g., adjust approach, add requirements)
-    console.log("User comment:", comment.content)
+    1. Read and understand comment.content
+    2. Take action or adjust work as needed
+    3. RESPOND to the comment using update_progress with replyTo:
+       
+       update_progress({
+         taskId: <TASK_ID>,
+         agentId: <AGENT_ID>,
+         phase: "EXECUTION",
+         message: "Response to user: [your response here]",
+         percentage: <CURRENT>,
+         replyTo: comment.id  // Links response to user's comment
+       })
 ```
+
+> **⚠️ CRITICAL**: Each user comment REQUIRES a response. The Dashboard shows unanswered comments with yellow/red indicators. Use `replyTo: comment.id` to thread your response.
 
 **Comment Processing Rules:**
 - Comments are **advisory guidance**, not blocking instructions
