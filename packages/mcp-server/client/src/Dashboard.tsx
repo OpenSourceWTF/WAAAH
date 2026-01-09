@@ -3,7 +3,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { ListChecks, Skull, Search, Filter, MessageSquare, ChevronDown, ChevronUp, RefreshCw, XCircle, Power, Sun, Moon, PanelLeftClose, PanelLeftOpen, Pin, Clock, Cpu } from "lucide-react";
+import { /* ListChecks - LEGACY: used in deprecated Tasks list view */ Skull, Search, Filter, MessageSquare, ChevronDown, ChevronUp, RefreshCw, XCircle, Power, Sun, Moon, PanelLeftClose, PanelLeftOpen, Pin, Clock, Cpu } from "lucide-react";
 import { KanbanBoard } from './KanbanBoard';
 import { ActivityFeed } from '@/components/ActivityFeed';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -254,6 +254,17 @@ export function Dashboard() {
       fetchData();
     } catch (error) {
       console.error("Failed to evict agent", error);
+    }
+  }, []);
+
+  const handleApproveTask = useCallback(async (e: React.MouseEvent, taskId: string) => {
+    e.stopPropagation();
+    try {
+      const res = await fetch(`/admin/tasks/${taskId}/approve`, { method: 'POST' });
+      if (!res.ok) throw new Error('Failed to approve');
+      console.log(`Task ${taskId} approved`);
+    } catch (error) {
+      console.error("Failed to approve task", error);
     }
   }, []);
 
@@ -544,7 +555,9 @@ export function Dashboard() {
             <Tabs defaultValue="kanban" className="flex flex-col h-full space-y-6">
               <TabsList className="bg-transparent border-b-2 border-primary w-full justify-start rounded-none p-0 h-auto gap-0 flex-none">
                 <TabsTrigger value="kanban" className="rounded-none border-x-2 border-t-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-xl px-6 py-2">KANBAN</TabsTrigger>
+                {/* LEGACY VIEW - Tasks list deprecated in favor of Kanban. Preserved for future use.
                 <TabsTrigger value="tasks" className="rounded-none border-x-2 border-t-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-xl px-6 py-2">{t('TASKS_TITLE').toLowerCase()} ({activeTasks.length})</TabsTrigger>
+                */}
                 <TabsTrigger value="history" className="rounded-none border-x-2 border-t-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-xl px-6 py-2">{t('HISTORY_TITLE').toLowerCase()}</TabsTrigger>
                 <TabsTrigger value="logs" className="rounded-none border-x-2 border-t-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-xl px-6 py-2 flex items-center gap-2"><MessageSquare className="h-4 w-4" /> {t('LOGS_TITLE').toLowerCase()}</TabsTrigger>
               </TabsList>
@@ -557,11 +570,12 @@ export function Dashboard() {
                   cancelledTasks={recentCancelled}
                   onCancelTask={handleCancelTask}
                   onRetryTask={handleRetryTask}
+                  onApproveTask={handleApproveTask}
                   onViewHistory={handleViewHistory}
                 />
               </TabsContent>
 
-              {/* TASKS TAB */}
+              {/* LEGACY VIEW - Tasks list tab deprecated in favor of Kanban. Preserved for future use.
               <TabsContent value="tasks" className="flex-1 overflow-y-auto m-0 pt-4 pr-2 scrollbar-thin scrollbar-thumb-primary scrollbar-track-black space-y-4">
                 {activeTasks.length === 0 && (
                   <div className="flex flex-col items-center justify-center p-12 border-2 border-dashed border-primary/50 text-primary/50 bg-primary/5">
@@ -571,6 +585,7 @@ export function Dashboard() {
                 )}
                 {activeTasks.map(task => renderTaskCard(task))}
               </TabsContent>
+              */}
 
               {/* HISTORY TAB */}
               <TabsContent value="history" className="flex-1 overflow-y-auto m-0 pt-4 pr-2 scrollbar-thin scrollbar-thumb-primary scrollbar-track-black space-y-4">
@@ -679,15 +694,16 @@ export function Dashboard() {
                           {isPinned && <Pin className="h-3 w-3 text-primary" />}
                         </div>
                         <div className="text-xs text-primary/60 font-mono tracking-tighter">[{agent.role}]</div>
-                        {agent.currentTasks && agent.currentTasks.length > 0 && (
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {agent.currentTasks.map(taskId => (
-                              <Badge key={taskId} variant="outline" className="text-[10px] h-4 px-1 border-primary/50 text-primary/80 font-mono bg-black/20">
-                                {taskId}
+                        {agent.currentTasks && agent.currentTasks.length > 0 && (() => {
+                          const mostRecentTask = agent.currentTasks[agent.currentTasks.length - 1];
+                          return (
+                            <div className="mt-1">
+                              <Badge variant="outline" className="text-[10px] h-4 px-1 border-primary/50 text-primary/80 font-mono bg-black/20">
+                                {mostRecentTask}
                               </Badge>
-                            ))}
-                          </div>
-                        )}
+                            </div>
+                          );
+                        })()}
                       </div>
                       <div className="flex items-center gap-2">
                         <Badge className={`${getStatusBadgeClass(agent.status)} ${agent.status === 'PROCESSING' ? 'animate-pulse' : ''}`}>
@@ -712,12 +728,12 @@ export function Dashboard() {
                         </div>
 
                         {/* Capabilities */}
-                        {agent.capabilities && agent.capabilities.length > 0 && (
-                          <div>
-                            <div className="flex items-center gap-1 text-xs text-primary/50 mb-1">
-                              <Cpu className="h-3 w-3" />
-                              <span>CAPABILITIES:</span>
-                            </div>
+                        <div>
+                          <div className="flex items-center gap-1 text-xs text-primary/50 mb-1">
+                            <Cpu className="h-3 w-3" />
+                            <span>CAPABILITIES:</span>
+                          </div>
+                          {agent.capabilities && agent.capabilities.length > 0 ? (
                             <div className="flex flex-wrap gap-1">
                               {agent.capabilities.map((cap, i) => (
                                 <Badge key={i} variant="outline" className="text-[10px] h-5 px-2 border-primary/30 text-primary/70 bg-black/20 font-mono">
@@ -725,8 +741,10 @@ export function Dashboard() {
                                 </Badge>
                               ))}
                             </div>
-                          </div>
-                        )}
+                          ) : (
+                            <span className="text-[10px] text-primary/40 italic font-mono">NO CAPABILITIES LISTED</span>
+                          )}
+                        </div>
 
                         {/* Actions Row */}
                         <div className="flex justify-between items-center pt-2 border-t border-primary/10">
