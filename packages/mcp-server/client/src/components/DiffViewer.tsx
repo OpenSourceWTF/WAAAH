@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MessageSquare, Check, Send, ChevronDown, ChevronRight, Plus } from "lucide-react";
+import { MessageSquare, Check, Send, ChevronDown, ChevronRight, Plus, FileText, X } from "lucide-react";
 
 interface ReviewComment {
   id: string;
@@ -26,6 +26,13 @@ interface DiffLine {
 interface DiffFile {
   path: string;
   lines: DiffLine[];
+}
+
+interface FileStats {
+  path: string;
+  additions: number;
+  deletions: number;
+  modifications: number;
 }
 
 interface DiffViewerProps {
@@ -80,6 +87,16 @@ function parseDiff(diffText: string): DiffFile[] {
   return files;
 }
 
+// Calculate file stats
+function getFileStats(files: DiffFile[]): FileStats[] {
+  return files.map(file => ({
+    path: file.path,
+    additions: file.lines.filter(l => l.type === 'add').length,
+    deletions: file.lines.filter(l => l.type === 'remove').length,
+    modifications: 0 // Could be computed by pairing +/- lines
+  }));
+}
+
 export function DiffViewer({ taskId, onAddComment }: DiffViewerProps) {
   const [files, setFiles] = useState<DiffFile[]>([]);
   const [comments, setComments] = useState<ReviewComment[]>([]);
@@ -88,28 +105,38 @@ export function DiffViewer({ taskId, onAddComment }: DiffViewerProps) {
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
   const [commentingLine, setCommentingLine] = useState<{ file: string; line: number | null } | null>(null);
   const [newComment, setNewComment] = useState('');
+  const [navOpen, setNavOpen] = useState(false);
 
-  // Fetch diff and comments
-  const fetchData = useCallback(async () => {
+  // Refs for file sections to enable jump-to
+  const fileRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const diffLoaded = useRef(false);
+
+  // Fetch comments only (doesn't reset scroll)
+  const fetchComments = useCallback(async () => {
+    try {
+      const res = await fetch(`/admin/tasks/${taskId}/review-comments`);
+      if (res.ok) {
+        setComments(await res.json());
+      }
+    } catch (e) {
+      console.error('Failed to fetch comments', e);
+    }
+  }, [taskId]);
+
+  // Fetch diff (only on initial load)
+  const fetchDiff = useCallback(async () => {
     try {
       setLoading(true);
-      const [diffRes, commentsRes] = await Promise.all([
-        fetch(`/admin/tasks/${taskId}/diff`),
-        fetch(`/admin/tasks/${taskId}/review-comments`)
-      ]);
+      const res = await fetch(`/admin/tasks/${taskId}/diff`);
 
-      if (diffRes.ok) {
-        const data = await diffRes.json();
+      if (res.ok) {
+        const data = await res.json();
         const parsed = parseDiff(data.diff || '');
         setFiles(parsed);
-        // Expand all files by default
         setExpandedFiles(new Set(parsed.map(f => f.path)));
+        diffLoaded.current = true;
       } else {
         setError('No diff available');
-      }
-
-      if (commentsRes.ok) {
-        setComments(await commentsRes.json());
       }
     } catch (e: any) {
       setError(e.message);
@@ -118,9 +145,12 @@ export function DiffViewer({ taskId, onAddComment }: DiffViewerProps) {
     }
   }, [taskId]);
 
+  // Initial load: fetch both
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    if (!diffLoaded.current) {
+      fetchDiff().then(() => fetchComments());
+    }
+  }, [fetchDiff, fetchComments]);
 
   const handleAddComment = async () => {
     if (!commentingLine || !newComment.trim()) return;
@@ -129,8 +159,8 @@ export function DiffViewer({ taskId, onAddComment }: DiffViewerProps) {
     setNewComment('');
     setCommentingLine(null);
 
-    // Refresh comments
-    setTimeout(fetchData, 500);
+    // Only refresh comments (not diff) - preserves scroll
+    setTimeout(fetchComments, 500);
   };
 
   const toggleFile = (path: string) => {
@@ -142,11 +172,25 @@ export function DiffViewer({ taskId, onAddComment }: DiffViewerProps) {
     });
   };
 
+  const jumpToFile = (path: string) => {
+    // Expand the file first
+    setExpandedFiles(prev => new Set([...prev, path]));
+    setNavOpen(false);
+
+    // Scroll to file after a tick
+    setTimeout(() => {
+      const el = fileRefs.current.get(path);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 50);
+  };
+
   const getCommentsForLine = (filePath: string, lineNumber: number | null) => {
     return comments.filter(c =>
       c.filePath === filePath &&
       c.lineNumber === lineNumber &&
-      !c.threadId // Only root comments
+      !c.threadId
     );
   };
 
@@ -155,6 +199,11 @@ export function DiffViewer({ taskId, onAddComment }: DiffViewerProps) {
   };
 
   const unresolvedCount = comments.filter(c => !c.resolved && !c.threadId).length;
+
+  // File stats for navigator
+  const fileStats = useMemo(() => getFileStats(files), [files]);
+  const totalAdditions = fileStats.reduce((sum, f) => sum + f.additions, 0);
+  const totalDeletions = fileStats.reduce((sum, f) => sum + f.deletions, 0);
 
   if (loading) {
     return (
@@ -174,16 +223,89 @@ export function DiffViewer({ taskId, onAddComment }: DiffViewerProps) {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="relative space-y-4">
+      {/* Floating File Navigator Button */}
+      <div className="fixed left-4 top-1/2 -translate-y-1/2 z-50">
+        {!navOpen ? (
+          <Button
+            variant="default"
+            size="sm"
+            className="h-10 w-10 p-0 bg-primary/90 hover:bg-primary shadow-lg border border-primary-foreground/20"
+            onClick={() => setNavOpen(true)}
+            title="Show file navigator"
+          >
+            <FileText className="h-5 w-5" />
+          </Button>
+        ) : (
+          <div className="bg-background/95 backdrop-blur border border-primary/30 shadow-xl w-72 max-h-[60vh] overflow-hidden flex flex-col">
+            {/* Navigator Header */}
+            <div className="flex items-center justify-between px-3 py-2 bg-primary/10 border-b border-primary/20">
+              <div className="flex items-center gap-2">
+                <FileText className="h-4 w-4 text-primary" />
+                <span className="text-sm font-bold text-primary">FILES</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-green-400">+{totalAdditions}</span>
+                <span className="text-xs text-red-400">−{totalDeletions}</span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 text-primary/50 hover:text-primary"
+                  onClick={() => setNavOpen(false)}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+
+            {/* File List */}
+            <div className="overflow-y-auto p-1">
+              {fileStats.map(stat => (
+                <button
+                  key={stat.path}
+                  className="w-full text-left px-2 py-1.5 hover:bg-primary/10 flex items-center gap-2 group"
+                  onClick={() => jumpToFile(stat.path)}
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-mono text-primary truncate" title={stat.path}>
+                      {stat.path.split('/').pop()}
+                    </p>
+                    <p className="text-[10px] text-primary/40 truncate">{stat.path}</p>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    {stat.additions > 0 && (
+                      <span className="text-[10px] px-1 bg-green-500/20 text-green-400 rounded">
+                        +{stat.additions}
+                      </span>
+                    )}
+                    {stat.deletions > 0 && (
+                      <span className="text-[10px] px-1 bg-red-500/20 text-red-400 rounded">
+                        −{stat.deletions}
+                      </span>
+                    )}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Header with stats */}
       <div className="flex items-center justify-between px-2">
         <div className="flex items-center gap-2">
           <Badge variant="outline" className="border-primary/50">
             {files.length} file{files.length !== 1 && 's'} changed
           </Badge>
+          <Badge variant="outline" className="border-green-500/50 text-green-400">
+            +{totalAdditions}
+          </Badge>
+          <Badge variant="outline" className="border-red-500/50 text-red-400">
+            −{totalDeletions}
+          </Badge>
           {unresolvedCount > 0 && (
             <Badge className="bg-orange-500 text-white">
-              {unresolvedCount} unresolved comment{unresolvedCount !== 1 && 's'}
+              {unresolvedCount} unresolved
             </Badge>
           )}
         </div>
@@ -191,7 +313,11 @@ export function DiffViewer({ taskId, onAddComment }: DiffViewerProps) {
 
       {/* Files */}
       {files.map(file => (
-        <div key={file.path} className="border border-primary/30 bg-black/20">
+        <div
+          key={file.path}
+          className="border border-primary/30 bg-black/20"
+          ref={el => { if (el) fileRefs.current.set(file.path, el); }}
+        >
           {/* File header */}
           <div
             className="flex items-center gap-2 p-2 bg-primary/10 border-b border-primary/20 cursor-pointer hover:bg-primary/20"

@@ -208,7 +208,9 @@ function runMigrations(db: Database.Database): void {
     { column: 'pendingAckAgentId', sql: 'ALTER TABLE tasks ADD COLUMN pendingAckAgentId TEXT' },
     // Capability-based task routing (V7)
     { column: 'toRequiredCapabilities', sql: 'ALTER TABLE tasks ADD COLUMN toRequiredCapabilities TEXT' },
-    { column: 'toWorkspaceId', sql: 'ALTER TABLE tasks ADD COLUMN toWorkspaceId TEXT' }
+    { column: 'toWorkspaceId', sql: 'ALTER TABLE tasks ADD COLUMN toWorkspaceId TEXT' },
+    // Messages JSON column for inline message storage
+    { column: 'messages', sql: 'ALTER TABLE tasks ADD COLUMN messages TEXT' }
   ];
 
   for (const migration of taskMigrations) {

@@ -80,6 +80,17 @@ export const KanbanBoard = React.memo(function KanbanBoard({ tasks, completedTas
   const [rejectFeedback, setRejectFeedback] = useState('');
   const [rejectingTaskId, setRejectingTaskId] = useState<string | null>(null);
 
+  // Sync expandedTask with fresh data when tasks prop updates (fixes stale message data)
+  useEffect(() => {
+    if (expandedTask) {
+      const allTasks = [...tasks, ...completedTasks, ...cancelledTasks];
+      const freshTask = allTasks.find(t => t.id === expandedTask.id);
+      if (freshTask && JSON.stringify(freshTask) !== JSON.stringify(expandedTask)) {
+        setExpandedTask(freshTask);
+      }
+    }
+  }, [tasks, completedTasks, cancelledTasks, expandedTask]);
+
   // Group tasks by column
   const columns = useMemo(() => {
     const cols: Record<string, Task[]> = {
