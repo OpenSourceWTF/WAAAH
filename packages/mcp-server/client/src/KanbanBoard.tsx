@@ -76,8 +76,9 @@ export function KanbanBoard({ tasks, completedTasks, cancelledTasks, onCancelTas
     return cols;
   }, [tasks, completedTasks, cancelledTasks]);
 
+  // Unified styling with Dashboard cards (per Task 1)
   const getStatusBadgeClass = (status: string) => {
-    const base = "text-[10px] font-bold px-1 py-0.5 border border-black";
+    const base = "text-xs font-bold px-2 py-1 border border-black";
     switch (status) {
       case 'COMPLETED': return `${base} bg-green-600 text-white border-green-800`;
       case 'FAILED':
@@ -349,8 +350,8 @@ export function KanbanBoard({ tasks, completedTasks, cancelledTasks, onCancelTas
                         <div
                           key={i}
                           className={`text-xs p-2 border-l-2 ${msg.role === 'user' ? 'border-blue-500 bg-blue-500/10' :
-                              msg.role === 'agent' ? 'border-primary bg-primary/5' :
-                                'border-gray-500 bg-gray-500/5'
+                            msg.role === 'agent' ? 'border-primary bg-primary/5' :
+                              'border-gray-500 bg-gray-500/5'
                             }`}
                         >
                           <div className="flex items-center gap-2 mb-1">
@@ -432,17 +433,19 @@ export function KanbanBoard({ tasks, completedTasks, cancelledTasks, onCancelTas
             {columns[col.id]?.map(task => (
               <Card
                 key={task.id}
-                className={`border border-primary/50 bg-card hover:bg-primary/10 transition-all duration-200 shadow-sm rounded-none cursor-pointer hover:border-primary hover:scale-[1.02] hover:shadow-md hover:shadow-primary/20`}
+                className={`border-2 border-primary/50 bg-card hover:bg-primary/5 transition-all duration-200 shadow-sm rounded-none cursor-pointer hover:border-primary hover:scale-[1.02] hover:shadow-md hover:shadow-primary/20`}
                 onClick={() => handleCardClick(task)}
               >
-                <CardHeader className="p-3 pb-0">
+                {/* Unified styling with Dashboard cards */}
+                <CardHeader className="p-4 pb-2">
                   <div className="flex justify-between items-start gap-2">
                     <span className="text-xs font-mono text-primary/70 break-all">{task.id}</span>
                     <Badge className={getStatusBadgeClass(task.status)}>{task.status}</Badge>
                   </div>
                 </CardHeader>
-                <CardContent className="p-3 pt-2">
-                  <p className="font-bold text-sm mb-2 line-clamp-3" title={formatTaskTitle(task)}>{formatTaskTitle(task)}</p>
+                <CardContent className="p-4 pt-2">
+                  {/* Title with left border accent (unified with Dashboard) */}
+                  <p className="font-bold text-sm mb-2 line-clamp-3 border-l-4 border-primary pl-2 text-foreground" title={formatTaskTitle(task)}>{formatTaskTitle(task)}</p>
 
                   <div className="text-xs text-primary/60 mb-2">
                     {(task.assignedTo || task.toAgentId) && <div>Agent: {task.assignedTo || task.toAgentId}</div>}
