@@ -33,6 +33,20 @@ interface KanbanBoardProps {
   onTaskClick?: (task: Task) => void;
 }
 
+// Helper to create a fingerprint of tasks for comparison
+function tasksFingerprint(tasks: Task[]): string {
+  return tasks.map(t => `${t.id}:${t.status}`).join('|');
+}
+
+// Custom comparison: prevent re-render if task IDs/statuses haven't changed
+function arePropsEqual(prev: KanbanBoardProps, next: KanbanBoardProps): boolean {
+  return (
+    tasksFingerprint(prev.tasks) === tasksFingerprint(next.tasks) &&
+    tasksFingerprint(prev.completedTasks) === tasksFingerprint(next.completedTasks) &&
+    tasksFingerprint(prev.cancelledTasks) === tasksFingerprint(next.cancelledTasks)
+  );
+}
+
 const COLUMNS = [
   { id: 'TODO', label: 'TODO', statuses: ['QUEUED', 'PENDING_ACK'] },
   { id: 'IN_PROGRESS', label: 'IN PROGRESS', statuses: ['ASSIGNED', 'IN_PROGRESS', 'PROCESSING'] },
@@ -41,7 +55,7 @@ const COLUMNS = [
   { id: 'CANCELLED', label: 'CANCELLED', statuses: ['CANCELLED', 'FAILED'] }
 ];
 
-export function KanbanBoard({ tasks, completedTasks, cancelledTasks, onCancelTask, onRetryTask, onViewHistory }: KanbanBoardProps) {
+export const KanbanBoard = React.memo(function KanbanBoard({ tasks, completedTasks, cancelledTasks, onCancelTask, onRetryTask, onViewHistory }: KanbanBoardProps) {
   // Expanded card state - null means no card expanded
   const [expandedTask, setExpandedTask] = useState<Task | null>(null);
 
@@ -164,6 +178,7 @@ export function KanbanBoard({ tasks, completedTasks, cancelledTasks, onCancelTas
 
     return (
       <div
+        key={task.id}
         className="absolute inset-0 z-20 bg-card border-2 border-primary flex flex-col animate-in zoom-in-95 duration-200 fill-mode-forwards shadow-lg shadow-primary/30"
         onClick={(e) => e.stopPropagation()}
       >
@@ -405,6 +420,7 @@ export function KanbanBoard({ tasks, completedTasks, cancelledTasks, onCancelTas
       {/* Backdrop when expanded */}
       {expandedTask && (
         <div
+          key="backdrop"
           className="absolute inset-0 z-10 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200 fill-mode-forwards"
           onClick={handleCloseExpanded}
         />
@@ -412,7 +428,7 @@ export function KanbanBoard({ tasks, completedTasks, cancelledTasks, onCancelTas
 
       {/* Expanded Card Overlay */}
       {expandedTask && (
-        <div className="absolute inset-4 z-20">
+        <div key={`expanded-${expandedTask.id}`} className="absolute inset-4 z-20">
           <ExpandedCardView task={expandedTask} />
         </div>
       )}
@@ -541,5 +557,5 @@ export function KanbanBoard({ tasks, completedTasks, cancelledTasks, onCancelTas
       ))}
     </div>
   );
-}
+}, arePropsEqual);
 
