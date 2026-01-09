@@ -208,10 +208,22 @@ Then → Step 1
 - Integration test login flow
 ```
 
-### 1.3 Quality Gate
+### 1.3 Spec Quality Gate
 
-Rate 1-10: Completeness? Clarity?
-**Both ≥8 → Continue. Otherwise → Revise.**
+> **🎭 PERSONA: Experienced Product Manager**
+> Adopt the critical eye of a seasoned PM who has seen specs fail due to ambiguity. Be brutally honest.
+
+**Self-assess the spec:**
+
+| Criterion | Question | Target |
+|-----------|----------|--------|
+| **Completeness** | Does the spec cover ALL requirements? Are edge cases addressed? | ≥9.5 |
+| **Specificity** | Is every acceptance criterion unambiguous? Can it be tested? | ≥9.5 |
+| **Quality** | Is the spec well-organized, clear to any developer? | ≥9.5 |
+
+**ALL ≥9.5 → Continue. Otherwise → Revise spec until it passes.**
+
+> **⚠️ A vague spec leads to vague code. Ruthlessly eliminate ambiguity.**
 
 ### 1.4 Progress Update
 
@@ -276,9 +288,35 @@ update_progress({
 
 > **⚠️ CRITICAL**: Regular heartbeats prove agent is active. Stale tasks (>5 min without update) appear stuck on Dashboard.
 
+### 2.3.1 🛑 BLOCKED Conditions
+
+**Immediately set task to BLOCKED if ANY of these occur:**
+
+| Condition | Example | Action |
+|-----------|---------|--------|
+| **Needs Clarification** | Ambiguous requirement, unclear edge case | `block_task(reason: "clarification", question: "...")` |
+| **Security Risk** | Potential vulnerability, dangerous operation | `block_task(reason: "decision", question: "Security concern: ...")` |
+| **Major Discovery** | Architecture gap, circular dependency, can't confidently solve | `block_task(reason: "dependency", question: "Discovered: ...")` |
+| **Test Loop Limit** | 10 consecutive test failures without fix | `block_task(reason: "dependency", question: "Stuck after 10 attempts: ...")` |
+
+```
+block_task({
+  taskId: <TASK_ID>,
+  reason: "clarification",
+  question: "The spec says 'validate user input' but doesn't define which fields are required. Should email be mandatory?",
+  summary: "Completed auth middleware, blocked on validation requirements",
+  notes: "Current implementation validates name and email, need confirmation"
+})
+```
+
+> **⚠️ Don't spin endlessly. If you can't solve it in 10 attempts, ask for help.**
+
 ### 2.4 Dev Quality Gate
 
-**Self-assess the implementation before testing:**
+> **🎭 PERSONA: Senior Software Architect**
+> Adopt the critical eye of an architect who reviews production code. Be brutally honest.
+
+**Self-assess the implementation:**
 
 | Criterion | Question | Target |
 |-----------|----------|--------|
@@ -289,23 +327,42 @@ update_progress({
 
 **ALL ≥9.5 → Continue to Test Loop. Otherwise → Fix implementation first.**
 
+> **⚠️ Never rate yourself 10/10. There's always room to improve. Be honest.**
+
 ### 2.5 Test Loop (REQUIRED)
 
 **After passing Dev Quality Gate, run comprehensive test verification:**
 
 ```
+LOOP_COUNT = 0
+
 TEST_LOOP:
-  1. Run full test suite: pnpm test
+  LOOP_COUNT++
+  
+  IF LOOP_COUNT > 10:
+    → BLOCKED (see 2.3.1 - Test Loop Limit)
+  
+  1. Run full test suite with coverage: pnpm test --coverage
   2. IF tests fail:
      a. Analyze failure output
      b. Fix the issue
-     c. GOTO TEST_LOOP (re-run all tests)
-  3. IF tests pass:
-     a. Run type check: pnpm typecheck OR tsc --noEmit
-     b. IF type errors → Fix and GOTO TEST_LOOP
-  4. Run lint: pnpm lint
+     c. GOTO TEST_LOOP
+  3. Check coverage thresholds:
+     a. Line coverage > 90% (REQUIRED)
+     b. Branch coverage > 85% (if available in output)
+     c. IF below thresholds → Add tests, GOTO TEST_LOOP
+  4. Run type check: pnpm typecheck OR tsc --noEmit
+     a. IF type errors → Fix and GOTO TEST_LOOP
+  5. Run lint: pnpm lint
      a. IF lint errors → Fix and GOTO TEST_LOOP
-  5. ALL CHECKS PASS → Continue to Test Quality Gate
+  6. ALL CHECKS PASS → Continue to Test Quality Gate
+```
+
+**Coverage Check Command:**
+```bash
+# Most test frameworks output coverage summary
+pnpm test --coverage
+# Look for: Statements: XX%, Branches: XX%, Lines: XX%
 ```
 
 **Test Loop Heartbeat:**
@@ -314,42 +371,94 @@ update_progress({
   taskId: <TASK_ID>,
   agentId: <AGENT_ID>,
   phase: "TESTING",
-  message: "All tests passing (15/15), type check clean",
+  message: "Tests passing (15/15), coverage 94%, branch 87%, loop 2/10",
   percentage: 80
 })
 ```
 
-> **⚠️ Do NOT proceed to Test Quality Gate until ALL tests, type checks, and lint pass.**
+> **⚠️ Do NOT proceed to Test Quality Gate until ALL tests pass AND coverage thresholds are met.**
+> **⚠️ After 10 failed loops, set task to BLOCKED - don't spin forever.**
 
 ### 2.6 Test Quality Gate
+
+> **🎭 PERSONA: Senior Test Engineer**
+> Adopt the critical eye of a test engineer who has seen production bugs from weak tests. Be brutally honest.
 
 **Self-assess the test suite:**
 
 | Criterion | Question | Target |
 |-----------|----------|--------|
-| **Coverage** | Are all code paths tested? Are edge cases covered? | ≥9.5 |
-| **Quality** | Are tests meaningful, not just passing? Do they catch real bugs? | ≥9.5 |
+| **Coverage** | Line coverage >90%? Branch coverage >85%? All code paths tested? | ≥9.5 |
+| **Quality** | Are tests meaningful, not just coverage padding? Do they catch real bugs? | ≥9.5 |
 
 **BOTH ≥9.5 → Continue. Otherwise → Add/improve tests and repeat Test Loop.**
 
+> **⚠️ Never rate yourself 10/10. Fake tests that just bump coverage are a 0. Be honest.**
+
 ### 2.7 Documentation Phase (per S17)
 
-After tests pass, add inline documentation:
-1. **Infer format** from existing codebase (e.g., TSDoc for TypeScript, JSDoc for JavaScript)
-2. **Document** all exported functions, classes, and interfaces
-3. **Include**: parameters, returns, throws, and usage examples where helpful
+**Add inline documentation for each function, step by step:**
 
-```
-// Example TSDoc format for TypeScript:
+1. **Infer format** from existing codebase (TSDoc, JSDoc, etc.)
+2. **For EACH exported function/class/interface:**
+   a. Add description of purpose
+   b. Document parameters with @param
+   c. Document return value with @returns
+   d. Document exceptions with @throws
+   e. Add usage example if non-obvious
+3. **Document each step** of complex functions inline with // comments
+
+```typescript
+// Example: Document each step inline
 /**
  * Finds the best matching agent for a task.
  * @param task - The task to match
  * @param candidates - Available agent pool
  * @returns The matched agent or null if none eligible
+ * @throws {ValidationError} If task is malformed
+ * @example
+ * const agent = findAgent(task, registry.getAll());
  */
+function findAgent(task: Task, candidates: Agent[]): Agent | null {
+  // Step 1: Filter candidates by role compatibility
+  const eligible = candidates.filter(c => c.role === task.targetRole);
+  
+  // Step 2: Sort by availability (least busy first)
+  const sorted = eligible.sort((a, b) => a.activeTasks - b.activeTasks);
+  
+  // Step 3: Return first available or null
+  return sorted[0] || null;
+}
 ```
 
-### 2.8 **Submit for Review** (KEY STEP)
+### 2.7.1 Post-Documentation Test Verification
+
+**Run tests after documentation to catch any errors introduced:**
+
+```bash
+pnpm test
+pnpm typecheck
+```
+
+> **⚠️ Documentation can accidentally break code (typos in examples, incorrect types). Always verify.**
+
+### 2.8 Documentation Quality Gate
+
+> **🎭 PERSONA: Technical Writer / Documentation Reviewer**
+> Adopt the critical eye of someone who reads docs to understand code. Be brutally honest.
+
+**Self-assess the documentation:**
+
+| Criterion | Question | Target |
+|-----------|----------|--------|
+| **Completeness** | Is every exported function/class/interface documented? Are steps explained? | ≥9.5 |
+| **Quality** | Are docs accurate, clear, and helpful? Would a new dev understand? | ≥9.5 |
+
+**BOTH ≥9.5 → Continue. Otherwise → Improve documentation.**
+
+> **⚠️ Undocumented code is a debt. Document it now while you understand it.**
+
+### 2.9 **Submit for Review** (KEY STEP)
 
 1. **Generate Diffs**:
    ```bash
