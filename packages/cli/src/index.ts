@@ -16,6 +16,8 @@ import {
 } from './utils/index.js';
 import { restartCommand } from './commands/restart.js';
 import { assignCommand } from './commands/assign.js';
+import { initCommand } from './commands/init.js';
+import { taskCommand } from './commands/task.js';
 
 const program = new Command();
 
@@ -26,6 +28,8 @@ program
 
 program.addCommand(restartCommand);
 program.addCommand(assignCommand);
+program.addCommand(initCommand);
+program.addCommand(taskCommand);
 
 let activeRl: readline.Interface | null = null;
 

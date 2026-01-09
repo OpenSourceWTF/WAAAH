@@ -79,14 +79,18 @@ export class ToolHandler {
   async register_agent(args: unknown) {
     try {
       const params = registerAgentSchema.parse(args);
+
+      // S11: Auto-generate displayName if not provided
+      const displayName = params.displayName || this.generateDisplayName();
+
       const finalAgentId = this.registry.register({
         id: params.agentId || `agent-${Date.now()}`,
-        displayName: params.displayName || '',
+        displayName,
         capabilities: params.capabilities,
         workspaceContext: params.workspaceContext
       });
 
-      emitActivity('AGENT', `Agent ${params.displayName || finalAgentId} connected`, {
+      emitActivity('AGENT', `Agent ${displayName} connected`, {
         agentId: finalAgentId,
         capabilities: params.capabilities
       });
@@ -97,12 +101,24 @@ export class ToolHandler {
           text: JSON.stringify({
             registered: true,
             agentId: finalAgentId,
-            displayName: params.displayName,
+            displayName,
             capabilities: params.capabilities
           })
         }]
       };
     } catch (e) { return this.handleError(e); }
+  }
+
+  /**
+   * Generate a random display name in adjective-noun-num format (S11).
+   */
+  private generateDisplayName(): string {
+    const adjectives = ['methodical', 'diligent', 'swift', 'careful', 'eager', 'steady', 'clever', 'precise'];
+    const nouns = ['builder', 'coder', 'worker', 'crafter', 'maker', 'thinker', 'solver', 'agent'];
+    const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
+    const noun = nouns[Math.floor(Math.random() * nouns.length)];
+    const num = Math.floor(Math.random() * 100);
+    return `${adj}-${noun}-${num.toString().padStart(2, '0')}`;
   }
 
   /**
