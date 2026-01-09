@@ -125,6 +125,24 @@ Tasks are **pulled** by agents via `wait_for_prompt`. The server's scheduler act
         *   **Agent Hint**: Preference for specific agent IDs.
     *   Action: Task state `QUEUED` → `ASSIGNED` → `PENDING_ACK`.
 
+### 3.3 Task Dependencies
+
+Tasks can declare dependencies on other tasks via the `dependencies` field (array of Task IDs).
+
+**Scheduler Behavior**:
+*   A task with unresolved dependencies **cannot be assigned** to any agent.
+*   The scheduler checks: `dependencies.every(depId => getTask(depId).status === 'COMPLETED')`.
+*   If any dependency is NOT `COMPLETED`, the task remains in `QUEUED` but is **skipped** during assignment.
+*   Once all dependencies are `COMPLETED`, the task becomes eligible for assignment.
+
+**Use Cases**:
+*   **Sequential Execution**: Task B depends on Task A. A must complete before B starts.
+*   **Parallel with Join**: Tasks B, C, D all depend on Task A. They can run in parallel after A completes.
+*   **DAG Execution**: Complex workflows where tasks form a directed acyclic graph.
+
+**CLI Integration** (per S6):
+When `waaah assign` parses a `tasks.md`, it creates multiple tasks with `dependencies` fields to respect the execution order.
+
 ---
 
 ## 4. State Management & Data
