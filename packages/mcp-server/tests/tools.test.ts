@@ -23,7 +23,7 @@ describe('ToolHandler', () => {
   });
 
   afterEach(() => {
-    ctx.cleanup();
+    ctx.close();
   });
 
   describe('register_agent', () => {
@@ -141,15 +141,17 @@ describe('ToolHandler', () => {
   });
 
   describe('assign_task', () => {
-    it('returns error for unknown target', async () => {
+    it('creates task even for unknown target (uses capability-based matching)', async () => {
+      // Unknown agents are allowed - they just use capability-based matching
       const result = await tools.assign_task({
         targetAgentId: 'nonexistent-agent-xyz-never-exists',
         prompt: 'Test',
         sourceAgentId: 'source'
       });
 
-      expect(result.isError).toBe(true);
-      expect(result.content[0].text).toContain('not found');
+      // Should succeed - task is created for capability-based matching
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0].text).toContain('Task delegated');
     });
 
     it('creates task when target agent is valid', async () => {

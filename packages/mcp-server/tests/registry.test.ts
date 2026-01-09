@@ -16,7 +16,7 @@ describe('AgentRepository', () => {
   });
 
   afterEach(() => {
-    ctx.cleanup();
+    ctx.close();
   });
 
   describe('register', () => {

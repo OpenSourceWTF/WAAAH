@@ -28,7 +28,7 @@ describe('TaskQueue', () => {
   });
 
   afterEach(() => {
-    ctx.cleanup();
+    ctx.close();
   });
 
   describe('enqueue', () => {
@@ -250,9 +250,10 @@ describe('TaskQueue', () => {
   });
 
   describe('getWaitingAgents', () => {
-    it('returns empty array initially', () => {
+    it('returns empty Map initially', () => {
       const waiting = queue.getWaitingAgents();
-      expect(Array.isArray(waiting)).toBe(true);
+      expect(waiting instanceof Map).toBe(true);
+      expect(waiting.size).toBe(0);
     });
 
     it('tracks agents during waitForTask', async () => {
@@ -261,7 +262,7 @@ describe('TaskQueue', () => {
 
       // Check if agent is in waiting list during the wait
       const waiting = queue.getWaitingAgents();
-      expect(Array.isArray(waiting)).toBe(true);
+      expect(waiting instanceof Map).toBe(true);
 
       // Wait for completion
       await waitPromise;
