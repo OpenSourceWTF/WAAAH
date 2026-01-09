@@ -143,6 +143,34 @@ Tasks can declare dependencies on other tasks via the `dependencies` field (arra
 **CLI Integration** (per S6):
 When `waaah assign` parses a `tasks.md`, it creates multiple tasks with `dependencies` fields to respect the execution order.
 
+> **Circular Dependency Detection**: The CLI (`waaah assign`) MUST detect and reject circular dependencies (A→B→A) before creating tasks.
+
+### 3.4 Agent Affinity on Feedback
+
+When a task transitions `IN_REVIEW → QUEUED` due to user feedback:
+1.  **Primary**: Attempt to reassign to the **same agent** that worked on it (via `task.assignedTo` hint).
+2.  **Fallback**: If original agent is offline/busy, assign to any agent with matching capabilities and workspace context.
+
+### 3.5 Spec-Driven Development
+
+WAAAH supports **spec-driven development** to ensure structured, verifiable work.
+
+**Task Submission (`assign_task`)**:
+*   Optional `spec` field: Raw text of specification document (e.g., `spec.md` contents).
+*   Optional `tasks` field: Raw text of task checklist (e.g., `tasks.md` contents).
+
+**Agent Behavior (waaah-orc)**:
+*   **If spec provided**: Agent uses embedded spec as the source of truth for requirements.
+*   **If no spec provided**: Agent MUST generate a spec inline before implementation (self-generated planning).
+*   **Testing Phase**: Agent writes tests BEFORE implementation (TDD), then fills in code.
+*   **Documentation Phase**: Agent adds inline documentation using **TSDoc** format for all exported functions/classes.
+
+**Priority Levels**:
+Tasks support three priority levels, processed in this order:
+1.  `critical` - Highest priority, processed first.
+2.  `high` - Processed before normal.
+3.  `normal` - Default priority.
+
 ---
 
 ## 4. State Management & Data
@@ -167,10 +195,10 @@ We use SQLite (`mcp.db`) as the single source for all state.
 ## 5. Reverse Engineering Notes
 
 *   **Scheduler**: Originally "Hybrid" (Push/Pull), now strictly a helper for the Pull-based `wait_for_prompt` mechanism.
-*   **Worktree Tooling**: Need to implement/standardize `create_worktree` MCP tool with enforced branch naming conventions.
+*   **Worktree Tooling**: Git worktree operations (`git worktree add`, `git worktree remove`) are performed by agents using raw git commands via the `run_command` tool. This keeps the MCP server stateless and avoids adding file system access complexity.
 
 ---
 
-**Self-Rating**: 9/10
-*Strengths*: Clear logical flow, detailed lifecycle coverage, diagrammatic representation of complex loops.
-*Weakness*: Could deeper document specific JSON schemas for inter-agent messages, but sufficient for architectural overview.
+**Self-Rating**: 9.5/10
+*Strengths*: Clear logical flow, detailed lifecycle coverage, spec-driven development, agent affinity on feedback.
+*Weakness*: Could deeper document specific JSON schemas, but sufficient for architectural overview.

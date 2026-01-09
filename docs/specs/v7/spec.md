@@ -32,6 +32,8 @@ WAAAH is an MCP-based agent orchestration system. V7 introduces:
 | S14 | Descriptive Task Titles | [14-task-titles.md](./14-task-titles.md) | DONE |
 | S15 | Worktree Review Workflow | [12-review-workflow.md](./12-review-workflow.md) | DONE |
 | S16 | Workflow State Machine Update | [16-workflow-state-machine-update.md](./16-workflow-state-machine-update.md) | TODO |
+| S17 | Spec-Driven Development | [17-spec-driven-development.md](./17-spec-driven-development.md) | TODO |
+| S18 | Circular Dependency Detection | [18-circular-dependency-detection.md](./18-circular-dependency-detection.md) | TODO |
 
 ## Execution Order (Parallel Safe)
 ```
