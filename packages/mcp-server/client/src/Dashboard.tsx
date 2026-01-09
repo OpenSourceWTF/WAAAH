@@ -166,7 +166,7 @@ export function Dashboard() {
         queryParams.append('status', statusFilter);
       }
 
-      const res = await fetch(`/admin/tasks/history?${queryParams.toString()}`);
+      const res = await fetch(`/admin/tasks?${queryParams.toString()}`);
 
       if (res.ok) {
         const newItems = await res.json();
