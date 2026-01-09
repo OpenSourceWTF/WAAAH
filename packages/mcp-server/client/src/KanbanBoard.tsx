@@ -50,7 +50,8 @@ function arePropsEqual(prev: KanbanBoardProps, next: KanbanBoardProps): boolean 
 const COLUMNS = [
   { id: 'TODO', label: 'TODO', statuses: ['QUEUED', 'PENDING_ACK'] },
   { id: 'IN_PROGRESS', label: 'IN PROGRESS', statuses: ['ASSIGNED', 'IN_PROGRESS', 'PROCESSING'] },
-  { id: 'REVIEW', label: 'IN REVIEW', statuses: ['BLOCKED', 'PENDING_RES', 'REVIEW', 'IN_REVIEW', 'PENDING', 'APPROVED'] },
+  { id: 'REVIEW', label: 'IN REVIEW', statuses: ['BLOCKED', 'PENDING_RES', 'REVIEW', 'IN_REVIEW', 'PENDING'] },
+  { id: 'APPROVED', label: 'APPROVED', statuses: ['APPROVED'] },
   { id: 'DONE', label: 'DONE', statuses: ['COMPLETED'] },
   { id: 'CANCELLED', label: 'CANCELLED', statuses: ['CANCELLED', 'FAILED'] }
 ];
@@ -65,6 +66,7 @@ export const KanbanBoard = React.memo(function KanbanBoard({ tasks, completedTas
       TODO: [],
       IN_PROGRESS: [],
       REVIEW: [],
+      APPROVED: [],
       DONE: [...completedTasks],
       CANCELLED: [...cancelledTasks]
     };
@@ -107,8 +109,8 @@ export const KanbanBoard = React.memo(function KanbanBoard({ tasks, completedTas
       case 'PENDING':
       case 'PENDING_RES':
       case 'REVIEW':
-      case 'IN_REVIEW':
-      case 'APPROVED': return `${base} bg-white text-black border-gray-400`;
+      case 'IN_REVIEW': return `${base} bg-white text-black border-gray-400`;
+      case 'APPROVED': return `${base} bg-green-400 text-black border-green-600`;
       default: return `${base} bg-gray-600 text-white`;
     }
   };
