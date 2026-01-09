@@ -276,9 +276,22 @@ update_progress({
 
 > **⚠️ CRITICAL**: Regular heartbeats prove agent is active. Stale tasks (>5 min without update) appear stuck on Dashboard.
 
-### 2.4 Test Loop (REQUIRED)
+### 2.4 Dev Quality Gate
 
-**After completing Build Loop, run comprehensive test verification:**
+**Self-assess the implementation before testing:**
+
+| Criterion | Question | Target |
+|-----------|----------|--------|
+| **Quality** | Is the code clean, readable, well-structured? | ≥9.5 |
+| **Elegance** | Does the solution use appropriate patterns, avoid over-engineering? | ≥9.5 |
+| **Functionality** | Does it work correctly for all expected inputs? | ≥9.5 |
+| **Meets Specs** | Does it satisfy ALL acceptance criteria from the spec? | ≥9.5 |
+
+**ALL ≥9.5 → Continue to Test Loop. Otherwise → Fix implementation first.**
+
+### 2.5 Test Loop (REQUIRED)
+
+**After passing Dev Quality Gate, run comprehensive test verification:**
 
 ```
 TEST_LOOP:
@@ -292,7 +305,7 @@ TEST_LOOP:
      b. IF type errors → Fix and GOTO TEST_LOOP
   4. Run lint: pnpm lint
      a. IF lint errors → Fix and GOTO TEST_LOOP
-  5. ALL CHECKS PASS → Continue to Quality Gate
+  5. ALL CHECKS PASS → Continue to Test Quality Gate
 ```
 
 **Test Loop Heartbeat:**
@@ -306,14 +319,20 @@ update_progress({
 })
 ```
 
-> **⚠️ Do NOT proceed to Quality Gate until ALL tests, type checks, and lint pass.**
+> **⚠️ Do NOT proceed to Test Quality Gate until ALL tests, type checks, and lint pass.**
 
-### 2.5 Quality Gate
+### 2.6 Test Quality Gate
 
-Rate 1-10: Correctness? Code quality?
-**Both ≥9.5 → Continue. Otherwise → Fix.**
+**Self-assess the test suite:**
 
-### 2.6 Documentation Phase (per S17)
+| Criterion | Question | Target |
+|-----------|----------|--------|
+| **Coverage** | Are all code paths tested? Are edge cases covered? | ≥9.5 |
+| **Quality** | Are tests meaningful, not just passing? Do they catch real bugs? | ≥9.5 |
+
+**BOTH ≥9.5 → Continue. Otherwise → Add/improve tests and repeat Test Loop.**
+
+### 2.7 Documentation Phase (per S17)
 
 After tests pass, add inline documentation:
 1. **Infer format** from existing codebase (e.g., TSDoc for TypeScript, JSDoc for JavaScript)
@@ -330,7 +349,7 @@ After tests pass, add inline documentation:
  */
 ```
 
-### 2.7 **Submit for Review** (KEY STEP)
+### 2.8 **Submit for Review** (KEY STEP)
 
 1. **Generate Diffs**:
    ```bash
