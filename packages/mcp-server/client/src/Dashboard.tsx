@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -137,8 +137,11 @@ export function Dashboard() {
     return () => clearInterval(interval);
   }, []);
 
-  // Filter Active Tasks: Exclude terminal states
-  const activeTasks = tasks.filter(t => !['COMPLETED', 'FAILED', 'BLOCKED', 'CANCELLED'].includes(t.status));
+  // Filter Active Tasks: Exclude terminal states - memoized to prevent recalc
+  const activeTasks = useMemo(() =>
+    tasks.filter(t => !['COMPLETED', 'FAILED', 'BLOCKED', 'CANCELLED'].includes(t.status)),
+    [tasks]
+  );
 
   // Infinite Scroll Fetch Logic
   const fetchHistory = useCallback(async (isInitial = false) => {
@@ -217,8 +220,8 @@ export function Dashboard() {
     };
   }, [fetchHistory, historyHasMore]);
 
-  // Task Actions
-  const handleCancelTask = async (e: React.MouseEvent, id: string) => {
+  // Task Actions - wrapped with useCallback for stable references
+  const handleCancelTask = useCallback(async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     try {
       await fetch(`/admin/tasks/${id}/cancel`, { method: 'POST' });
@@ -226,9 +229,9 @@ export function Dashboard() {
     } catch (error) {
       console.error("Failed to cancel task", error);
     }
-  };
+  }, []);
 
-  const handleRetryTask = async (e: React.MouseEvent, id: string) => {
+  const handleRetryTask = useCallback(async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     try {
       await fetch(`/admin/tasks/${id}/retry`, { method: 'POST' });
@@ -236,9 +239,9 @@ export function Dashboard() {
     } catch (error) {
       console.error("Failed to retry task", error);
     }
-  };
+  }, []);
 
-  const handleEvictAgent = async (e: React.MouseEvent, id: string) => {
+  const handleEvictAgent = useCallback(async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     if (!window.confirm(`Are you sure you want to SHUTDOWN agent ${id}?`)) return;
 
@@ -252,14 +255,14 @@ export function Dashboard() {
     } catch (error) {
       console.error("Failed to evict agent", error);
     }
-  };
+  }, []);
 
   // Task click handler removed - KanbanBoard handles expansion inline
 
   // handleApproveReview, handleRejectReview, handleAddComment removed - KanbanBoard handles actions
 
-  // Helper for status badge style -- CUSTOM COLORS
-  const getStatusBadgeClass = (status: string) => {
+  // Helper for status badge style -- CUSTOM COLORS (memoized)
+  const getStatusBadgeClass = useCallback((status: string) => {
     const base = "text-xs font-bold px-2 py-1 border border-black";
     switch (status) {
       case 'COMPLETED': return `${base} bg-green-600 text-white border-green-800`;
@@ -278,9 +281,9 @@ export function Dashboard() {
       case 'IN_REVIEW': return `${base} bg-white text-black border-gray-400`;
       default: return `${base} bg-gray-600 text-white`;
     }
-  };
+  }, []);
 
-  const formatResponse = (response: Record<string, unknown> | string | null | undefined): string => {
+  const formatResponse = useCallback((response: Record<string, unknown> | string | null | undefined): string => {
     if (!response) return '';
     if (typeof response === 'string') return response;
 
@@ -291,9 +294,15 @@ export function Dashboard() {
     if (response.error && typeof response.error === 'string') return `ERROR: ${response.error}`;
 
     return JSON.stringify(response, null, 2);
-  };
+  }, []);
 
   // ... duplicate Task interface removed ...
+
+  // Handler for viewing history tab from KanbanBoard
+  const handleViewHistory = useCallback(() => {
+    document.getElementById('tab-trigger-history')?.click() ||
+      (document.querySelector('[value="history"]') as HTMLElement)?.click();
+  }, []);
 
   // ... existing code ...
 
@@ -543,12 +552,12 @@ export function Dashboard() {
               {/* KANBAN TAB */}
               <TabsContent value="kanban" className="flex-1 overflow-hidden m-0 pt-4 h-full">
                 <KanbanBoard
-                  tasks={[...activeTasks]}
+                  tasks={activeTasks}
                   completedTasks={recentCompleted}
                   cancelledTasks={recentCancelled}
                   onCancelTask={handleCancelTask}
                   onRetryTask={handleRetryTask}
-                  onViewHistory={() => document.getElementById('tab-trigger-history')?.click() || (document.querySelector('[value="history"]') as HTMLElement)?.click()}
+                  onViewHistory={handleViewHistory}
                 />
               </TabsContent>
 

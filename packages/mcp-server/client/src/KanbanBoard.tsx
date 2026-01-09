@@ -1,5 +1,5 @@
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -142,8 +142,8 @@ export const KanbanBoard = React.memo(function KanbanBoard({ tasks, completedTas
     }
     return task.command || 'Untitled Task';
   };
-
-  const formatResponse = (response: Record<string, unknown> | string | null | undefined): string => {
+  // Helper functions - memoized
+  const formatResponse = useCallback((response: Record<string, unknown> | string | null | undefined): string => {
     if (!response) return 'No output yet.';
     if (typeof response === 'string') return response;
     if (response.output && typeof response.output === 'string') return response.output;
@@ -151,23 +151,23 @@ export const KanbanBoard = React.memo(function KanbanBoard({ tasks, completedTas
     if (response.content && typeof response.content === 'string') return response.content;
     if (response.error && typeof response.error === 'string') return `ERROR: ${response.error}`;
     return JSON.stringify(response, null, 2);
-  };
+  }, []);
 
   // Extract progress updates from messages
-  const getProgressUpdates = (task: Task) => {
+  const getProgressUpdates = useCallback((task: Task) => {
     if (!task.messages) return [];
     return task.messages.filter(m =>
       m.role === 'agent' && m.metadata && (m.metadata as any).percentage !== undefined
     );
-  };
+  }, []);
 
-  const handleCardClick = (task: Task) => {
+  const handleCardClick = useCallback((task: Task) => {
     setExpandedTask(task);
-  };
+  }, []);
 
-  const handleCloseExpanded = () => {
+  const handleCloseExpanded = useCallback(() => {
     setExpandedTask(null);
-  };
+  }, []);
 
   // Expanded Card View Component
   const ExpandedCardView = ({ task }: { task: Task }) => {
