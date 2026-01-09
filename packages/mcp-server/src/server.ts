@@ -453,7 +453,7 @@ const VALID_TOOLS = [
   'list_agents', 'get_agent_status', 'ack_task', 'admin_update_agent',
   'wait_for_task', 'admin_evict_agent',
   'get_task_context', 'block_task', 'answer_task', 'update_progress',
-  'scaffold_plan', 'submit_review'
+  'scaffold_plan', 'submit_review', 'broadcast_system_prompt'
 ] as const;
 
 type ToolName = typeof VALID_TOOLS[number];

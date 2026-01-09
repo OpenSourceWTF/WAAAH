@@ -746,4 +746,40 @@ export class ToolHandler {
       };
     } catch (e) { return this.handleError(e); }
   }
+
+  /**
+   * Broadcasts a system prompt to agents.
+   */
+  async broadcast_system_prompt(args: unknown) {
+    try {
+      const { broadcastSystemPromptSchema } = await import('@opensourcewtf/waaah-types');
+      const params = broadcastSystemPromptSchema.parse(args);
+
+      const targetAgents: string[] = [];
+
+      if (params.broadcast) {
+        const allAgents = this.registry.getAll();
+        targetAgents.push(...allAgents.map((a: { id: string }) => a.id));
+      } else if (params.targetRole) {
+        const roleAgents = this.registry.getAll().filter((a: { role: string }) => a.role === params.targetRole);
+        targetAgents.push(...roleAgents.map((a: { id: string }) => a.id));
+      } else if (params.targetAgentId) {
+        targetAgents.push(params.targetAgentId);
+      }
+
+      if (targetAgents.length === 0) {
+        return {
+          content: [{ type: 'text', text: JSON.stringify({ success: false, error: 'No agents matched' }) }]
+        };
+      }
+
+      for (const agentId of targetAgents) {
+        this.queue.queueSystemPrompt(agentId, params.promptType, params.message, params.payload, params.priority);
+      }
+
+      return {
+        content: [{ type: 'text', text: JSON.stringify({ success: true, targetCount: targetAgents.length, targets: targetAgents }) }]
+      };
+    } catch (e) { return this.handleError(e); }
+  }
 }

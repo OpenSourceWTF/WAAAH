@@ -247,3 +247,20 @@ export const updateProgressSchema = z.object({
   percentage: z.number().min(0).max(100).optional().describe("Optional completion percentage")
 });
 export type UpdateProgressArgs = z.infer<typeof updateProgressSchema>;
+
+/**
+ * Schema for broadcast_system_prompt tool arguments.
+ * Sends system-level prompts to agents (workflow updates, config changes, etc.)
+ */
+export const broadcastSystemPromptSchema = z.object({
+  targetAgentId: z.string().optional().describe("Specific agent ID to target"),
+  targetRole: AgentRole.optional().describe("Target all agents with this role"),
+  broadcast: z.boolean().optional().describe("If true, send to ALL agents"),
+  promptType: z.enum(['WORKFLOW_UPDATE', 'EVICTION_NOTICE', 'CONFIG_UPDATE', 'SYSTEM_MESSAGE']).describe("Type of system prompt"),
+  message: z.string().min(1).describe("Human-readable message"),
+  payload: z.record(z.unknown()).optional().describe("Optional payload data"),
+  priority: z.enum(['normal', 'high', 'critical']).optional().default('normal').describe("Urgency level")
+}).refine(data => data.targetAgentId || data.targetRole || data.broadcast, {
+  message: "Either targetAgentId, targetRole, or broadcast must be specified"
+});
+export type BroadcastSystemPromptArgs = z.infer<typeof broadcastSystemPromptSchema>;

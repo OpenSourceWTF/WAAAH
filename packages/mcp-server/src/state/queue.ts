@@ -891,6 +891,50 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue {
     }
     return null;
   }
+
+  // ===== System Prompts =====
+  private systemPrompts: Map<string, {
+    promptType: 'WORKFLOW_UPDATE' | 'EVICTION_NOTICE' | 'CONFIG_UPDATE' | 'SYSTEM_MESSAGE';
+    message: string;
+    payload?: Record<string, unknown>;
+    priority?: 'normal' | 'high' | 'critical';
+  }[]> = new Map();
+
+  /**
+   * Queue a system prompt for an agent (or all agents with '*').
+   */
+  queueSystemPrompt(
+    agentId: string,
+    promptType: 'WORKFLOW_UPDATE' | 'EVICTION_NOTICE' | 'CONFIG_UPDATE' | 'SYSTEM_MESSAGE',
+    message: string,
+    payload?: Record<string, unknown>,
+    priority?: 'normal' | 'high' | 'critical'
+  ): void {
+    const existing = this.systemPrompts.get(agentId) || [];
+    existing.push({ promptType, message, payload, priority });
+    this.systemPrompts.set(agentId, existing);
+    console.log(`[Queue] Queued system prompt for ${agentId}: ${promptType}`);
+  }
+
+  /**
+   * Pop the next system prompt for an agent.
+   */
+  popSystemPrompt(agentId: string): {
+    promptType: 'WORKFLOW_UPDATE' | 'EVICTION_NOTICE' | 'CONFIG_UPDATE' | 'SYSTEM_MESSAGE';
+    message: string;
+    payload?: Record<string, unknown>;
+    priority?: 'normal' | 'high' | 'critical';
+  } | null {
+    const agentPrompts = this.systemPrompts.get(agentId);
+    if (agentPrompts && agentPrompts.length > 0) {
+      return agentPrompts.shift()!;
+    }
+    const broadcastPrompts = this.systemPrompts.get('*');
+    if (broadcastPrompts && broadcastPrompts.length > 0) {
+      return broadcastPrompts.shift()!;
+    }
+    return null;
+  }
   /**
    * Fetch recent activity logs (persisted).
    * Returns them in CHRONOLOGICAL order (Oldest -> Newest).

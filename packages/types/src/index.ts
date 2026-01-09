@@ -127,3 +127,15 @@ export interface EvictionSignal {
   reason: string;
   action: 'RESTART' | 'SHUTDOWN';
 }
+
+/**
+ * Generic system prompt sent to agents via wait_for_prompt.
+ * Used for workflow updates, system messages, configuration changes, etc.
+ */
+export interface SystemPrompt {
+  controlSignal: 'SYSTEM_PROMPT';
+  promptType: 'WORKFLOW_UPDATE' | 'EVICTION_NOTICE' | 'CONFIG_UPDATE' | 'SYSTEM_MESSAGE';
+  message: string;
+  payload?: Record<string, unknown>;
+  priority?: 'normal' | 'high' | 'critical';
+}

@@ -2,15 +2,19 @@ import {
   AgentIdentity,
   AgentRole
 } from '@opensourcewtf/waaah-types';
-import { db } from './db.js';
+import { db as defaultDb } from './db.js';
+import type Database from 'better-sqlite3';
 
 /**
  * Manages the registry of active agents, handling registration, discovery, and capability tracking.
  * Supported by a persistent SQLite database.
  */
 export class AgentRegistry {
-  // We no longer need memory cache as source of truth, but could cache for perf.
-  // For now, let's read directly from DB for simplicity and consistency.
+  private db: Database.Database;
+
+  constructor(db: Database.Database = defaultDb) {
+    this.db = db;
+  }
 
   /**
    * Registers a new agent or updates an existing one.
@@ -42,7 +46,7 @@ export class AgentRegistry {
 
     // Upsert agent with finalId
     const now = Date.now();
-    const stmt = db.prepare(`
+    const stmt = this.db.prepare(`
       INSERT INTO agents (id, role, displayName, lastSeen, capabilities, createdAt)
       VALUES (@id, @role, @displayName, @lastSeen, @capabilities, @createdAt)
       ON CONFLICT(id) DO UPDATE SET
@@ -90,7 +94,7 @@ export class AgentRegistry {
    * @returns The agent identity or undefined if not found.
    */
   get(agentId: string): (AgentIdentity & { id: string; color?: string; lastSeen?: number }) | undefined {
-    const row = db.prepare('SELECT * FROM agents WHERE id = ?').get(agentId) as any;
+    const row = this.db.prepare('SELECT * FROM agents WHERE id = ?').get(agentId) as any;
     if (!row) return undefined;
     return this.mapRowToIdentity(row);
   }
@@ -105,13 +109,13 @@ export class AgentRegistry {
     const lowerName = displayName.toLowerCase();
 
     // 1. Direct match on displayName
-    let row = db.prepare('SELECT * FROM agents WHERE lower(displayName) = ?').get(lowerName) as any;
+    let row = this.db.prepare('SELECT * FROM agents WHERE lower(displayName) = ?').get(lowerName) as any;
 
     // 2. Alias lookup
     if (!row) {
-      const aliasRow = db.prepare('SELECT agentId FROM aliases WHERE alias = ?').get(lowerName) as any;
+      const aliasRow = this.db.prepare('SELECT agentId FROM aliases WHERE alias = ?').get(lowerName) as any;
       if (aliasRow) {
-        row = db.prepare('SELECT * FROM agents WHERE id = ?').get(aliasRow.agentId) as any;
+        row = this.db.prepare('SELECT * FROM agents WHERE id = ?').get(aliasRow.agentId) as any;
       }
     }
 
@@ -130,7 +134,7 @@ export class AgentRegistry {
    */
   getByRole(role: string): (AgentIdentity & { id: string; color?: string; lastSeen?: number }) | undefined {
     // Pick the most recently seen agent with this role
-    const row = db.prepare('SELECT * FROM agents WHERE role = ? ORDER BY lastSeen DESC LIMIT 1').get(role) as any;
+    const row = this.db.prepare('SELECT * FROM agents WHERE role = ? ORDER BY lastSeen DESC LIMIT 1').get(role) as any;
     if (!row) return undefined;
     return this.mapRowToIdentity(row);
   }
@@ -141,7 +145,7 @@ export class AgentRegistry {
    * @returns An array of all agent identities.
    */
   getAll(): (AgentIdentity & { id: string; color?: string; lastSeen?: number })[] {
-    const rows = db.prepare('SELECT * FROM agents').all() as any[];
+    const rows = this.db.prepare('SELECT * FROM agents').all() as any[];
     return rows.map(r => this.mapRowToIdentity(r));
   }
 
@@ -155,7 +159,7 @@ export class AgentRegistry {
   getAllowedDelegates(role: AgentRole): string[] {
     // 1. Try to get from DB first
     let dbDelegates: string[] = [];
-    const row = db.prepare('SELECT canDelegateTo FROM agents WHERE role = ? LIMIT 1').get(role) as any;
+    const row = this.db.prepare('SELECT canDelegateTo FROM agents WHERE role = ? LIMIT 1').get(role) as any;
 
     if (row && row.canDelegateTo) {
       try {
@@ -193,7 +197,7 @@ export class AgentRegistry {
   }
 
   heartbeat(agentId: string): void {
-    db.prepare('UPDATE agents SET lastSeen = ? WHERE id = ?').run(Date.now(), agentId);
+    this.db.prepare('UPDATE agents SET lastSeen = ? WHERE id = ?').run(Date.now(), agentId);
   }
 
   /**
@@ -215,12 +219,12 @@ export class AgentRegistry {
     if (sets.length === 0) return false;
 
     args.push(agentId);
-    const result = db.prepare(`UPDATE agents SET ${sets.join(', ')} WHERE id = ?`).run(...args);
+    const result = this.db.prepare(`UPDATE agents SET ${sets.join(', ')} WHERE id = ?`).run(...args);
 
     // Also add the new name as an alias automatically
     if (updates.displayName) {
       try {
-        db.prepare('INSERT OR IGNORE INTO aliases (alias, agentId) VALUES (?, ?)').run(updates.displayName.toLowerCase(), agentId);
+        this.db.prepare('INSERT OR IGNORE INTO aliases (alias, agentId) VALUES (?, ?)').run(updates.displayName.toLowerCase(), agentId);
       } catch (e) { }
     }
 
@@ -228,14 +232,14 @@ export class AgentRegistry {
   }
 
   requestEviction(agentId: string, reason: string): boolean {
-    const result = db.prepare(
+    const result = this.db.prepare(
       'UPDATE agents SET eviction_requested = 1, eviction_reason = ? WHERE id = ?'
     ).run(reason, agentId);
     return result.changes > 0;
   }
 
   checkEviction(agentId: string): { requested: boolean, reason?: string } {
-    const row = db.prepare('SELECT eviction_requested, eviction_reason FROM agents WHERE id = ?').get(agentId) as any;
+    const row = this.db.prepare('SELECT eviction_requested, eviction_reason FROM agents WHERE id = ?').get(agentId) as any;
     if (!row) return { requested: false };
     return {
       requested: Boolean(row.eviction_requested),
@@ -244,7 +248,7 @@ export class AgentRegistry {
   }
 
   clearEviction(agentId: string): void {
-    db.prepare(
+    this.db.prepare(
       'UPDATE agents SET eviction_requested = 0, eviction_reason = NULL WHERE id = ?'
     ).run(agentId);
   }
@@ -256,15 +260,15 @@ export class AgentRegistry {
     const cutoff = Date.now() - intervalMs;
 
     // We fetch all agents first to filter in memory
-    const stmt = db.prepare('SELECT id, lastSeen FROM agents');
+    const stmt = this.db.prepare('SELECT id, lastSeen FROM agents');
     const all = stmt.all() as any[];
 
     for (const a of all) {
       if (activeAgentIds.has(a.id)) continue; // Don't delete busy agents
       if (a.lastSeen < cutoff) {
         console.log(`[Registry] Cleaning up stale agent: ${a.id}`);
-        db.prepare('DELETE FROM agents WHERE id = ?').run(a.id);
-        db.prepare('DELETE FROM aliases WHERE agentId = ?').run(a.id);
+        this.db.prepare('DELETE FROM agents WHERE id = ?').run(a.id);
+        this.db.prepare('DELETE FROM aliases WHERE agentId = ?').run(a.id);
       }
     }
   }
@@ -284,13 +288,13 @@ export class AgentRegistry {
 
   // Helper to get color
   getAgentColor(agentId: string): string | undefined {
-    const row = db.prepare('SELECT color FROM agents WHERE id = ?').get(agentId) as any;
+    const row = this.db.prepare('SELECT color FROM agents WHERE id = ?').get(agentId) as any;
     return row?.color;
   }
 
   // Helper to get lastSeen timestamp
   getLastSeen(agentId: string): number | undefined {
-    const row = db.prepare('SELECT lastSeen FROM agents WHERE id = ?').get(agentId) as any;
+    const row = this.db.prepare('SELECT lastSeen FROM agents WHERE id = ?').get(agentId) as any;
     return row?.lastSeen;
   }
 }
