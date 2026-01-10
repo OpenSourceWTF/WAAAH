@@ -135,7 +135,7 @@ export abstract class BaseAgent {
     // Handle stdin forwarding with Ctrl+C detection
     const stdinHandler = (data: Buffer) => {
       // Detect Ctrl+C (0x03) in raw mode and emit SIGINT
-      if (data.length === 1 && data[0] === 0x03) {
+      if (data.includes(0x03)) {
         process.emit('SIGINT', 'SIGINT');
         return;
       }

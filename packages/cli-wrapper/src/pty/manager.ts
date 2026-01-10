@@ -188,9 +188,13 @@ export class PTYManager {
     this.heartbeatInterval = setInterval(() => {
       if (!this.running || !this.autoRespond) return;
 
+      // Strip ANSI codes for reliable pattern matching
+      // eslint-disable-next-line no-control-regex
+      const cleanOutput = this.outputBuffer.replace(/\x1B\[\d+;?\d*m/g, '').replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '');
+
       // Check if output matches a wait pattern
       for (const pattern of WAIT_PATTERNS) {
-        if (pattern.test(this.outputBuffer)) {
+        if (pattern.test(cleanOutput)) {
           console.log('\n[Heartbeat] Detected wait prompt, auto-responding...');
           this.write(AUTO_RESPONSE);
           this.outputBuffer = ''; // Clear buffer after responding

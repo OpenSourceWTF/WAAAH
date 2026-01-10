@@ -100,13 +100,9 @@ class AgentRunner {
       // Format: gemini -i "prompt" --yolo
       args = ['-i', prompt, '--yolo'];
     } else if (this.cli === 'claude') {
-      // Claude uses -p flag
-      const promptIdx = args.indexOf('-p');
-      if (promptIdx >= 0) {
-        args[promptIdx + 1] = prompt;
-      } else {
-        args.unshift('-p', prompt);
-      }
+      // Claude CLI: claude --dangerously-skip-permissions "prompt"
+      // Prompt is positional, not a flag
+      args = ['--dangerously-skip-permissions', prompt];
     }
 
     console.log(`\n🚀 Starting ${this.cli} agent (attempt ${this.restartCount + 1}/${MAX_RESTARTS})...`);

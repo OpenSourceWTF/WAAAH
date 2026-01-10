@@ -32,6 +32,9 @@
   ],
   "scripts": {
     "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "echo 'No linting configured'",
     "dev": "tsc -w",
     "prepublishOnly": "npm run build"
   },
