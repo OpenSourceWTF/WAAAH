@@ -40,6 +40,13 @@ export {
 export { GitUtils } from './utils/git.js';
 export { Logger } from './utils/logger.js';
 
+// Doctor Agent module
+export {
+  GitPoller,
+  type DoctorState,
+  type ChangeCheckResult,
+} from './doctor/index.js';
+
 /**
  * Main entry point for the CLI wrapper.
  * This will be implemented to parse CLI arguments and start the agent.
