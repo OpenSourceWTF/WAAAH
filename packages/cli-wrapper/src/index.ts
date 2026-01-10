@@ -140,43 +140,127 @@ async function launchAgent(options: any) {
     console.warn(`\n⚠️  Workflow '${workflow}' not found in .agent/workflows/`);
   }
 
-  // 6. Build the command
+  // 6. Build the command based on agent type
+  if (agentType === 'gemini') {
+    // Gemini has built-in restart - just launch once
+    await launchGemini(workspaceRoot, workflow, resume);
+  } else {
+    // Claude needs manual restart with --resume
+    await launchClaudeWithRestart(workspaceRoot, workflow, resume);
+  }
+}
+
+/**
+ * Launch Gemini - simple one-shot, it handles its own restarts
+ */
+async function launchGemini(workspaceRoot: string, workflow: string, resume: boolean): Promise<void> {
   const prompt = resume
     ? `Resume the /${workflow} workflow. Continue from where you left off.`
     : `Follow the /${workflow} workflow exactly.`;
 
-  let command: string;
-  let args: string[];
-
-  if (agentType === 'gemini') {
-    command = 'gemini';
-    args = ['-i', prompt, '--yolo'];
-  } else {
-    command = 'claude';
-    args = ['--dangerously-skip-permissions', prompt];
-  }
-
-  // 7. Launch the native CLI (replace this process)
   console.log('\n' + '─'.repeat(60));
-  console.log(`Launching: ${command} ${args.join(' ')}`);
+  console.log(`Launching: gemini -i "${prompt.slice(0, 40)}..." --yolo`);
   console.log('─'.repeat(60) + '\n');
 
-  // Use spawn with stdio inherit to give user native experience
-  // Then exit when the child exits
-  const child = spawn(command, args, {
+  const child = spawn('gemini', ['-i', prompt, '--yolo'], {
     cwd: workspaceRoot,
     stdio: 'inherit',
     env: process.env,
   });
 
-  // Forward signals to child
   process.on('SIGINT', () => child.kill('SIGINT'));
   process.on('SIGTERM', () => child.kill('SIGTERM'));
 
-  // Exit with child's exit code
-  child.on('exit', (code) => {
-    process.exit(code ?? 0);
+  return new Promise((resolve) => {
+    child.on('exit', (code) => {
+      process.exit(code ?? 0);
+    });
   });
+}
+
+/**
+ * Launch Claude with restart support using --resume
+ */
+async function launchClaudeWithRestart(
+  workspaceRoot: string,
+  workflow: string,
+  resume: boolean,
+  maxRestarts: number = 10
+): Promise<void> {
+  let sessionId: string | undefined;
+  let restartCount = 0;
+
+  const prompt = resume
+    ? `Resume the /${workflow} workflow. Continue from where you left off.`
+    : `Follow the /${workflow} workflow exactly.`;
+
+  while (restartCount < maxRestarts) {
+    const args: string[] = ['--dangerously-skip-permissions'];
+
+    // If we have a session ID from previous run, use --resume
+    if (sessionId) {
+      args.push('--resume', sessionId);
+      console.log(`\n🔄 Restarting Claude (attempt ${restartCount + 1}/${maxRestarts})...`);
+      console.log(`   Resuming session: ${sessionId}`);
+    } else {
+      args.push(prompt);
+      console.log('\n' + '─'.repeat(60));
+      console.log(`Launching: claude ${args.join(' ').slice(0, 50)}...`);
+      console.log('─'.repeat(60));
+    }
+    console.log('');
+
+    const child = spawn('claude', args, {
+      cwd: workspaceRoot,
+      stdio: 'inherit',
+      env: process.env,
+    });
+
+    // Track session ID from Claude's output (would need to parse, for now use timestamp)
+    if (!sessionId) {
+      // Generate a session ID based on timestamp for now
+      // TODO: Parse Claude's actual session ID from output
+      sessionId = `waaah-${Date.now()}`;
+    }
+
+    // Handle signals
+    let signalReceived = false;
+    const handleSignal = (signal: NodeJS.Signals) => {
+      signalReceived = true;
+      child.kill(signal);
+    };
+    process.on('SIGINT', () => handleSignal('SIGINT'));
+    process.on('SIGTERM', () => handleSignal('SIGTERM'));
+
+    // Wait for exit
+    const exitCode = await new Promise<number>((resolve) => {
+      child.on('exit', (code) => resolve(code ?? 0));
+    });
+
+    // If user sent signal, exit cleanly
+    if (signalReceived) {
+      console.log('\n✅ Agent stopped by user.');
+      process.exit(0);
+    }
+
+    // If clean exit (0), we're done
+    if (exitCode === 0) {
+      console.log('\n✅ Agent completed successfully.');
+      process.exit(0);
+    }
+
+    // Otherwise, restart
+    restartCount++;
+    console.log(`\n⚠️  Claude exited with code ${exitCode}.`);
+
+    if (restartCount >= maxRestarts) {
+      console.log(`❌ Max restarts (${maxRestarts}) reached. Exiting.`);
+      process.exit(exitCode);
+    }
+
+    // Brief delay before restart
+    await new Promise(r => setTimeout(r, 2000));
+  }
 }
 
 // Run main if executed directly
