@@ -5,7 +5,6 @@
 export {
   LoopDetector,
   type LoopDetectionResult,
-  type LoopExitCallback,
 } from './loop-detector.js';
 
 export {
@@ -14,3 +13,9 @@ export {
   type RestartEventType,
   type RestartHandlerOptions,
 } from './restart-handler.js';
+
+export {
+  TokenTracker,
+  type TokenUsage,
+  type TokenSummary,
+} from './token-tracker.js';
