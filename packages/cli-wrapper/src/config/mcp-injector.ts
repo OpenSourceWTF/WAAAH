@@ -201,27 +201,15 @@ export class MCPInjector {
       existingConfig.mcpServers = {};
     }
 
-    // Create the WAAAH MCP entry based on agent type
-    if (agentType === 'gemini') {
-      // Gemini uses URL-based config
-      existingConfig.mcpServers[WAAAH_MCP_NAME] = {
-        url: config.url,
-        ...(config.apiKey && {
-          env: { WAAAH_API_KEY: config.apiKey }
-        })
-      };
-    } else {
-      // Claude uses command-based config - use local proxy from monorepo
-      // Find the monorepo root relative to this file
-      const proxyPath = path.resolve(__dirname, '../../..', 'mcp-proxy/dist/index.js');
-      existingConfig.mcpServers[WAAAH_MCP_NAME] = {
-        command: 'node',
-        args: [proxyPath, '--url', config.url],
-        ...(config.apiKey && {
-          env: { WAAAH_API_KEY: config.apiKey }
-        })
-      };
-    }
+    // Create the WAAAH MCP entry - both agents use command-based config
+    // Requires: pnpm link --global in packages/mcp-proxy
+    existingConfig.mcpServers[WAAAH_MCP_NAME] = {
+      command: 'waaah-proxy',
+      args: ['--url', config.url],
+      ...(config.apiKey && {
+        env: { WAAAH_API_KEY: config.apiKey }
+      })
+    };
 
     // Ensure directory exists
     await this.ensureDir(configPath);
