@@ -80,48 +80,50 @@ const tools = new ToolHandler(registry, queue);
 app.use(cors());
 app.use(bodyParser.json());
 
-// Serve Admin Dashboard
-app.use('/admin', express.static(path.join(WORKSPACE_ROOT, 'packages/mcp-server/public')));
-app.use('/admin', (req, res, next) => {
-  if (req.path === '/') {
-    return res.redirect('/admin/index.html');
-  }
-  next();
-});
-
-// API Key Authentication (if configured)
-app.use((req, res, next) => {
-  if (req.path === '/health') return next();
-  if (!API_KEY) return next();
-
+/**
+ * API Key Authentication Middleware
+ * Validates X-API-Key header or apiKey query param
+ */
+function requireApiKey(req: express.Request, res: express.Response, next: express.NextFunction) {
   const providedKey = req.headers['x-api-key'] || req.query.apiKey;
   if (providedKey !== API_KEY) {
     res.status(401).json({ error: 'Unauthorized: Invalid or missing API key' });
     return;
   }
   next();
-});
+}
 
-// Health check
+// ============================================
+// PUBLIC ROUTES (no authentication required)
+// ============================================
+
+// Health check - must be accessible for monitoring
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
+// Serve Admin Dashboard static files ONLY (browser needs to load HTML/JS/CSS)
+app.use('/admin', express.static(path.join(WORKSPACE_ROOT, 'packages/mcp-server/public')));
+app.get('/admin/', (req, res) => res.redirect('/admin/index.html'));
+
+// ============================================
+// PROTECTED ROUTES (require API key)
+// ============================================
+
 // Debug state
-app.get('/debug/state', (req, res) => {
+app.get('/debug/state', requireApiKey, (req, res) => {
   res.json({
     agents: registry.getAll(),
     tasks: queue.getAll().map(t => ({ id: t.id, status: t.status, to: t.to }))
   });
 });
 
-// Stats
-app.get('/admin/stats', (req, res) => {
+// Admin API endpoints (protected - dashboard JS includes API key)
+app.get('/admin/stats', requireApiKey, (req, res) => {
   res.json(queue.getStats());
 });
 
-// Logs
-app.get('/admin/logs', (req, res) => {
+app.get('/admin/logs', requireApiKey, (req, res) => {
   try {
     const logs = queue.getLogs(100);
     res.json(logs);
@@ -131,17 +133,32 @@ app.get('/admin/logs', (req, res) => {
   }
 });
 
-// Clear queue
-app.post('/admin/queue/clear', (req, res) => {
+app.post('/admin/queue/clear', requireApiKey, (req, res) => {
   queue.clear();
   res.json({ success: true, message: 'Queue cleared' });
 });
 
-// Mount extracted route modules
-app.use('/admin', createTaskRoutes({ queue, workspaceRoot: WORKSPACE_ROOT }));
-app.use('/admin', createReviewRoutes({ queue, db: ctx.db, workspaceRoot: WORKSPACE_ROOT }));
-app.use('/admin', createAgentRoutes({ registry, queue }));
-app.use('/admin', createSSERoutes({ queue }));
+// SPA fallback for client-side routing (public - serves HTML)
+// Must be BEFORE adminApiRouter to avoid auth middleware on SPA routes
+// API paths fall through to the protected router below
+app.get('/admin/*', (req, res, next) => {
+  const apiPrefixes = ['/admin/tasks', '/admin/agents', '/admin/stats', '/admin/logs',
+    '/admin/enqueue', '/admin/evict', '/admin/delegations', '/admin/bot', '/admin/review',
+    '/admin/queue'];
+  if (apiPrefixes.some(p => req.path.startsWith(p))) {
+    return next(); // Let protected router handle API paths
+  }
+  res.sendFile(path.join(WORKSPACE_ROOT, 'packages/mcp-server/public/index.html'));
+});
+
+// Mount extracted route modules (protected)
+const adminApiRouter = express.Router();
+adminApiRouter.use(requireApiKey);
+adminApiRouter.use(createTaskRoutes({ queue, workspaceRoot: WORKSPACE_ROOT }));
+adminApiRouter.use(createReviewRoutes({ queue, db: ctx.db, workspaceRoot: WORKSPACE_ROOT }));
+adminApiRouter.use(createAgentRoutes({ registry, queue }));
+adminApiRouter.use(createSSERoutes({ queue }));
+app.use('/admin', adminApiRouter);
 
 // Tool Routing - Dynamic dispatch to ToolHandler methods
 const VALID_TOOLS = [
@@ -155,7 +172,7 @@ const VALID_TOOLS = [
 
 type ToolName = typeof VALID_TOOLS[number];
 
-app.post('/mcp/tools/:toolName', async (req, res) => {
+app.post('/mcp/tools/:toolName', requireApiKey, async (req, res) => {
   const { toolName } = req.params;
   const args = req.body;
 
@@ -179,11 +196,6 @@ app.post('/mcp/tools/:toolName', async (req, res) => {
     ? await (method as any).call(tools, args, ctx.db)
     : await (method as any).call(tools, args);
   res.json(result);
-});
-
-// Fallback for SPA routing
-app.get('/admin/*', (req, res) => {
-  res.sendFile(path.join(WORKSPACE_ROOT, 'packages/mcp-server/public/index.html'));
 });
 
 let server: any;

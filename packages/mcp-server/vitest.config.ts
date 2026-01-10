@@ -4,7 +4,8 @@ export default defineConfig({
   test: {
     // Force in-memory database for ALL tests
     env: {
-      DB_PATH: ':memory:'
+      DB_PATH: ':memory:',
+      WAAAH_API_KEY: 'test-api-key-12345'
     },
     // Other test settings
     globals: true,

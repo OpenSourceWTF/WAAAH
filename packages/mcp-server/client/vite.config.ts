@@ -7,7 +7,7 @@ import tailwindcss from '@tailwindcss/vite'
 export default defineConfig({
   base: '/admin/',
   plugins: [react(), tailwindcss()],
-  // Allow WAAAH_* env vars to be exposed to the client (consistent with CLI/mcp-proxy)
+  // Allow WAAAH_* env vars to be exposed to the client (in addition to VITE_*)
   envPrefix: ['VITE_', 'WAAAH_'],
   resolve: {
     alias: {

@@ -2,6 +2,8 @@ import request from 'supertest';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { app, server } from '../src/server';
 
+const TEST_API_KEY = 'test-api-key-12345';
+
 // Mock the queue to isolate API testing
 vi.mock('../src/state/queue.js', () => {
   return {
@@ -39,6 +41,7 @@ describe('API POST /admin/tasks/:taskId/retry', () => {
   it('should force retry a stuck task', async () => {
     const res = await request(app)
       .post('/admin/tasks/task-stuck/retry')
+      .set('X-API-Key', TEST_API_KEY)
       .send();
 
     expect(res.status).toBe(200);
@@ -49,6 +52,7 @@ describe('API POST /admin/tasks/:taskId/retry', () => {
   it('should reject retry for completed task', async () => {
     const res = await request(app)
       .post('/admin/tasks/task-completed/retry')
+      .set('X-API-Key', TEST_API_KEY)
       .send();
 
     expect(res.status).toBe(400);
@@ -58,9 +62,20 @@ describe('API POST /admin/tasks/:taskId/retry', () => {
   it('should return 400 for non-existent task', async () => {
     const res = await request(app)
       .post('/admin/tasks/task-unknown/retry')
+      .set('X-API-Key', TEST_API_KEY)
       .send();
 
     expect(res.status).toBe(400); // code uses 400 for errors from forceRetry (Task not found returns success:false)
     expect(res.body.error).toContain('Task not found');
   });
+
+  it('should reject request without API key', async () => {
+    const res = await request(app)
+      .post('/admin/tasks/task-stuck/retry')
+      .send();
+
+    expect(res.status).toBe(401);
+    expect(res.body.error).toContain('Unauthorized');
+  });
 });
+

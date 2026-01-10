@@ -2,6 +2,7 @@ import request from 'supertest';
 import { describe, it, expect, vi, afterEach, beforeAll } from 'vitest';
 import path from 'path';
 
+const TEST_API_KEY = 'test-api-key-12345';
 const PROJECT_ROOT = path.resolve(process.cwd(), '../..');
 
 // Mock context.js to use in-memory database with proper queue mock
@@ -77,7 +78,9 @@ describe('Tasks API Integration', () => {
 
   describe('GET /admin/tasks (unified endpoint)', () => {
     it('should pass search param "q" to generic search', async () => {
-      const res = await request(app).get('/admin/tasks?q=bug&limit=10');
+      const res = await request(app)
+        .get('/admin/tasks?q=bug&limit=10')
+        .set('X-API-Key', TEST_API_KEY);
       expect(res.status).toBe(200);
       const result = res.body[0];
       expect(result.id).toBe('mock-task');
@@ -86,21 +89,27 @@ describe('Tasks API Integration', () => {
     });
 
     it('should pass status filter', async () => {
-      const res = await request(app).get('/admin/tasks?status=FAILED');
+      const res = await request(app)
+        .get('/admin/tasks?status=FAILED')
+        .set('X-API-Key', TEST_API_KEY);
       expect(res.status).toBe(200);
       const result = res.body[0];
       expect(result.opts.status).toBe('FAILED');
     });
 
     it('should pass agentId filter', async () => {
-      const res = await request(app).get('/admin/tasks?agentId=agent-123');
+      const res = await request(app)
+        .get('/admin/tasks?agentId=agent-123')
+        .set('X-API-Key', TEST_API_KEY);
       expect(res.status).toBe(200);
       const result = res.body[0];
       expect(result.opts.agentId).toBe('agent-123');
     });
 
     it('should support pagination with limit and offset', async () => {
-      const res = await request(app).get('/admin/tasks?limit=20&offset=10');
+      const res = await request(app)
+        .get('/admin/tasks?limit=20&offset=10')
+        .set('X-API-Key', TEST_API_KEY);
       expect(res.status).toBe(200);
       const result = res.body[0];
       expect(result.opts.limit).toBe(20);
@@ -110,9 +119,12 @@ describe('Tasks API Integration', () => {
 
   describe('GET /admin/tasks/history (deprecated, redirects)', () => {
     it('should redirect to /admin/tasks with query params preserved', async () => {
-      const res = await request(app).get('/admin/tasks/history?status=COMPLETED&limit=5');
+      const res = await request(app)
+        .get('/admin/tasks/history?status=COMPLETED&limit=5')
+        .set('X-API-Key', TEST_API_KEY);
       expect(res.status).toBe(301);
       expect(res.headers.location).toContain('/admin/tasks');
     });
   });
 });
+

@@ -1,14 +1,8 @@
 import request from 'supertest';
 import { describe, it, expect, vi, afterEach, beforeAll } from 'vitest';
 import path from 'path';
-// import { fileURLToPath } from 'url'; // Vitest might parse __dirname automatically or we use path.resolve
 
-// const __dirname = path.dirname(fileURLToPath(import.meta.url)); 
-// In Vitest environment, __dirname might be available if using CJS transform or similar, but let's assume standard ESM needing fix or process.cwd()
-// Actually, process.cwd() in test is packages/mcp-server. 
-// We want WORKSPACE_ROOT to be /home/dtai/projects/WAAAH 
-// i.e. process.cwd() + ../..
-
+const TEST_API_KEY = 'test-api-key-12345';
 const PROJECT_ROOT = path.resolve(process.cwd(), '../..');
 
 // Mock dependencies
@@ -59,11 +53,18 @@ describe('SPA Routing Integration', () => {
     if (server) server.close();
   });
 
-  it('should serve API response for /admin/tasks', async () => {
-    const res = await request(app).get('/admin/tasks');
+  it('should serve API response for /admin/tasks with API key', async () => {
+    const res = await request(app)
+      .get('/admin/tasks')
+      .set('X-API-Key', TEST_API_KEY);
     expect(res.status).toBe(200);
     expect(res.headers['content-type']).toMatch(/json/);
     expect(Array.isArray(res.body)).toBe(true);
+  });
+
+  it('should reject /admin/tasks without API key', async () => {
+    const res = await request(app).get('/admin/tasks');
+    expect(res.status).toBe(401);
   });
 
   it('should serve HTML for SPA routes like /admin/dashboard', async () => {
@@ -78,3 +79,4 @@ describe('SPA Routing Integration', () => {
     expect(res.headers['content-type']).toMatch(/html/);
   });
 });
+

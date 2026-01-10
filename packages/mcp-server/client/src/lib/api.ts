@@ -2,12 +2,12 @@
  * API utilities for the admin dashboard
  * 
  * Handles API key authentication via environment variables.
- * Uses WAAAH_API_KEY (exposed via Vite's envPrefix config)
+ * Vite loads from root .env (configured via envDir in vite.config.ts)
  */
 
-// Vite exposes WAAAH_* env vars via import.meta.env
+// WAAAH_API_KEY is loaded from root .env file
 const API_KEY = import.meta.env.WAAAH_API_KEY || '';
-const BASE_URL = import.meta.env.WAAAH_SERVER_URL || 'http://localhost:3000';
+const BASE_URL = import.meta.env.WAAAH_SERVER_URL || '';
 
 /**
  * Make an authenticated fetch request
