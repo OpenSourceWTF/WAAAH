@@ -5,7 +5,6 @@
 export {
   LoopDetector,
   type LoopDetectionResult,
-  type LoopExitCallback,
 } from './loop-detector.js';
 
 export {
