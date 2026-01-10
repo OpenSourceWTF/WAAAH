@@ -4,8 +4,11 @@
 
 export {
   LoopDetector,
+  LoopState,
   type LoopDetectionResult,
-  type LoopExitCallback,
+  type LoopDetectorOptions,
+  type LoopEventType,
+  type LoopEventHandler,
 } from './loop-detector.js';
 
 export {
@@ -14,3 +17,4 @@ export {
   type RestartEventType,
   type RestartHandlerOptions,
 } from './restart-handler.js';
+
