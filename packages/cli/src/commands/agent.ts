@@ -203,11 +203,13 @@ export const agentCommand = new Command('agent')
   .option('--as <workflow>', 'Workflow to run', DEFAULT_WORKFLOW)
   .option('--resume', 'Resume previous session', false)
   .option('--max-restarts <n>', 'Maximum restart attempts', String(MAX_RESTARTS))
+  .option('--server <url>', 'WAAAH MCP Server URL', 'http://localhost:3000')
   .action(async (options: {
     start: string;
     as: string;
     resume: boolean;
     maxRestarts: string;
+    server: string;
   }) => {
     try {
       const cli = options.start.toLowerCase();
