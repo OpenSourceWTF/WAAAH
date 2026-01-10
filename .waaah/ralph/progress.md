@@ -67,11 +67,32 @@ return ['--dangerously-skip-permissions', prompt];
 
 ---
 
+## Iteration 2: Parsing & Robustness
+
+### Changes Made
+1. **Enhanced Ctrl+C Detection** (`base.ts`)
+   - Improved detection to check `data.includes(0x03)` instead of strict length check.
+   - Ensures robust shutdown even if 0x03 is part of a larger buffer.
+
+2. **Parsing Logic Fix** (`manager.ts`)
+   - Added ANSI code stripping to `startHeartbeat` prompt detection.
+   - Prevents prompt detection failures when output contains color codes.
+
+3. **Package Scripts**
+   - Added `typecheck` and `test` scripts to `packages/cli-wrapper/package.json` for easier verification.
+
+### Verification
+- ✅ **Tests**: All 104 tests passed.
+- ✅ **Typecheck**: Passed.
+- ✅ **Code Review**: Verified changes in `base.ts` and `manager.ts`.
+
+---
+
 ## ✅ COMPLETE
 
 Both issues addressed:
-1. ✅ **Ctrl+C fixed** - Raw mode now detects 0x03 and emits SIGINT
-2. ✅ **Parsing fixed** - Claude CLI now uses correct args
+1. ✅ **Ctrl+C fixed** - Raw mode now detects 0x03 (robustly) and emits SIGINT.
+2. ✅ **Parsing fixed** - ANSI codes stripped before pattern matching; Claude args fixed in Iter 1.
 
 All criteria are at 10/10!
 
@@ -79,3 +100,4 @@ All criteria are at 10/10!
 |------|-------|---|
 | 0 | Ctrl+C handling | +8 correctness |
 | 1 | Claude CLI args | +2 completeness, +1 correctness |
+| 2 | Robustness & Parsing | +1 completeness (ANSI) |
