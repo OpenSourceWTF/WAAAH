@@ -11,3 +11,10 @@ export {
   type DoctorState,
   type ChangeCheckResult,
 } from './git-poller.js';
+
+export {
+  HealthReportGenerator,
+  type HealthReportData,
+  type HealthIssue,
+  type CreatedTask,
+} from './health-report.js';
