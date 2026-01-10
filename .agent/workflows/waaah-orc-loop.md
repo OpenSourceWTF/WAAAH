@@ -51,8 +51,22 @@ description: Orchestrator agent lifecycle - plan/build/verify/merge
 
 ## STARTUP
 
+**Generate a friendly display name:**
 ```
-register_agent({ capabilities: ["code-writing", "spec-writing", "test-writing", "doc-writing"] })
+ADJECTIVES = [curious, speedy, clever, gentle, mighty, nimble, brave, jolly, plucky, snappy]
+ANIMALS = [otter, panda, fox, owl, penguin, koala, bunny, duck, bee, gecko]
+NUMBER = random(10-99)
+
+NAME = pick(ADJECTIVES) + " " + pick(ANIMALS) + " " + NUMBER
+# Example: "Curious Otter 42", "Jolly Penguin 17"
+```
+
+**Register:**
+```
+register_agent({
+  displayName: NAME,
+  capabilities: ["code-writing", "spec-writing", "test-writing", "doc-writing"]
+})
 AGENT_ID = response.agentId
 → MAIN LOOP
 ```

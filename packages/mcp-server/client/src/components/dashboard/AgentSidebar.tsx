@@ -52,8 +52,13 @@ export function AgentSidebar({
   const getIndicatorColor = useCallback((agent: Agent) => {
     if (agent.status === 'OFFLINE') return 'border-gray-600 bg-gray-600/10 opacity-50';
     if (agent.status === 'PROCESSING') return 'border-cyan-400 bg-cyan-400/20 animate-working-pulse shadow-[0_0_12px_rgba(34,211,238,0.4)]';
+    // WAITING agents are healthy - they're just polling for tasks
+    if (agent.status === 'WAITING') return 'border-green-500 bg-green-500/30';
     const lastSeenMs = agent.lastSeen ? Date.now() - agent.lastSeen : Infinity;
-    if (lastSeenMs > 60000) return 'border-red-500 bg-red-500/20';
+    // Only show red if truly stale (>5 min without heartbeat)
+    if (lastSeenMs > 300000) return 'border-red-500 bg-red-500/20';
+    // Yellow warning if between 1-5 min
+    if (lastSeenMs > 60000) return 'border-yellow-500 bg-yellow-500/20';
     return 'border-green-500 bg-green-500/30';
   }, []);
 
@@ -189,24 +194,32 @@ export function AgentSidebar({
                   onClick={() => toggleAgentPin(agent.id)}
                 >
                   {/* Collapsed Card Header */}
-                  <div className="p-2 flex items-center gap-2">
-                    <div className={`w-8 h-8 border-2 rounded-sm flex items-center justify-center shrink-0 ${getIndicatorColor(agent)}`}>
-                      <span className="text-xs font-bold text-foreground">{getInitials(agent)}</span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-sm text-primary truncate">{agent.displayName || agent.id}</span>
-                        {pinnedAgents.has(agent.id) && <Pin className="h-3 w-3 text-primary shrink-0" />}
+                  <div className="p-2">
+                    {/* Row 1: Avatar + Name + Status */}
+                    <div className="flex items-start gap-2 mb-1">
+                      <div className={`w-8 h-8 border-2 rounded-sm flex items-center justify-center shrink-0 ${getIndicatorColor(agent)}`}>
+                        <span className="text-xs font-bold text-foreground">{getInitials(agent)}</span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] text-primary/60 font-mono">[{agent.role}]</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="font-bold text-sm text-primary leading-tight" style={{ wordBreak: 'break-word' }}>
+                            {agent.displayName || agent.id}
+                          </span>
+                          {pinnedAgents.has(agent.id) && <Pin className="h-3 w-3 text-primary shrink-0" />}
+                        </div>
+                      </div>
+                      {isExpanded
+                        ? <ChevronUp className="h-4 w-4 text-primary shrink-0 mt-1" />
+                        : <ChevronDown className="h-4 w-4 text-primary/50 shrink-0 mt-1" />}
+                    </div>
+                    {/* Row 2: Role + Source + Status */}
+                    <div className="flex items-center justify-between gap-2 pl-10">
+                      <div className="flex items-center gap-1 min-w-0">
+                        {agent.role && <span className="text-[10px] text-primary/60 font-mono truncate">[{agent.role}]</span>}
                         {getSourceBadge(agent.source)}
                       </div>
+                      <Badge className={`${getStatusBadgeClass(agent.status)} text-[10px] shrink-0`}>{agent.status}</Badge>
                     </div>
-                    <Badge className={`${getStatusBadgeClass(agent.status)} text-[10px] shrink-0`}>{agent.status}</Badge>
-                    {isExpanded
-                      ? <ChevronUp className="h-4 w-4 text-primary shrink-0" />
-                      : <ChevronDown className="h-4 w-4 text-primary/50 shrink-0" />}
                   </div>
 
                   {/* Expanded Content */}

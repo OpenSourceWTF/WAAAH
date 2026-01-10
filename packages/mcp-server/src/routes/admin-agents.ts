@@ -34,8 +34,11 @@ export function createAgentRoutes({ registry, queue }: AgentRoutesConfig): Route
       return {
         id: agent.id,
         displayName: agent.displayName,
+        role: agent.role || '',
+        source: agent.source,
         status,
         lastSeen,
+        createdAt: agent.createdAt,
         currentTasks: assignedTasks.map(t => t.id),
         capabilities: agent.capabilities || [],
         color: agent.color

@@ -95,7 +95,7 @@ export class AgentRepository implements IAgentRepository {
     return rows.map(r => this.mapRow(r));
   }
 
-  getAll(): (AgentIdentity & { lastSeen?: number })[] {
+  getAll(): (AgentIdentity & { lastSeen?: number; createdAt?: number })[] {
     const rows = this.db.prepare('SELECT * FROM agents ORDER BY lastSeen DESC').all() as any[];
     return rows.map(r => this.mapRow(r));
   }
@@ -204,6 +204,7 @@ export class AgentRepository implements IAgentRepository {
       capabilities: row.capabilities ? JSON.parse(row.capabilities) : [],
       color: row.color || undefined,
       lastSeen: row.lastSeen || undefined,
+      createdAt: row.createdAt || undefined,
       workspaceContext
     };
   }

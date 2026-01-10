@@ -12,6 +12,8 @@ export interface Agent {
   currentTasks?: string[];
   capabilities?: string[];
   createdAt?: number;
+  source?: 'cli' | 'ide';
+  color?: string;
 }
 
 /**
