@@ -211,10 +211,12 @@ export class MCPInjector {
         })
       };
     } else {
-      // Claude uses command-based config with npx proxy
+      // Claude uses command-based config - use local proxy from monorepo
+      // Find the monorepo root relative to this file
+      const proxyPath = path.resolve(__dirname, '../../..', 'mcp-proxy/dist/index.js');
       existingConfig.mcpServers[WAAAH_MCP_NAME] = {
-        command: 'npx',
-        args: ['@opensourcewtf/waaah-mcp-proxy', '--url', config.url],
+        command: 'node',
+        args: [proxyPath, '--url', config.url],
         ...(config.apiKey && {
           env: { WAAAH_API_KEY: config.apiKey }
         })
