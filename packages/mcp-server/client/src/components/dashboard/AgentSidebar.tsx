@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Clock, PanelLeftClose, PanelLeftOpen, Pin, Cpu, Power, ChevronDown, ChevronUp } from 'lucide-react';
+import { Clock, PanelLeftClose, PanelLeftOpen, Pin, Cpu, Power, ChevronDown, ChevronUp, Terminal, Monitor } from 'lucide-react';
 import type { TextKey } from '@/contexts/ThemeContext';
 
 interface Agent {
@@ -13,6 +13,7 @@ interface Agent {
   lastSeen?: number;
   createdAt?: number;
   capabilities?: string[];
+  source?: 'cli' | 'ide';
 }
 
 interface AgentSidebarProps {
@@ -61,6 +62,24 @@ export function AgentSidebar({
     const words = name.split(/[\s-_]+/);
     if (words.length > 1) return (words[0][0] + words[1][0]).toUpperCase();
     return name.substring(0, 2).toUpperCase();
+  }, []);
+
+  const getSourceBadge = useCallback((source?: 'cli' | 'ide') => {
+    if (source === 'cli') {
+      return (
+        <span className="inline-flex items-center gap-0.5 text-[9px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 border border-blue-500/30 font-bold">
+          <Terminal className="h-2.5 w-2.5" />CLI
+        </span>
+      );
+    }
+    if (source === 'ide') {
+      return (
+        <span className="inline-flex items-center gap-0.5 text-[9px] bg-purple-500/20 text-purple-400 px-1.5 py-0.5 border border-purple-500/30 font-bold">
+          <Monitor className="h-2.5 w-2.5" />IDE
+        </span>
+      );
+    }
+    return null;
   }, []);
 
   return (
@@ -122,7 +141,10 @@ export function AgentSidebar({
                     <div className="bg-card border-2 border-primary p-3 shadow-lg shadow-primary/20 min-w-[200px] max-w-[280px]">
                       <div className="flex items-center justify-between gap-2 mb-2">
                         <span className="font-bold text-sm text-primary truncate">{agent.displayName || agent.id}</span>
-                        <Badge className={`${getStatusBadgeClass(agent.status)} text-[10px] shrink-0`}>{agent.status}</Badge>
+                        <div className="flex items-center gap-1">
+                          {getSourceBadge(agent.source)}
+                          <Badge className={`${getStatusBadgeClass(agent.status)} text-[10px] shrink-0`}>{agent.status}</Badge>
+                        </div>
                       </div>
                       <div className="text-xs text-primary/60 font-mono mb-2">[{agent.role}]</div>
                       {currentTask && (
@@ -176,7 +198,10 @@ export function AgentSidebar({
                         <span className="font-bold text-sm text-primary truncate">{agent.displayName || agent.id}</span>
                         {pinnedAgents.has(agent.id) && <Pin className="h-3 w-3 text-primary shrink-0" />}
                       </div>
-                      <div className="text-[10px] text-primary/60 font-mono">[{agent.role}]</div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-primary/60 font-mono">[{agent.role}]</span>
+                        {getSourceBadge(agent.source)}
+                      </div>
                     </div>
                     <Badge className={`${getStatusBadgeClass(agent.status)} text-[10px] shrink-0`}>{agent.status}</Badge>
                     {isExpanded
