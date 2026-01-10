@@ -160,7 +160,7 @@ export abstract class BaseAgent {
       env: { ...process.env, FORCE_COLOR: '1' },
       cols: process.stdout.columns || 80,
       rows: process.stdout.rows || 24,
-      sanitizeOutput: this.config.sanitizeOutput ?? true, // Default: strip TUI sequences
+      sanitizeOutput: this.config.sanitizeOutput ?? false, // Default: pass through (agents need TUI)
     });
 
     // Resize PTY on window resize

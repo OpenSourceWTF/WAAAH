@@ -210,15 +210,12 @@ async function runAgent(options: any) {
   });
   shutdown.install();
 
-  // 9. Start the Agent with restart support
+  // 9. Start the Agent
+  // NOTE: restartOnExit disabled - Gemini/Claude have built-in restart handling
   console.log('');
   console.log(`🤖 Starting ${agentType} agent...`);
   console.log(`   Workflow: ${workflow}`);
-  console.log(`   Restart on exit: enabled (max 10)`);
   console.log('');
-
-  // Enable restart on exit
-  agent.config.restartOnExit = 10;
 
   // Start the agent (blocks until all restarts exhausted or clean exit)
   await agent.start();
