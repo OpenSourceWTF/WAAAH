@@ -22,7 +22,14 @@ export {
   type ClaudeMCPServerConfig,
   type AgentType,
 } from './config/scanner.js';
-export { LoopDetector } from './monitor/loop-detector.js';
+export {
+  LoopDetector,
+  LoopState,
+  type LoopDetectionResult,
+  type LoopDetectorOptions,
+  type LoopEventType,
+  type LoopEventHandler,
+} from './monitor/loop-detector.js';
 export { GitUtils } from './utils/git.js';
 export { Logger } from './utils/logger.js';
 
