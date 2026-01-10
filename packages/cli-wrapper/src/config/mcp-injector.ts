@@ -174,6 +174,7 @@ export class MCPInjector {
    * 
    * @param agentType - The agent type
    * @param config - MCP server configuration
+   * @param proxyMethod - How to invoke the proxy: 'global' (waaah-proxy) or 'npx' (npx @opensourcewtf/waaah-mcp-proxy)
    * @returns Promise resolving to the backup path (if created)
    * 
    * @throws {Error} If the config file cannot be written
@@ -183,11 +184,15 @@ export class MCPInjector {
    * const backupPath = await injector.inject('gemini', {
    *   url: 'http://localhost:3000',
    *   apiKey: 'optional-key'
-   * });
+   * }, 'global');
    * console.log('Backup created at:', backupPath);
    * ```
    */
-  public async inject(agentType: AgentType, config: MCPServerConfig): Promise<string | null> {
+  public async inject(
+    agentType: AgentType,
+    config: MCPServerConfig,
+    proxyMethod: 'global' | 'npx' = 'global'
+  ): Promise<string | null> {
     const configPath = this.getConfigPath(agentType);
 
     // Create backup before modifying
@@ -201,15 +206,26 @@ export class MCPInjector {
       existingConfig.mcpServers = {};
     }
 
-    // Create the WAAAH MCP entry - both agents use command-based config
-    // Requires: pnpm link --global in packages/mcp-proxy
-    existingConfig.mcpServers[WAAAH_MCP_NAME] = {
-      command: 'waaah-proxy',
-      args: ['--url', config.url],
-      ...(config.apiKey && {
-        env: { WAAAH_API_KEY: config.apiKey }
-      })
-    };
+    // Create the WAAAH MCP entry based on proxy method
+    if (proxyMethod === 'global') {
+      // Global link: requires `pnpm link --global` in packages/mcp-proxy
+      existingConfig.mcpServers[WAAAH_MCP_NAME] = {
+        command: 'waaah-proxy',
+        args: ['--url', config.url],
+        ...(config.apiKey && {
+          env: { WAAAH_API_KEY: config.apiKey }
+        })
+      };
+    } else {
+      // npx: downloads from npm registry
+      existingConfig.mcpServers[WAAAH_MCP_NAME] = {
+        command: 'npx',
+        args: ['-y', '@opensourcewtf/waaah-mcp-proxy', '--url', config.url],
+        ...(config.apiKey && {
+          env: { WAAAH_API_KEY: config.apiKey }
+        })
+      };
+    }
 
     // Ensure directory exists
     await this.ensureDir(configPath);

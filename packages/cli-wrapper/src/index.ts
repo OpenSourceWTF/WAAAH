@@ -19,13 +19,72 @@ process.on('warning', (warning) => {
 import { Command } from 'commander';
 import * as path from 'path';
 import * as fs from 'fs';
+import * as readline from 'readline';
 import { execSync, spawn } from 'child_process';
 
 import { GeminiAgent } from './agents/gemini.js';
 import { ClaudeAgent } from './agents/claude.js';
-import { MCPInjector } from './config/mcp-injector.js';
+import { MCPInjector, type AgentType } from './config/mcp-injector.js';
 import { GitUtils } from './utils/git.js';
 import { WorkflowInjector } from './workflow/injector.js';
+
+// ─────────────────────────────────────────────────────────────
+// Helper Functions for Interactive Prompts
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Prompt user for yes/no input
+ */
+async function promptYesNo(question: string): Promise<boolean> {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+
+  return new Promise((resolve) => {
+    rl.question(question, (answer) => {
+      rl.close();
+      resolve(answer.toLowerCase().startsWith('y'));
+    });
+  });
+}
+
+/**
+ * Prompt user to choose proxy installation method
+ */
+async function promptProxyMethod(): Promise<'global' | 'npx'> {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+
+  return new Promise((resolve) => {
+    console.log('\n   How should the WAAAH proxy be invoked?');
+    console.log('   1. Global link (requires: pnpm link --global in packages/mcp-proxy)');
+    console.log('   2. npx from npm (downloads @opensourcewtf/waaah-mcp-proxy)');
+
+    rl.question('   Choose (1 or 2) [default: 1]: ', (answer) => {
+      rl.close();
+      resolve(answer.trim() === '2' ? 'npx' : 'global');
+    });
+  });
+}
+
+/**
+ * Configure MCP with interactive prompts
+ */
+async function configureMcp(
+  injector: MCPInjector,
+  agentType: AgentType,
+  serverUrl: string
+): Promise<void> {
+  const method = await promptProxyMethod();
+
+  console.log(`\n   Configuring WAAAH MCP (${method === 'global' ? 'global link' : 'npx from npm'})...`);
+
+  await injector.inject(agentType, { url: serverUrl }, method);
+  console.log('   ✅ MCP configured.');
+}
 
 // Re-exports for library usage
 export { BaseAgent } from './agents/base.js';
@@ -125,10 +184,21 @@ async function launchAgent(options: any) {
     const injector = new MCPInjector();
     const hasConfig = await injector.hasWaaahConfig(agentType as 'gemini' | 'claude');
 
-    if (!hasConfig) {
-      console.log('\n⚙️  Configuring WAAAH MCP...');
-      await injector.inject(agentType as 'gemini' | 'claude', { url: server });
-      console.log('✅ MCP configured.');
+    if (hasConfig) {
+      // Prompt user about overwriting
+      const currentConfig = await injector.getWaaahConfig(agentType as 'gemini' | 'claude');
+      console.log(`\n📋 Existing WAAAH MCP config found:`);
+      console.log(`   URL: ${currentConfig?.url || 'unknown'}`);
+
+      const overwrite = await promptYesNo('   Overwrite with new settings? (y/n): ');
+      if (!overwrite) {
+        console.log('   Keeping existing config.');
+      } else {
+        await configureMcp(injector, agentType as 'gemini' | 'claude', server);
+      }
+    } else {
+      console.log('\n⚙️  WAAAH MCP not configured.');
+      await configureMcp(injector, agentType as 'gemini' | 'claude', server);
     }
   }
 
