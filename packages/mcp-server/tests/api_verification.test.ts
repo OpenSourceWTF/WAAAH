@@ -100,16 +100,18 @@ vi.mock('../src/mcp/tools.js', () => {
 
 import { app, server } from '../src/server';
 
+const TEST_API_KEY = 'test-api-key-12345';
+
 describe('API Verification: Activity Feed & Controls', () => {
   afterEach(() => {
     if (server) server.close();
   });
 
-  const API_KEY = 'test-api-key-12345';
-
   describe('GET /admin/logs', () => {
     it('should return a list of logs', async () => {
-      const res = await request(app).get('/admin/logs').set('x-api-key', API_KEY);
+      const res = await request(app)
+        .get('/admin/logs')
+        .set('x-api-key', TEST_API_KEY);
       expect(res.status).toBe(200);
       expect(Array.isArray(res.body)).toBe(true);
       expect(res.body.length).toBe(2);
@@ -119,13 +121,17 @@ describe('API Verification: Activity Feed & Controls', () => {
 
   describe('POST /admin/tasks/:taskId/cancel', () => {
     it('should cancel a queued task', async () => {
-      const res = await request(app).post('/admin/tasks/task-queued/cancel').set('x-api-key', API_KEY);
+      const res = await request(app)
+        .post('/admin/tasks/task-queued/cancel')
+        .set('x-api-key', TEST_API_KEY);
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
     });
 
     it('should fail to cancel a completed task', async () => {
-      const res = await request(app).post('/admin/tasks/task-completed/cancel').set('x-api-key', API_KEY);
+      const res = await request(app)
+        .post('/admin/tasks/task-completed/cancel')
+        .set('x-api-key', TEST_API_KEY);
       expect(res.status).toBe(400);
       expect(res.body.error).toBe('Cannot cancel completed task');
     });
@@ -135,7 +141,7 @@ describe('API Verification: Activity Feed & Controls', () => {
     it('should queue eviction for an agent', async () => {
       const res = await request(app)
         .post('/admin/evict')
-        .set('x-api-key', API_KEY)
+        .set('x-api-key', TEST_API_KEY)
         .send({ agentId: 'agent-1', reason: 'Test' });
 
       expect(res.status).toBe(200);
@@ -144,7 +150,10 @@ describe('API Verification: Activity Feed & Controls', () => {
     });
 
     it('should validate missing agentId', async () => {
-      const res = await request(app).post('/admin/evict').set('x-api-key', API_KEY).send({ reason: 'Test' });
+      const res = await request(app)
+        .post('/admin/evict')
+        .set('x-api-key', TEST_API_KEY)
+        .send({ reason: 'Test' });
       expect(res.status).toBe(400);
     });
   });
@@ -153,7 +162,7 @@ describe('API Verification: Activity Feed & Controls', () => {
     it('should request eviction for known agent', async () => {
       const res = await request(app)
         .post('/admin/agents/agent-1/evict')
-        .set('x-api-key', API_KEY)
+        .set('x-api-key', TEST_API_KEY)
         .send({ reason: 'Test' });
 
       expect(res.status).toBe(200);
@@ -163,7 +172,7 @@ describe('API Verification: Activity Feed & Controls', () => {
     it('should return 404 for unknown agent', async () => {
       const res = await request(app)
         .post('/admin/agents/unknown-agent/evict')
-        .set('x-api-key', API_KEY)
+        .set('x-api-key', TEST_API_KEY)
         .send({ reason: 'Test' });
 
       expect(res.status).toBe(404);
