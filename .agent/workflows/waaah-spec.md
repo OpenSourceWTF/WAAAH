@@ -90,18 +90,27 @@ WHILE score < 10:
    - Group by feature area
    - Order by dependencies
    - Estimate: S/M/L
+   - REQUIRED: Add `verify:` command (shell command that fails if incomplete)
 
 2. Display:
    "Tasks:
-    T1: [title] - [size] - deps: none
-    T2: [title] - [size] - deps: T1"
+    T1: [title] - [size] - deps: none - verify: [command]
+    T2: [title] - [size] - deps: T1 - verify: [command]"
 
 3. On confirm, assign ALL with dependencies:
-   t1_id = assign_task({ prompt: "..." })
-   t2_id = assign_task({ prompt: "...", dependencies: [t1_id] })
+   t1_id = assign_task({ prompt: "...", verify: "[smoke command]" })
+   t2_id = assign_task({ prompt: "...", dependencies: [t1_id], verify: "..." })
 
-4. Report: "✅ Spec saved. [N] tasks queued."
+4. Report: "✅ Spec saved. [N] tasks queued with smoke tests."
 ```
+
+### Verify Command Examples
+
+| Task Type | Verify Command |
+|-----------|----------------|
+| CLI | `node dist/index.js --help \| grep "expected"` |
+| API | `curl -s localhost:3000/health \| jq .status` |
+| Component | `pnpm test -- ComponentName` |
 
 ---
 

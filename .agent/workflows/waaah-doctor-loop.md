@@ -138,6 +138,15 @@ Search for same names in other files
 IF found → violation
 ```
 
+### Stubs (Anti-Stub Protocol)
+```bash
+patterns="TODO|Not implemented|pending|🚧"
+grep -rE "$patterns" FILE
+IF found → violation("stub", high)
+```
+
+**Stub violations get high priority** - they indicate incomplete work that was marked done.
+
 ---
 
 ## STATE

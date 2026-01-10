@@ -214,9 +214,31 @@ git branch -D $BRANCH
 git push origin --delete $BRANCH
 ```
 
-**Verify push succeeded before completing:**
+---
+
+## 🚫 SMOKE GATE (Anti-Stub Protocol)
+
+**BEFORE `send_response({ status: "COMPLETED" })`:**
+
 ```
-IF push failed → block_task
-ELSE → send_response({ status: "COMPLETED" })
+1. READ task.verify from context
+   IF verify exists:
+     RUN verify command
+     IF exit_code != 0:
+       DISPLAY "❌ Smoke failed: [output]"
+       DO NOT send COMPLETED
+       CONTINUE fixing
+     
+2. GRUMPY TEST:
+   Ask: "Can a stranger run [main command] and see [expected output]?"
+   IF no → task is NOT complete
+   IF yes → proceed
+
+3. STUB CHECK:
+   RUN: grep -r "TODO\|Not implemented\|pending" [modified files]
+   IF found → task is NOT complete
+
+4. All checks pass → send_response({ status: "COMPLETED" })
 ```
+
 → MAIN LOOP
