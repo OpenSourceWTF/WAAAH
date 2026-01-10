@@ -11,6 +11,12 @@ export { BaseAgent } from './agents/base.js';
 export { GeminiAgent } from './agents/gemini.js';
 export { PTYManager } from './pty/manager.js';
 export { SessionManager } from './session/manager.js';
+export {
+  CrashRecovery,
+  RecoveryStatus,
+  type RecoveryResult,
+  type CrashSession,
+} from './session/recovery.js';
 export { MCPInjector } from './config/mcp-injector.js';
 export {
   scanMCPConfig,
