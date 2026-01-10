@@ -182,19 +182,24 @@ async function launchAgent(options: any) {
   // 4. MCP Configuration
   if (!skipMcp) {
     const injector = new MCPInjector();
-    const hasConfig = await injector.hasWaaahConfig(agentType as 'gemini' | 'claude');
+    const currentConfig = await injector.getWaaahConfig(agentType as 'gemini' | 'claude');
 
-    if (hasConfig) {
-      // Prompt user about overwriting
-      const currentConfig = await injector.getWaaahConfig(agentType as 'gemini' | 'claude');
-      console.log(`\n📋 Existing WAAAH MCP config found:`);
-      console.log(`   URL: ${currentConfig?.url || 'unknown'}`);
-
-      const overwrite = await promptYesNo('   Overwrite with new settings? (y/n): ');
-      if (!overwrite) {
-        console.log('   Keeping existing config.');
+    if (currentConfig) {
+      // Check if URL matches what we want
+      if (currentConfig.url === server) {
+        console.log(`\n✅ WAAAH MCP already configured (${server})`);
       } else {
-        await configureMcp(injector, agentType as 'gemini' | 'claude', server);
+        // URL mismatch - prompt user
+        console.log(`\n⚠️  WAAAH MCP config mismatch:`);
+        console.log(`   Current: ${currentConfig.url}`);
+        console.log(`   Expected: ${server}`);
+
+        const overwrite = await promptYesNo('   Update to new URL? (y/n): ');
+        if (!overwrite) {
+          console.log('   Keeping existing config.');
+        } else {
+          await configureMcp(injector, agentType as 'gemini' | 'claude', server);
+        }
       }
     } else {
       console.log('\n⚙️  WAAAH MCP not configured.');
