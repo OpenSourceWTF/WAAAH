@@ -143,6 +143,16 @@ body,
   background: hsl(var(--border));
 }
 
+/* Hide scrollbar utility */
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
 /* Theme-aware background utilities for light/dark mode compatibility */
 .bg-surface {
   background-color: hsl(var(--muted));

@@ -132,7 +132,7 @@ export class HybridScheduler {
    * Step 2: Proactively assign ALL QUEUED tasks to waiting agents
    */
   private assignPendingTasks(): void {
-    const queuedTasks = this.queue.getByStatuses(['QUEUED', 'APPROVED'])
+    const queuedTasks = this.queue.getByStatuses(['QUEUED', 'APPROVED_QUEUED'])
       .sort((a: Task, b: Task) => {
         const pScores: Record<string, number> = { critical: 3, high: 2, normal: 1 };
         const scoreA = pScores[a.priority] || 1;

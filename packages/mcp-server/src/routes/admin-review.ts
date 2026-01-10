@@ -50,10 +50,10 @@ export function createReviewRoutes({ queue, db, workspaceRoot }: ReviewRoutesCon
         return;
       }
 
-      queue.addMessage(taskId, 'system', 'Task approved. Agent should merge to main and cleanup.');
-      queue.updateStatus(taskId, 'APPROVED');
+      queue.addMessage(taskId, 'system', 'Task approved. Queued for agent to merge and cleanup.');
+      queue.updateStatus(taskId, 'APPROVED_QUEUED');
 
-      res.json({ success: true, message: 'Task approved. Awaiting agent merge.' });
+      res.json({ success: true, message: 'Task approved and queued for merge.' });
     } catch (e: any) {
       console.error(`Approve failed for ${taskId}:`, e.message);
       res.status(500).json({ error: 'Failed to approve task', details: e.message });
@@ -76,9 +76,11 @@ export function createReviewRoutes({ queue, db, workspaceRoot }: ReviewRoutesCon
         queue.addMessage(taskId, 'system', 'Task rejected. See review comments for details.');
       }
 
-      queue.updateStatus(taskId, 'IN_PROGRESS');
+      // Set to REJECTED for audit trail, then immediately to QUEUED for restart
+      queue.updateStatus(taskId, 'REJECTED');
+      queue.updateStatus(taskId, 'QUEUED');
 
-      res.json({ success: true, message: 'Task rejected and returned to agent' });
+      res.json({ success: true, message: 'Task rejected and returned to queue' });
     } catch (e: any) {
       console.error(`Reject failed for ${taskId}:`, e.message);
       res.status(500).json({ error: 'Failed to reject task', details: e.message });

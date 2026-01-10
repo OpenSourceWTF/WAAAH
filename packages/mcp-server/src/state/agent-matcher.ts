@@ -256,7 +256,7 @@ export function findPendingTaskForAgent(
   workspaceContext?: WaitingAgent['workspaceContext'],
   getTask?: (taskId: string) => Task | undefined
 ): Task | undefined {
-  const candidates = queue.getByStatuses(['QUEUED', 'APPROVED']);
+  const candidates = queue.getByStatuses(['QUEUED', 'APPROVED_QUEUED']);
 
   // Filter out tasks with unsatisfied dependencies
   const eligibleCandidates = candidates.filter(task => {

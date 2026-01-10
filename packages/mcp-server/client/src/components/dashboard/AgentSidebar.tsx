@@ -98,7 +98,7 @@ export function AgentSidebar({
 
       {/* Collapsed View: Agent Indicators */}
       {!(isSidebarExpanded || isSidebarPinned) && (
-        <div className="flex-1 overflow-hidden py-2 px-2">
+        <div className="flex-1 overflow-hidden py-2 px-2 scrollbar-none">
           <div className="flex flex-col items-center gap-2">
             {agents.length === 0 && (
               <div className="w-10 h-10 border-2 border-dashed border-primary/30 rounded-sm flex items-center justify-center">
@@ -146,7 +146,7 @@ export function AgentSidebar({
 
       {/* Expanded View: Full Agent Cards */}
       {(isSidebarExpanded || isSidebarPinned) && (
-        <div className="flex-1 overflow-hidden p-3">
+        <div className="flex-1 overflow-y-auto scrollbar-none p-3">
           <div className="space-y-2">
             {agents.length === 0 && (
               <div className="w-full p-3 border-2 border-dashed border-primary/30 rounded-sm flex items-center justify-center">

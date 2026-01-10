@@ -443,7 +443,7 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
    * Prioritizes tasks that were previously assigned to this agent (affinity on feedback).
    */
   private findPendingTaskForAgent(agentId: string, capabilities: StandardCapability[]): Task | undefined {
-    const candidates = this.repo.getByStatuses(['QUEUED', 'APPROVED']);
+    const candidates = this.repo.getByStatuses(['QUEUED', 'APPROVED_QUEUED']);
 
     // Filter out tasks with unsatisfied dependencies
     const eligibleCandidates = candidates.filter(task => {

@@ -26,15 +26,26 @@ export const ALL_CAPABILITIES: StandardCapability[] = [
  * Tracks the lifecycle of a task from creation to completion or failure.
  */
 export const TaskStatus = z.enum([
+  // Queue states
   'QUEUED',
   'PENDING_ACK',
+
+  // Work states
   'ASSIGNED',
   'IN_PROGRESS',
+  'BLOCKED',
+
+  // Review states
   'IN_REVIEW',
-  'APPROVED',
+  'REJECTED',              // Explicit rejection → transitions to QUEUED
+
+  // Approval queue states
+  'APPROVED_QUEUED',       // User approved, waiting for agent pickup
+  'APPROVED_PENDING_ACK',  // Agent picked up, waiting for ack
+
+  // Terminal states
   'COMPLETED',
   'FAILED',
-  'BLOCKED',
   'CANCELLED'
 ]);
 export type TaskStatus = z.infer<typeof TaskStatus>;

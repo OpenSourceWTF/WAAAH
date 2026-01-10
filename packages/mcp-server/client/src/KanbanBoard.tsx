@@ -167,7 +167,7 @@ export const KanbanBoard = React.memo(function KanbanBoard({
 
       {/* Kanban Columns */}
       {COLUMNS.map(col => (
-        <div key={col.id} className="flex-shrink-0 w-72 min-w-[280px] flex flex-col border-2 border-primary/30">
+        <div key={col.id} className="flex-1 min-w-[180px] flex flex-col border-2 border-primary/30">
           {/* Column Header - lighter */}
           <div className="flex items-center justify-between p-3 pb-2 border-b-2 border-primary/30 bg-card/80">
             <h3 className="font-bold text-sm text-primary">{col.label}</h3>
