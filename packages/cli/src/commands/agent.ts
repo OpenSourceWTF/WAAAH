@@ -14,7 +14,8 @@
 import { Command } from 'commander';
 import * as fs from 'fs';
 import * as path from 'path';
-import { spawn, ChildProcess } from 'child_process';
+import * as readline from 'readline';
+import { spawn, ChildProcess, execSync } from 'child_process';
 import { handleError } from '../utils/index.js';
 
 const SUPPORTED_CLIS = ['gemini', 'claude'] as const;
@@ -50,12 +51,144 @@ function findGitRoot(cwd: string): string | null {
 }
 
 async function checkCLIInstalled(cli: SupportedCLI): Promise<boolean> {
-  const { execSync } = await import('child_process');
   try {
     execSync(`which ${cli}`, { stdio: 'pipe' });
     return true;
   } catch {
     return false;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// MCP Configuration
+// ─────────────────────────────────────────────────────────────
+
+type AgentType = 'gemini' | 'claude';
+
+function getConfigPath(agentType: AgentType): string {
+  const home = process.env.HOME || '';
+  return agentType === 'gemini'
+    ? `${home}/.gemini/settings.json`
+    : `${home}/.claude/claude_desktop_config.json`;
+}
+
+function getMcpConfig(agentType: AgentType): { url: string } | null {
+  try {
+    const configPath = getConfigPath(agentType);
+    const content = fs.readFileSync(configPath, 'utf-8');
+    const config = JSON.parse(content);
+    const waaah = config.mcpServers?.waaah;
+    if (!waaah) return null;
+
+    // Extract URL from args
+    if (waaah.args) {
+      const urlIdx = waaah.args.indexOf('--url');
+      if (urlIdx !== -1 && waaah.args[urlIdx + 1]) {
+        return { url: waaah.args[urlIdx + 1] };
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function isProxyInstalled(): boolean {
+  try {
+    execSync('which waaah-proxy', { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function promptYesNo(question: string): Promise<boolean> {
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise((resolve) => {
+    rl.question(question, (answer) => {
+      rl.close();
+      resolve(answer.toLowerCase().startsWith('y'));
+    });
+  });
+}
+
+function promptChoice(question: string): Promise<string> {
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise((resolve) => {
+    rl.question(question, (answer) => {
+      rl.close();
+      resolve(answer.trim());
+    });
+  });
+}
+
+async function configureMcp(agentType: AgentType, serverUrl: string): Promise<void> {
+  // Check if proxy is installed
+  const installed = isProxyInstalled();
+  let proxyMethod: 'global' | 'npx' = 'global';
+
+  if (!installed) {
+    console.log('\n   ⚠️  waaah-proxy is not globally installed.');
+    console.log('   1. Install globally now (npm install -g @opensourcewtf/waaah-mcp-proxy)');
+    console.log('   2. Use npx each time (slower)');
+    const choice = await promptChoice('   Choose (1 or 2) [default: 1]: ');
+
+    if (choice === '2') {
+      proxyMethod = 'npx';
+    } else {
+      console.log('   📦 Installing waaah-proxy globally...');
+      try {
+        execSync('npm install -g @opensourcewtf/waaah-mcp-proxy', { stdio: 'inherit' });
+        console.log('   ✅ Installed!');
+      } catch {
+        console.log('   ❌ Install failed. Using npx.');
+        proxyMethod = 'npx';
+      }
+    }
+  } else {
+    console.log('   ✅ waaah-proxy is installed globally');
+  }
+
+  // Build config
+  const configPath = getConfigPath(agentType);
+  let config: any = {};
+  try {
+    config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+  } catch { /* new file */ }
+
+  config.mcpServers = config.mcpServers || {};
+
+  if (proxyMethod === 'global') {
+    config.mcpServers.waaah = {
+      command: 'waaah-proxy',
+      args: ['--url', serverUrl]
+    };
+  } else {
+    config.mcpServers.waaah = {
+      command: 'npx',
+      args: ['-y', '@opensourcewtf/waaah-mcp-proxy', '--url', serverUrl]
+    };
+  }
+
+  fs.mkdirSync(path.dirname(configPath), { recursive: true });
+  fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+  console.log(`   ✅ MCP configured (${serverUrl})`);
+}
+
+async function ensureMcpConfig(agentType: AgentType, serverUrl: string): Promise<void> {
+  const current = getMcpConfig(agentType);
+
+  if (!current) {
+    console.log('\n⚙️  WAAAH MCP not configured.');
+    await configureMcp(agentType, serverUrl);
+  } else if (current.url !== serverUrl) {
+    console.log(`\n⚠️  MCP URL mismatch: ${current.url} vs ${serverUrl}`);
+    const update = await promptYesNo('   Update config? (y/n): ');
+    if (update) {
+      await configureMcp(agentType, serverUrl);
+    }
+  } else {
+    console.log(`\n✅ MCP configured (${serverUrl})`);
   }
 }
 
@@ -243,7 +376,12 @@ export const agentCommand = new Command('agent')
       console.log(`   CLI: ${cli}`);
       console.log(`   Workflow: ${options.as}`);
       console.log(`   Workspace: ${workspaceRoot}`);
-      console.log(`   Max restarts: ${options.maxRestarts}`);
+      console.log(`   Server: ${options.server}`);
+
+      // Check/configure MCP
+      await ensureMcpConfig(cli as AgentType, options.server);
+
+      console.log(`\n   Max restarts: ${options.maxRestarts}`);
 
       const runner = new AgentRunner(
         cli,
