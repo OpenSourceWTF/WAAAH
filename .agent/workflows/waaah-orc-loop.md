@@ -34,7 +34,7 @@ description: Orchestrator agent lifecycle - plan/build/verify/merge
 | `register_agent` | Startup |
 | `wait_for_prompt` | Main loop |
 | `ack_task` | On task |
-| `update_progress` | Every 2-3m |
+| `update_progress` | Every 30s or step |
 | `block_task` | When stuck |
 | `send_response` | Submit/complete |
 

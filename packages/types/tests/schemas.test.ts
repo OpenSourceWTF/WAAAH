@@ -39,7 +39,11 @@ describe('StandardCapability', () => {
 
 describe('TaskStatus', () => {
   it('accepts all valid statuses', () => {
-    const statuses = ['QUEUED', 'PENDING_ACK', 'ASSIGNED', 'IN_PROGRESS', 'IN_REVIEW', 'APPROVED', 'COMPLETED', 'FAILED', 'BLOCKED', 'CANCELLED'];
+    const statuses = [
+      'QUEUED', 'PENDING_ACK', 'ASSIGNED', 'IN_PROGRESS', 'BLOCKED',
+      'IN_REVIEW', 'REJECTED', 'APPROVED_QUEUED', 'APPROVED_PENDING_ACK',
+      'COMPLETED', 'FAILED', 'CANCELLED'
+    ];
     statuses.forEach(s => expect(TaskStatus.parse(s)).toBe(s));
   });
 

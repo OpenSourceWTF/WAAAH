@@ -27,6 +27,9 @@ export const SCHEDULER_INTERVAL_MS = 10000;
 /** Agent considered orphaned after this time offline. 5 minutes. */
 export const ORPHAN_TIMEOUT_MS = 5 * 60 * 1000;
 
+/** Task considered stale if no progress update for this long. 15 minutes. */
+export const ASSIGNED_TIMEOUT_MS = 15 * 60 * 1000;
+
 // ===== Database Constants =====
 
 /** Default port for the server. */
