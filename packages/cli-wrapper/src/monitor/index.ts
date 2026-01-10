@@ -4,7 +4,11 @@
 
 export {
   LoopDetector,
+  LoopState,
   type LoopDetectionResult,
+  type LoopDetectorOptions,
+  type LoopEventType,
+  type LoopEventHandler,
 } from './loop-detector.js';
 
 export {
