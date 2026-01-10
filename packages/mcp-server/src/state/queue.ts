@@ -24,7 +24,9 @@ import { TypedEventEmitter } from './queue-events.js';
 import { TaskRepository, type ITaskRepository } from './task-repository.js';
 import { HybridScheduler, type ISchedulerQueue, SCHEDULER_INTERVAL_MS } from './scheduler.js';
 import { EvictionService, type IEvictionService, type EvictionSignal } from './eviction-service.js';
-import { isTaskForAgent } from './agent-matcher.js';
+import { QueuePersistence } from './persistence/queue-persistence.js';
+import { SystemPromptService } from './services/system-prompt-service.js';
+import { AgentMatchingService } from './services/agent-matching-service.js';
 
 /**
  * Manages the global task queue, handling task lifecycle, assignment, and persistence.
@@ -43,6 +45,15 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
   /** Eviction service for agent eviction management */
   private readonly evictionService: IEvictionService;
 
+  /** Persistence helper for queue state */
+  private readonly persistence: QueuePersistence;
+
+  /** Service for handling system prompts */
+  private readonly systemPromptService: SystemPromptService;
+
+  /** Service for agent matching logic */
+  private readonly matchingService: AgentMatchingService;
+
   /**
    * Create a new TaskQueue instance.
    * @param databaseOrRepo - Database instance or TaskRepository (REQUIRED - no default to prevent production leaks)
@@ -59,6 +70,11 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
       this.db = databaseOrRepo as Database;
     }
 
+    // Initialize helpers and services
+    this.persistence = new QueuePersistence(this.db);
+    this.systemPromptService = new SystemPromptService(this.db);
+    this.matchingService = new AgentMatchingService(this.repo, this.persistence);
+
     // Initialize scheduler with this queue (implements ISchedulerQueue directly)
     this.scheduler = new HybridScheduler(this);
 
@@ -69,94 +85,6 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
     this.resetStaleState();
   }
 
-  // ===== Database-backed state helpers =====
-
-  /**
-   * Get pending ACKs from database (replaces in-memory map).
-   */
-  private getPendingAcksFromDB(): Map<string, { taskId: string; agentId: string; sentAt: number }> {
-    const rows = this.db.prepare(
-      'SELECT id, pendingAckAgentId, ackSentAt FROM tasks WHERE status = ? AND pendingAckAgentId IS NOT NULL'
-    ).all('PENDING_ACK') as any[];
-
-    const map = new Map<string, { taskId: string; agentId: string; sentAt: number }>();
-    for (const row of rows) {
-      map.set(row.id, {
-        taskId: row.id,
-        agentId: row.pendingAckAgentId,
-        sentAt: row.ackSentAt
-      });
-    }
-    return map;
-  }
-
-  /**
-   * Get waiting agents from database (replaces in-memory map).
-   * Returns agent ID -> capabilities mapping.
-   */
-  private getWaitingAgentsFromDB(): Map<string, StandardCapability[]> {
-    const rows = this.db.prepare(
-      'SELECT id, capabilities FROM agents WHERE waitingSince IS NOT NULL'
-    ).all() as any[];
-
-    const map = new Map<string, StandardCapability[]>();
-    for (const row of rows) {
-      const caps = row.capabilities ? JSON.parse(row.capabilities) : [];
-      map.set(row.id, caps);
-    }
-    return map;
-  }
-
-  /**
-   * Set pending ACK state in database.
-   */
-  private setPendingAck(taskId: string, agentId: string): void {
-    this.db.prepare(
-      'UPDATE tasks SET pendingAckAgentId = ?, ackSentAt = ? WHERE id = ?'
-    ).run(agentId, Date.now(), taskId);
-  }
-
-  /**
-   * Clear pending ACK state in database.
-   */
-  private clearPendingAck(taskId: string): void {
-    this.db.prepare(
-      'UPDATE tasks SET pendingAckAgentId = NULL, ackSentAt = NULL WHERE id = ?'
-    ).run(taskId);
-  }
-
-  /**
-   * Set agent waiting state in database.
-   * Creates the agent row if it doesn't exist (for tests and edge cases).
-   */
-  private setAgentWaiting(agentId: string, capabilities: StandardCapability[]): void {
-    try {
-      // Ensure agent exists (upsert pattern)
-      this.db.prepare(
-        'INSERT OR IGNORE INTO agents (id, displayName, capabilities) VALUES (?, ?, ?)'
-      ).run(agentId, agentId, JSON.stringify(capabilities));
-
-      this.db.prepare(
-        'UPDATE agents SET waitingSince = ?, capabilities = ? WHERE id = ?'
-      ).run(Date.now(), JSON.stringify(capabilities), agentId);
-    } catch (e: any) {
-      console.error(`[Queue] Failed to set agent waiting: ${e.message}`);
-    }
-  }
-
-  /**
-   * Clear agent waiting state in database.
-   */
-  private clearAgentWaiting(agentId: string): void {
-    try {
-      this.db.prepare(
-        'UPDATE agents SET waitingSince = NULL WHERE id = ?'
-      ).run(agentId);
-    } catch (e: any) {
-      console.error(`[Queue] Failed to clear agent waiting: ${e.message}`);
-    }
-  }
-
   /** Reset PENDING_ACK tasks and waiting agents on startup */
   private resetStaleState(): void {
     try {
@@ -165,11 +93,11 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
       for (const task of stale) {
         console.log(`[Queue] Resetting PENDING_ACK task ${task.id} to QUEUED on startup`);
         this.repo.updateStatus(task.id, 'QUEUED');
-        this.clearPendingAck(task.id);
+        this.persistence.clearPendingAck(task.id);
       }
 
-      // Clear all waiting agents (connections are gone after restart)
-      this.db.prepare('UPDATE agents SET waitingSince = NULL WHERE waitingSince IS NOT NULL').run();
+      // Clear all waiting agents
+      this.persistence.resetWaitingAgents();
 
       console.log(`[Queue] Loaded ${this.repo.getActive().length} active tasks from DB`);
     } catch {
@@ -202,10 +130,12 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
       console.log(`[Queue] Enqueued task: ${task.id} (${task.status})`);
 
       // ATOMIC ASSIGNMENT: Find and reserve agent synchronously
-      const reservedAgentId = this.findAndReserveAgent(task);
+      const reservedAgentId = this.matchingService.reserveAgentForTask(task);
 
       if (reservedAgentId) {
         console.log(`[Queue] ✓ Task ${task.id} reserved for agent ${reservedAgentId}`);
+        // Notify the agent via event
+        this.emit('task', task, reservedAgentId);
       } else {
         console.log(`[Queue] No waiting agents for task ${task.id}. Task remains QUEUED.`);
       }
@@ -261,7 +191,7 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
     }
 
     this.updateStatus(taskId, 'CANCELLED');
-    this.clearPendingAck(taskId);
+    this.persistence.clearPendingAck(taskId);
 
     console.log(`[Queue] Task ${taskId} cancelled by admin`);
     return { success: true };
@@ -298,7 +228,7 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
     });
 
     this.persistUpdate(task);
-    this.clearPendingAck(taskId);
+    this.persistence.clearPendingAck(taskId);
 
     console.log(`[Queue] Task ${taskId} force-retried by admin`);
     return { success: true };
@@ -386,14 +316,14 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
     }
 
     // Track this agent as waiting in DB
-    this.setAgentWaiting(agentId, capabilities);
+    this.persistence.setAgentWaiting(agentId, capabilities);
 
     // 1. Check if there are pending tasks for this agent
-    const pendingTask = this.findPendingTaskForAgent(agentId, capabilities);
+    const pendingTask = this.matchingService.findPendingTaskForAgent(agentId, capabilities);
     if (pendingTask) {
-      this.clearAgentWaiting(agentId);
+      this.persistence.clearAgentWaiting(agentId);
       this.updateStatus(pendingTask.id, 'PENDING_ACK');
-      this.setPendingAck(pendingTask.id, agentId);
+      this.persistence.setPendingAck(pendingTask.id, agentId);
       return pendingTask;
     }
 
@@ -410,7 +340,7 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
         if (timeoutTimer) clearTimeout(timeoutTimer);
 
         // Clear waiting state in DB
-        this.clearAgentWaiting(agentId);
+        this.persistence.clearAgentWaiting(agentId);
 
         resolve(result);
       };
@@ -435,91 +365,6 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
         finish(null);
       }, timeoutMs);
     });
-  }
-
-  /**
-   * Finds a pending task suitable for an agent.
-   * Skips tasks with unsatisfied dependencies.
-   * Prioritizes tasks that were previously assigned to this agent (affinity on feedback).
-   */
-  private findPendingTaskForAgent(agentId: string, capabilities: StandardCapability[]): Task | undefined {
-    const candidates = this.repo.getByStatuses(['QUEUED', 'APPROVED_QUEUED']);
-
-    // Filter out tasks with unsatisfied dependencies
-    const eligibleCandidates = candidates.filter(task => {
-      if (!task.dependencies || task.dependencies.length === 0) {
-        return true; // No dependencies - eligible
-      }
-      // Check all dependencies are COMPLETED
-      const allMet = task.dependencies.every(depId => {
-        const dep = this.getTask(depId) || this.getTaskFromDB(depId);
-        return dep && dep.status === 'COMPLETED';
-      });
-      if (!allMet) {
-        console.log(`[Queue] Skipping task ${task.id} - dependencies not satisfied`);
-      }
-      return allMet;
-    });
-
-    // Sort by: 1) Agent affinity (previously assigned to this agent), 2) Priority, 3) Age
-    eligibleCandidates.sort((a: Task, b: Task) => {
-      // Agent affinity first - tasks previously assigned to this agent get priority
-      const aAffinity = a.assignedTo === agentId ? 1 : 0;
-      const bAffinity = b.assignedTo === agentId ? 1 : 0;
-      if (aAffinity !== bAffinity) return bAffinity - aAffinity; // Affinity first
-
-      const pScores: Record<string, number> = { critical: 3, high: 2, normal: 1 };
-      const scoreA = pScores[a.priority] || 1;
-      const scoreB = pScores[b.priority] || 1;
-      if (scoreA !== scoreB) return scoreB - scoreA;
-      return a.createdAt - b.createdAt;
-    });
-
-    for (const task of eligibleCandidates) {
-      if (task.to.agentId === agentId) return task;
-      // Check if agent has required capabilities (exact match)
-      const required = task.to.requiredCapabilities || [];
-      if (required.length === 0 || required.every(cap => capabilities.includes(cap))) {
-        return task;
-      }
-    }
-
-    return undefined;
-  }
-
-  /**
-   * Finds and reserves a matching waiting agent for a task.
-   * Uses database-backed waiting agents state.
-   */
-  findAndReserveAgent(task: Task): string | null {
-    const waitingAgents = this.getWaitingAgentsFromDB();
-    if (waitingAgents.size === 0) return null;
-
-    // Shuffle agents for fairness
-    const waitingList = Array.from(waitingAgents.entries());
-    const shuffled = waitingList
-      .map(value => ({ value, sort: Math.random() }))
-      .sort((a, b) => a.sort - b.sort)
-      .map(({ value }) => value);
-
-    for (const [agentId, capabilities] of shuffled) {
-      const capsArray = capabilities || [];
-      console.log(`[Queue] Checking ${agentId} with capabilities=[${capsArray.join(',')}] against task.to.requiredCapabilities=[${task.to.requiredCapabilities?.join(',') || 'any'}]`);
-
-      if (isTaskForAgent(task, agentId, capabilities)) {
-        // Atomic reservation
-        this.updateStatus(task.id, 'PENDING_ACK');
-        this.setPendingAck(task.id, agentId);
-
-        console.log(`[Queue] Reserved task ${task.id} for agent ${agentId}, notifying...`);
-        this.emit('task', task, agentId);
-
-        this.clearAgentWaiting(agentId);
-
-        return agentId;
-      }
-    }
-    return null;
   }
 
   /**
@@ -561,7 +406,7 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
     });
 
     this.persistUpdate(task);
-    this.clearPendingAck(taskId);
+    this.persistence.clearPendingAck(taskId);
     console.log(`[Queue] Task ${taskId} ACKed by ${agentId}, now ASSIGNED`);
 
     return { success: true };
@@ -655,12 +500,12 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
 
   /** Get all agents currently waiting with their capabilities (from DB) - implements ISchedulerQueue */
   getWaitingAgents(): Map<string, StandardCapability[]> {
-    return this.getWaitingAgentsFromDB();
+    return this.persistence.getWaitingAgents();
   }
 
   /** Get pending ACKs (from DB) - implements ISchedulerQueue */
   getPendingAcks(): Map<string, { taskId: string; agentId: string; sentAt: number }> {
-    return this.getPendingAcksFromDB();
+    return this.persistence.getPendingAcks();
   }
 
   /** Get tasks by status - implements ISchedulerQueue */
@@ -670,8 +515,7 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
 
   /** Check if a specific agent is currently waiting (from DB) */
   isAgentWaiting(agentId: string): boolean {
-    const row = this.db.prepare('SELECT waitingSince FROM agents WHERE id = ?').get(agentId) as any;
-    return row?.waitingSince != null;
+    return this.persistence.isAgentWaiting(agentId);
   }
 
   /** Get all agents that are currently assigned tasks */
@@ -708,7 +552,7 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
     try {
       this.repo.clearAll();
       // Also clear waiting agents
-      this.db.prepare('UPDATE agents SET waitingSince = NULL').run();
+      this.persistence.resetWaitingAgents();
       console.log('[Queue] Cleared all tasks');
     } catch (e: any) {
       console.error(`[Queue] Failed to clear tasks: ${e.message}`);
@@ -733,7 +577,7 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
     return this.evictionService.popEviction(agentId);
   }
 
-  // ===== System Prompts (DB-backed) =====
+  // ===== System Prompts (delegated to SystemPromptService) =====
 
   queueSystemPrompt(
     agentId: string,
@@ -742,10 +586,7 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
     payload?: Record<string, unknown>,
     priority?: 'normal' | 'high' | 'critical'
   ): void {
-    this.db.prepare(
-      'INSERT INTO system_prompts (agentId, promptType, message, payload, priority, createdAt) VALUES (?, ?, ?, ?, ?, ?)'
-    ).run(agentId, promptType, message, payload ? JSON.stringify(payload) : null, priority || 'normal', Date.now());
-
+    this.systemPromptService.queueSystemPrompt(agentId, promptType, message, payload, priority);
     console.log(`[Queue] Queued system prompt for ${agentId}: ${promptType}`);
   }
 
@@ -755,31 +596,7 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
     payload?: Record<string, unknown>;
     priority?: 'normal' | 'high' | 'critical';
   } | null {
-    // Try agent-specific prompt first
-    let row = this.db.prepare(
-      'SELECT id, promptType, message, payload, priority FROM system_prompts WHERE agentId = ? ORDER BY createdAt ASC LIMIT 1'
-    ).get(agentId) as any;
-
-    // Fall back to broadcast prompts
-    if (!row) {
-      row = this.db.prepare(
-        'SELECT id, promptType, message, payload, priority FROM system_prompts WHERE agentId = ? ORDER BY createdAt ASC LIMIT 1'
-      ).get('*') as any;
-    }
-
-    if (row) {
-      // Delete the consumed prompt
-      this.db.prepare('DELETE FROM system_prompts WHERE id = ?').run(row.id);
-
-      return {
-        promptType: row.promptType,
-        message: row.message,
-        payload: row.payload ? JSON.parse(row.payload) : undefined,
-        priority: row.priority
-      };
-    }
-
-    return null;
+    return this.systemPromptService.popSystemPrompt(agentId);
   }
 
   /**
