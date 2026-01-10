@@ -18,3 +18,8 @@ export {
   type RestartHandlerOptions,
 } from './restart-handler.js';
 
+export {
+  TokenTracker,
+  type TokenUsage,
+  type TokenSummary,
+} from './token-tracker.js';
