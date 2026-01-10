@@ -12,185 +12,23 @@
  * ```
  */
 import { Command } from 'commander';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as readline from 'readline';
-import { spawn, ChildProcess, execSync } from 'child_process';
+import { spawn, ChildProcess } from 'child_process';
 import { handleError } from '../utils/index.js';
-
-const SUPPORTED_CLIS = ['gemini', 'claude'] as const;
-type SupportedCLI = typeof SUPPORTED_CLIS[number];
+import {
+  SupportedCLI,
+  AgentType,
+  SUPPORTED_CLIS,
+  isSupportedCLI,
+  checkCLIInstalled,
+  findWorkflowFile,
+  findGitRoot,
+  ensureMcpConfig
+} from '../utils/agent-utils.js';
 
 const DEFAULT_WORKFLOW = 'waaah-orc-loop';
 const MAX_RESTARTS = 10;
 const RESTART_DELAY_MS = 2000;
 const HEARTBEAT_TIMEOUT_MS = 300_000; // 5 minutes
-
-function isSupportedCLI(cli: string): cli is SupportedCLI {
-  return SUPPORTED_CLIS.includes(cli as SupportedCLI);
-}
-
-function findWorkflowFile(workflowName: string, cwd: string): string | null {
-  const workflowPath = path.join(cwd, '.agent', 'workflows', `${workflowName}.md`);
-  if (fs.existsSync(workflowPath)) return workflowPath;
-
-  // Try without .md
-  const altPath = path.join(cwd, '.agent', 'workflows', workflowName);
-  if (fs.existsSync(altPath)) return altPath;
-
-  return null;
-}
-
-function findGitRoot(cwd: string): string | null {
-  let current = cwd;
-  while (current !== '/') {
-    if (fs.existsSync(path.join(current, '.git'))) return current;
-    current = path.dirname(current);
-  }
-  return null;
-}
-
-async function checkCLIInstalled(cli: SupportedCLI): Promise<boolean> {
-  try {
-    execSync(`which ${cli}`, { stdio: 'pipe' });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-// ─────────────────────────────────────────────────────────────
-// MCP Configuration
-// ─────────────────────────────────────────────────────────────
-
-type AgentType = 'gemini' | 'claude';
-
-function getConfigPath(agentType: AgentType): string {
-  const home = process.env.HOME || '';
-  return agentType === 'gemini'
-    ? `${home}/.gemini/settings.json`
-    : `${home}/.claude/claude_desktop_config.json`;
-}
-
-function getMcpConfig(agentType: AgentType): { url: string } | null {
-  try {
-    const configPath = getConfigPath(agentType);
-    const content = fs.readFileSync(configPath, 'utf-8');
-    const config = JSON.parse(content);
-    const waaah = config.mcpServers?.waaah;
-    if (!waaah) return null;
-
-    // Extract URL from args
-    if (waaah.args) {
-      const urlIdx = waaah.args.indexOf('--url');
-      if (urlIdx !== -1 && waaah.args[urlIdx + 1]) {
-        return { url: waaah.args[urlIdx + 1] };
-      }
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-function isProxyInstalled(): boolean {
-  try {
-    execSync('which waaah-proxy', { stdio: 'ignore' });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function promptYesNo(question: string): Promise<boolean> {
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  return new Promise((resolve) => {
-    rl.question(question, (answer) => {
-      rl.close();
-      resolve(answer.toLowerCase().startsWith('y'));
-    });
-  });
-}
-
-function promptChoice(question: string): Promise<string> {
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  return new Promise((resolve) => {
-    rl.question(question, (answer) => {
-      rl.close();
-      resolve(answer.trim());
-    });
-  });
-}
-
-async function configureMcp(agentType: AgentType, serverUrl: string): Promise<void> {
-  // Check if proxy is installed
-  const installed = isProxyInstalled();
-  let proxyMethod: 'global' | 'npx' = 'global';
-
-  if (!installed) {
-    console.log('\n   ⚠️  waaah-proxy is not globally installed.');
-    console.log('   1. Install globally now (npm install -g @opensourcewtf/waaah-mcp-proxy)');
-    console.log('   2. Use npx each time (slower)');
-    const choice = await promptChoice('   Choose (1 or 2) [default: 1]: ');
-
-    if (choice === '2') {
-      proxyMethod = 'npx';
-    } else {
-      console.log('   📦 Installing waaah-proxy globally...');
-      try {
-        execSync('npm install -g @opensourcewtf/waaah-mcp-proxy', { stdio: 'inherit' });
-        console.log('   ✅ Installed!');
-      } catch {
-        console.log('   ❌ Install failed. Using npx.');
-        proxyMethod = 'npx';
-      }
-    }
-  } else {
-    console.log('   ✅ waaah-proxy is installed globally');
-  }
-
-  // Build config
-  const configPath = getConfigPath(agentType);
-  let config: any = {};
-  try {
-    config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-  } catch { /* new file */ }
-
-  config.mcpServers = config.mcpServers || {};
-
-  if (proxyMethod === 'global') {
-    config.mcpServers.waaah = {
-      command: 'waaah-proxy',
-      args: ['--url', serverUrl]
-    };
-  } else {
-    config.mcpServers.waaah = {
-      command: 'npx',
-      args: ['-y', '@opensourcewtf/waaah-mcp-proxy', '--url', serverUrl]
-    };
-  }
-
-  fs.mkdirSync(path.dirname(configPath), { recursive: true });
-  fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
-  console.log(`   ✅ MCP configured (${serverUrl})`);
-}
-
-async function ensureMcpConfig(agentType: AgentType, serverUrl: string): Promise<void> {
-  const current = getMcpConfig(agentType);
-
-  if (!current) {
-    console.log('\n⚙️  WAAAH MCP not configured.');
-    await configureMcp(agentType, serverUrl);
-  } else if (current.url !== serverUrl) {
-    console.log(`\n⚠️  MCP URL mismatch: ${current.url} vs ${serverUrl}`);
-    const update = await promptYesNo('   Update config? (y/n): ');
-    if (update) {
-      await configureMcp(agentType, serverUrl);
-    }
-  } else {
-    console.log(`\n✅ MCP configured (${serverUrl})`);
-  }
-}
 
 /**
  * Agent runner with restart and heartbeat support
@@ -209,7 +47,7 @@ class AgentRunner {
     private env: NodeJS.ProcessEnv,
     private workflow: string,
     private resume: boolean
-  ) { }
+  ) { } 
 
   start(): void {
     this.shouldStop = false;
@@ -230,21 +68,11 @@ class AgentRunner {
         : `Follow the /${this.workflow} workflow exactly.`;
       args = ['-i', prompt, '--yolo'];
     } else if (this.cli === 'claude') {
-      // Claude: use --continue for restarts, initial prompt for first run
-      if (this.resume) {
-        // Continue most recent conversation
-        args = ['--dangerously-skip-permissions', '--continue'];
-      } else {
-        const prompt = `Follow the /${this.workflow} workflow exactly.`;
-        args = ['--dangerously-skip-permissions', prompt];
-      }
+      // Claude: uses --resume or prompt
+      args = this.resume ? ['--resume'] : ['-p', `Follow the /${this.workflow} workflow exactly.`];
     }
 
-    console.log(`\n🚀 Starting ${this.cli} agent (attempt ${this.restartCount + 1}/${MAX_RESTARTS})...`);
-    console.log(`   Workflow: ${this.workflow}`);
-    console.log(`   Resume: ${this.resume}`);
-    console.log('');
-
+    console.log(`\n🚀 Spawning ${this.cli}...`);
     this.child = spawn(this.cli, args, {
       cwd: this.cwd,
       stdio: 'inherit',
@@ -405,12 +233,3 @@ export const agentCommand = new Command('agent')
       handleError(error);
     }
   });
-
-function getInstallInstructions(cli: SupportedCLI): string {
-  switch (cli) {
-    case 'gemini':
-      return '   Install: npm install -g @google/gemini-cli';
-    case 'claude':
-      return '   Install Claude Desktop or: npm install -g @anthropic-ai/claude-cli';
-  }
-}
