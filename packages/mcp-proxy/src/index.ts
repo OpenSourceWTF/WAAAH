@@ -10,7 +10,13 @@ import axios from 'axios';
 
 import { MCP_TOOL_DEFINITIONS } from '@opensourcewtf/waaah-types';
 
-const SERVER_URL = process.env.WAAAH_SERVER_URL || 'http://localhost:3000';
+// Parse CLI args for --url
+const urlArgIndex = process.argv.indexOf('--url');
+const cliUrl = urlArgIndex !== -1 && process.argv[urlArgIndex + 1]
+  ? process.argv[urlArgIndex + 1]
+  : undefined;
+
+const SERVER_URL = cliUrl || process.env.WAAAH_SERVER_URL || 'http://localhost:3456';
 const AGENT_ID = process.env.AGENT_ID || 'unknown-agent';
 const AGENT_ROLE = process.env.AGENT_ROLE || 'developer';
 const WAAAH_API_KEY = process.env.WAAAH_API_KEY;
