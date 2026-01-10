@@ -11,6 +11,17 @@ export { BaseAgent } from './agents/base.js';
 export { PTYManager } from './pty/manager.js';
 export { SessionManager } from './session/manager.js';
 export { MCPInjector } from './config/mcp-injector.js';
+export {
+  scanMCPConfig,
+  scanGeminiConfig,
+  scanClaudeConfig,
+  scanAllConfigs,
+  getDefaultConfigPath,
+  type MCPConfig,
+  type GeminiMCPServerConfig,
+  type ClaudeMCPServerConfig,
+  type AgentType,
+} from './config/scanner.js';
 export { LoopDetector } from './monitor/loop-detector.js';
 export { GitUtils } from './utils/git.js';
 export { Logger } from './utils/logger.js';
