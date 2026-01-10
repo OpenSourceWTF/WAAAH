@@ -20,6 +20,8 @@ export interface AgentConfig {
   workspaceRoot: string;
   /** Restart on exit - if true or number, will restart on exit. Number specifies max restarts. */
   restartOnExit?: boolean | number;
+  /** Sanitize TUI output by stripping cursor movement sequences (default: true) */
+  sanitizeOutput?: boolean;
 }
 
 /**
@@ -158,6 +160,7 @@ export abstract class BaseAgent {
       env: { ...process.env, FORCE_COLOR: '1' },
       cols: process.stdout.columns || 80,
       rows: process.stdout.rows || 24,
+      sanitizeOutput: this.config.sanitizeOutput ?? true, // Default: strip TUI sequences
     });
 
     // Resize PTY on window resize

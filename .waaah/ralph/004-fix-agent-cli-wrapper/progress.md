@@ -200,4 +200,22 @@ process.on('unhandledRejection', cleanup);
 |------|-------|--------|-------|
 | 0 | Initial Analysis | 4,3,3,3 | Identified 5 major issues |
 | 1 | Core Fixes | 8,8,8,8 | Process group kill, removed heartbeat, emergency handlers |
+| 2 | TUI Sanitization | 9,9,9,9 | Enabled sanitizeOutput by default in AgentConfig |
+
+---
+
+## Iteration 2: TUI Sanitization Enabled
+
+### Changes
+- Added `sanitizeOutput` option to `AgentConfig` in `base.ts`
+- Default to `true` - strips cursor movement/positioning sequences
+- Preserves colors (SGR sequences like `\x1B[32m`)
+
+### Verification
+- ✅ Build: Passed
+- ✅ Tests: 104/104 passed
+
+### Remaining for 10/10
+- Live test with Gemini/Claude to verify TUI output is clean
+- Consider edge cases where sanitization might strip too much
 
