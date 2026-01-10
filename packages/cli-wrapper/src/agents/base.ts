@@ -35,7 +35,7 @@ export interface AgentConfig {
  * ```
  */
 export abstract class BaseAgent {
-  protected config: AgentConfig;
+  public config: AgentConfig;
   protected ptyManager: PTYManager | null = null;
   protected restartCount = 0;
 

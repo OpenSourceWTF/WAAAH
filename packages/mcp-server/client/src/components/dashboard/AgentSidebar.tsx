@@ -193,32 +193,38 @@ export function AgentSidebar({
                   onMouseLeave={() => setHoveredAgent(null)}
                   onClick={() => toggleAgentPin(agent.id)}
                 >
-                  {/* Collapsed Card Header */}
-                  <div className="p-2">
-                    {/* Row 1: Avatar + Name + Status */}
-                    <div className="flex items-start gap-2 mb-1">
-                      <div className={`w-8 h-8 border-2 rounded-sm flex items-center justify-center shrink-0 ${getIndicatorColor(agent)}`}>
-                        <span className="text-xs font-bold text-foreground">{getInitials(agent)}</span>
+                  {/* Card with left status stripe */}
+                  <div className="flex">
+                    {/* Status stripe */}
+                    <div className={`w-1 shrink-0 ${agent.status === 'PROCESSING' ? 'bg-cyan-400 animate-pulse' :
+                        agent.status === 'WAITING' ? 'bg-green-500' :
+                          agent.status === 'OFFLINE' ? 'bg-gray-600' : 'bg-yellow-500'
+                      }`} />
+
+                    {/* Card content */}
+                    <div className="flex-1 p-2 min-w-0">
+                      {/* Row 1: Initials + Name + Chevron */}
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-primary/70 shrink-0">{getInitials(agent)}</span>
+                        <span className="font-bold text-sm text-primary truncate flex-1">
+                          {agent.displayName || agent.id}
+                        </span>
+                        {pinnedAgents.has(agent.id) && <Pin className="h-3 w-3 text-primary shrink-0" />}
+                        {isExpanded
+                          ? <ChevronUp className="h-4 w-4 text-primary shrink-0" />
+                          : <ChevronDown className="h-4 w-4 text-primary/50 shrink-0" />}
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-1">
-                          <span className="font-bold text-sm text-primary leading-tight" style={{ wordBreak: 'break-word' }}>
-                            {agent.displayName || agent.id}
-                          </span>
-                          {pinnedAgents.has(agent.id) && <Pin className="h-3 w-3 text-primary shrink-0" />}
-                        </div>
-                      </div>
-                      {isExpanded
-                        ? <ChevronUp className="h-4 w-4 text-primary shrink-0 mt-1" />
-                        : <ChevronDown className="h-4 w-4 text-primary/50 shrink-0 mt-1" />}
-                    </div>
-                    {/* Row 2: Role + Source + Status */}
-                    <div className="flex items-center justify-between gap-2 pl-10">
-                      <div className="flex items-center gap-1 min-w-0">
-                        {agent.role && <span className="text-[10px] text-primary/60 font-mono truncate">[{agent.role}]</span>}
+
+                      {/* Row 2: Role + Source + Status + Time */}
+                      <div className="flex items-center gap-2 mt-1 text-[10px]">
+                        {agent.role && <span className="text-primary/50 font-mono">[{agent.role}]</span>}
                         {getSourceBadge(agent.source)}
+                        <span className={`font-bold ${agent.status === 'PROCESSING' ? 'text-cyan-400' :
+                            agent.status === 'WAITING' ? 'text-green-500' :
+                              agent.status === 'OFFLINE' ? 'text-gray-500' : 'text-yellow-500'
+                          }`}>{agent.status}</span>
+                        <span className="text-primary/40 ml-auto">{getRelativeTime(agent.lastSeen)}</span>
                       </div>
-                      <Badge className={`${getStatusBadgeClass(agent.status)} text-[10px] shrink-0`}>{agent.status}</Badge>
                     </div>
                   </div>
 

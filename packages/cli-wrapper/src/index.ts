@@ -204,26 +204,18 @@ async function runAgent(options: any) {
   });
   shutdown.install();
 
-  // 9. Start the Agent logic
-  // Since BaseAgent.start() is currently 'Not implemented' and abstract, 
-  // and we don't have the PTY wiring fully exposed in the Agent class yet
-  // (The Agent classes we viewed just had getCliCommand/Args), we need to instantiate PTYManager here
-  // or inside the Agent.
+  // 9. Start the Agent with restart support
+  console.log('');
+  console.log(`🤖 Starting ${agentType} agent...`);
+  console.log(`   Workflow: ${workflow}`);
+  console.log(`   Restart on exit: enabled (max 10)`);
+  console.log('');
 
-  // Realization: The BaseAgent.start() was abstract and throwing "Not implemented".
-  // We need to implement the actual spawn logic.
-  // The GeminiAgent/ClaudeAgent classes we viewed earlier ONLY implemented getCliCommand/getArgs.
-  // They inherited 'start' from BaseAgent which threw Error.
-  // We need to implement start() in BaseAgent or override it.
+  // Enable restart on exit
+  agent.config.restartOnExit = 10;
 
-  // Let's implement the spawning logic directly here for V1 
-  // OR fix BaseAgent to use PTYManager.
-  // Fixing BaseAgent is cleaner.
-
-  // For this immediate step, I will throw an error if I try to run it.
-  // I should update BaseAgent to actually run the PTY.
-
-  console.log('🚧 Agent startup logic pending BaseAgent implementation update.');
+  // Start the agent (blocks until all restarts exhausted or clean exit)
+  await agent.start();
 }
 
 // Run main if executed directly

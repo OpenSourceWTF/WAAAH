@@ -65,6 +65,7 @@ NAME = pick(ADJECTIVES) + " " + pick(ANIMALS) + " " + NUMBER
 ```
 register_agent({
   displayName: NAME,
+  role: "orchestrator",
   capabilities: ["code-writing", "spec-writing", "test-writing", "doc-writing"]
 })
 AGENT_ID = response.agentId

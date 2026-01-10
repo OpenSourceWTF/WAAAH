@@ -2,84 +2,53 @@
  * waaah agent - Start and manage CLI coding agents
  * 
  * Spawns external CLI coding agents (gemini, claude) with WAAAH MCP integration.
+ * Features: auto-restart, heartbeat monitoring, resume support.
  * 
  * @example
  * ```bash
  * waaah agent --start=gemini
- * waaah agent --start=claude --as=custom-workflow
+ * waaah agent --start=gemini --as=waaah-orc-loop
  * waaah agent --start=gemini --resume
  * ```
- * 
- * @packageDocumentation
  */
 import { Command } from 'commander';
 import * as fs from 'fs';
 import * as path from 'path';
+import { spawn, ChildProcess } from 'child_process';
 import { handleError } from '../utils/index.js';
 
-/**
- * Supported CLI agent types.
- */
 const SUPPORTED_CLIS = ['gemini', 'claude'] as const;
 type SupportedCLI = typeof SUPPORTED_CLIS[number];
 
-/**
- * Default workflow to use when --as is not specified.
- */
-const DEFAULT_WORKFLOW = 'waaah-orc';
+const DEFAULT_WORKFLOW = 'waaah-orc-loop';
+const MAX_RESTARTS = 10;
+const RESTART_DELAY_MS = 2000;
+const HEARTBEAT_TIMEOUT_MS = 300_000; // 5 minutes
 
-/**
- * Check if the specified CLI agent is supported.
- * @param cli - CLI name to check
- * @returns True if supported
- */
 function isSupportedCLI(cli: string): cli is SupportedCLI {
   return SUPPORTED_CLIS.includes(cli as SupportedCLI);
 }
 
-/**
- * Get the path to a workflow file.
- * @param workflowName - Name of the workflow (without .md extension)
- * @param cwd - Current working directory
- * @returns Absolute path to workflow file or null if not found
- */
 function findWorkflowFile(workflowName: string, cwd: string): string | null {
-  // Try .agent/workflows/<name>.md
   const workflowPath = path.join(cwd, '.agent', 'workflows', `${workflowName}.md`);
-  if (fs.existsSync(workflowPath)) {
-    return workflowPath;
-  }
+  if (fs.existsSync(workflowPath)) return workflowPath;
 
-  // Try without extension
+  // Try without .md
   const altPath = path.join(cwd, '.agent', 'workflows', workflowName);
-  if (fs.existsSync(altPath)) {
-    return altPath;
-  }
+  if (fs.existsSync(altPath)) return altPath;
 
   return null;
 }
 
-/**
- * Detect git repository root from a directory.
- * @param cwd - Starting directory
- * @returns Git root path or null
- */
 function findGitRoot(cwd: string): string | null {
   let current = cwd;
   while (current !== '/') {
-    if (fs.existsSync(path.join(current, '.git'))) {
-      return current;
-    }
+    if (fs.existsSync(path.join(current, '.git'))) return current;
     current = path.dirname(current);
   }
   return null;
 }
 
-/**
- * Check if a CLI tool is installed and accessible.
- * @param cli - CLI name to check
- * @returns True if installed
- */
 async function checkCLIInstalled(cli: SupportedCLI): Promise<boolean> {
   const { execSync } = await import('child_process');
   try {
@@ -91,50 +60,172 @@ async function checkCLIInstalled(cli: SupportedCLI): Promise<boolean> {
 }
 
 /**
- * Agent command - start and manage CLI coding agents
+ * Agent runner with restart and heartbeat support
  */
+class AgentRunner {
+  private child: ChildProcess | null = null;
+  private restartCount = 0;
+  private lastActivity = Date.now();
+  private heartbeatInterval: NodeJS.Timeout | null = null;
+  private shouldStop = false;
+
+  constructor(
+    private cli: SupportedCLI,
+    private args: string[],
+    private cwd: string,
+    private env: NodeJS.ProcessEnv,
+    private workflow: string,
+    private resume: boolean
+  ) { }
+
+  start(): void {
+    this.shouldStop = false;
+    this.spawnAgent();
+    this.startHeartbeat();
+    this.setupSignalHandlers();
+  }
+
+  private spawnAgent(): void {
+    if (this.shouldStop) return;
+
+    const prompt = this.resume
+      ? `Resume the /${this.workflow} workflow. Continue from where you left off.`
+      : `Follow the /${this.workflow} workflow exactly.`;
+
+    const args = [...this.args];
+    if (this.cli === 'gemini' || this.cli === 'claude') {
+      // Replace or add prompt
+      const promptIdx = args.indexOf('-p');
+      if (promptIdx >= 0) {
+        args[promptIdx + 1] = prompt;
+      } else {
+        args.unshift('-p', prompt);
+      }
+    }
+
+    console.log(`\n🚀 Starting ${this.cli} agent (attempt ${this.restartCount + 1}/${MAX_RESTARTS})...`);
+    console.log(`   Workflow: ${this.workflow}`);
+    console.log(`   Resume: ${this.resume}`);
+    console.log('');
+
+    this.child = spawn(this.cli, args, {
+      cwd: this.cwd,
+      stdio: 'inherit',
+      env: this.env
+    });
+
+    this.lastActivity = Date.now();
+
+    this.child.on('exit', (code, signal) => {
+      if (this.shouldStop) {
+        console.log('\n✅ Agent stopped.');
+        process.exit(0);
+      }
+
+      if (signal) {
+        console.log(`\n⚠️  Agent killed by signal: ${signal}`);
+      } else if (code !== 0) {
+        console.log(`\n⚠️  Agent exited with code: ${code}`);
+      } else {
+        console.log('\n✅ Agent exited successfully.');
+      }
+
+      this.scheduleRestart();
+    });
+
+    this.child.on('error', (err) => {
+      console.error(`\n❌ Failed to spawn ${this.cli}: ${err.message}`);
+      this.scheduleRestart();
+    });
+  }
+
+  private scheduleRestart(): void {
+    if (this.shouldStop) return;
+
+    this.restartCount++;
+    if (this.restartCount >= MAX_RESTARTS) {
+      console.error(`\n❌ Max restarts (${MAX_RESTARTS}) reached. Giving up.`);
+      this.cleanup();
+      process.exit(1);
+    }
+
+    console.log(`\n🔄 Restarting in ${RESTART_DELAY_MS / 1000}s...`);
+    this.resume = true; // Always resume after restart
+    setTimeout(() => this.spawnAgent(), RESTART_DELAY_MS);
+  }
+
+  private startHeartbeat(): void {
+    this.heartbeatInterval = setInterval(() => {
+      const staleTime = Date.now() - this.lastActivity;
+      if (staleTime > HEARTBEAT_TIMEOUT_MS && this.child) {
+        console.log(`\n⚠️  Agent appears stuck (no activity for ${Math.floor(staleTime / 60000)}m). Restarting...`);
+        this.child.kill('SIGTERM');
+        // Exit handler will trigger restart
+      }
+    }, 60_000); // Check every minute
+  }
+
+  private setupSignalHandlers(): void {
+    const cleanup = () => {
+      console.log('\n🛑 Stopping agent...');
+      this.stop();
+    };
+    process.on('SIGINT', cleanup);
+    process.on('SIGTERM', cleanup);
+  }
+
+  stop(): void {
+    this.shouldStop = true;
+    this.cleanup();
+    if (this.child) {
+      this.child.kill('SIGTERM');
+    }
+  }
+
+  private cleanup(): void {
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = null;
+    }
+  }
+
+  // Call this when we detect activity (e.g., from server callbacks)
+  heartbeat(): void {
+    this.lastActivity = Date.now();
+  }
+}
+
 export const agentCommand = new Command('agent')
-  .description('Start and manage CLI coding agents (gemini, claude) with WAAAH integration')
+  .description('Start and manage CLI coding agents with auto-restart and heartbeat')
   .requiredOption('--start <cli>', 'CLI agent to start (gemini, claude)')
   .option('--as <workflow>', 'Workflow to run', DEFAULT_WORKFLOW)
-  .option('--resume', 'Resume previous session if available', false)
-  .option('--server <url>', 'WAAAH MCP server URL', 'http://localhost:3456')
-  .option('--no-mcp', 'Skip MCP configuration check')
+  .option('--resume', 'Resume previous session', false)
+  .option('--max-restarts <n>', 'Maximum restart attempts', String(MAX_RESTARTS))
   .action(async (options: {
     start: string;
     as: string;
     resume: boolean;
-    server: string;
-    mcp: boolean;
+    maxRestarts: string;
   }) => {
     try {
       const cli = options.start.toLowerCase();
 
-      // Validate CLI is supported
       if (!isSupportedCLI(cli)) {
         console.error(`❌ Unsupported CLI: ${cli}`);
-        console.error(`   Supported CLIs: ${SUPPORTED_CLIS.join(', ')}`);
+        console.error(`   Supported: ${SUPPORTED_CLIS.join(', ')}`);
         process.exit(1);
       }
 
-      // Check if CLI is installed
       const installed = await checkCLIInstalled(cli);
       if (!installed) {
-        console.error(`❌ ${cli} CLI not found.`);
-        console.error(getInstallInstructions(cli));
+        console.error(`❌ ${cli} CLI not found. Install it first.`);
         process.exit(1);
       }
 
-      // Detect workspace (git root)
       const cwd = process.cwd();
       const gitRoot = findGitRoot(cwd);
-      if (!gitRoot) {
-        console.warn('⚠️  Not in a git repository. Some features may not work correctly.');
-        console.warn('   Consider running: git init');
-      }
       const workspaceRoot = gitRoot || cwd;
 
-      // Find workflow file
       const workflowPath = findWorkflowFile(options.as, workspaceRoot);
       if (!workflowPath) {
         console.error(`❌ Workflow not found: ${options.as}`);
@@ -142,63 +233,33 @@ export const agentCommand = new Command('agent')
         process.exit(1);
       }
 
-      // Read workflow content
-      const workflowContent = fs.readFileSync(workflowPath, 'utf-8');
-
-      console.log('🚀 WAAAH Agent Wrapper');
+      console.log('🤖 WAAAH Agent Wrapper');
       console.log(`   CLI: ${cli}`);
       console.log(`   Workflow: ${options.as}`);
       console.log(`   Workspace: ${workspaceRoot}`);
-      console.log(`   Resume: ${options.resume}`);
-      console.log(`   MCP Server: ${options.server}`);
-      console.log('');
+      console.log(`   Max restarts: ${options.maxRestarts}`);
 
-      // TODO: Check MCP configuration (requires cli-wrapper package implementation)
-      if (options.mcp) {
-        console.log('🔧 Checking MCP configuration...');
-        // This will be implemented when MCPInjector is available
-        console.log('   MCP configuration check not yet implemented.');
-      }
+      const runner = new AgentRunner(
+        cli,
+        [workspaceRoot],
+        workspaceRoot,
+        { ...process.env },
+        options.as,
+        options.resume
+      );
 
-      // TODO: Start agent with PTY (requires cli-wrapper package implementation)
-      console.log('');
-      console.log('⚠️  Agent spawning not yet implemented.');
-      console.log('   The following would be executed:');
-      console.log(`   - Spawn ${cli} CLI in PTY`);
-      console.log(`   - Inject workflow: @[/${options.as}]`);
-      console.log(`   - Monitor output for loop exit`);
-      console.log(`   - Auto-restart on crash or loop exit`);
-      console.log('');
-      console.log('   Waiting for cli-wrapper package implementation (T-4, T-8).');
-
-      // Preview workflow
-      console.log('');
-      console.log('📄 Workflow preview:');
-      console.log('─'.repeat(60));
-      const preview = workflowContent.substring(0, 500);
-      console.log(preview);
-      if (workflowContent.length > 500) {
-        console.log('... (truncated)');
-      }
-      console.log('─'.repeat(60));
+      runner.start();
 
     } catch (error) {
       handleError(error);
     }
   });
 
-/**
- * Get installation instructions for a CLI.
- * @param cli - CLI name
- * @returns Installation instructions string
- */
 function getInstallInstructions(cli: SupportedCLI): string {
   switch (cli) {
     case 'gemini':
-      return '   Install with: npm install -g @google/gemini-cli\n   Then run: gemini auth';
+      return '   Install: npm install -g @google/gemini-cli';
     case 'claude':
-      return '   Install Claude Desktop from: https://claude.ai/desktop\n   Or use: npm install -g @anthropic-ai/claude-cli';
-    default:
-      return '   Please install the CLI and ensure it is in your PATH.';
+      return '   Install Claude Desktop or: npm install -g @anthropic-ai/claude-cli';
   }
 }

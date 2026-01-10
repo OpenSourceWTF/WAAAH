@@ -44,12 +44,31 @@ description: Autonomous QA auditor daemon - monitors repo health
 
 ## STARTUP
 
+**Generate a friendly display name:**
 ```
-1. register_agent({ agentId: "doctor", capabilities: ["code-analysis"] })
-2. mkdir -p .waaah/doctor
-3. IF no state.json → create { last_sha: "", last_run: "" }
-4. Initial scan: git status, find packages
-5. → MAIN LOOP
+ADJECTIVES = [curious, speedy, clever, gentle, mighty, nimble, brave, jolly, plucky, snappy]
+ANIMALS = [otter, panda, fox, owl, penguin, koala, bunny, duck, bee, gecko]
+NUMBER = random(10-99)
+
+NAME = "Dr. " + pick(ADJECTIVES) + " " + pick(ANIMALS) + " " + NUMBER
+# Example: "Dr. Curious Otter 42", "Dr. Jolly Penguin 17"
+```
+
+**Register:**
+```
+register_agent({ 
+  displayName: NAME,
+  role: "doctor",
+  capabilities: ["code-analysis"] 
+})
+→ MAIN LOOP
+```
+
+**Initialize state:**
+```
+mkdir -p .waaah/doctor
+IF no state.json → create { last_sha: "", last_run: "" }
+Initial scan: git status, find packages
 ```
 
 ---

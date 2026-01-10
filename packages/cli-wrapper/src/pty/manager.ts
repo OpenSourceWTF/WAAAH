@@ -1,99 +1,49 @@
 /**
- * PTYManager - PTY lifecycle management
+ * PTYManager - PTY lifecycle management with fallback
  * 
- * Handles spawning and managing PTY subprocesses for CLI agents.
- * Uses node-pty for full terminal emulation with cross-platform support (Linux/macOS).
+ * Uses node-pty when available, falls back to child_process.spawn.
  * 
  * @packageDocumentation
  */
 
-import * as pty from 'node-pty';
-import type { IPty } from 'node-pty';
+import { spawn, ChildProcess } from 'child_process';
+
+// Try to load node-pty, fallback to null if unavailable
+let pty: typeof import('node-pty') | null = null;
+try {
+  pty = await import('node-pty');
+} catch {
+  console.warn('[PTYManager] node-pty not available, using child_process fallback');
+}
 
 /**
  * Options for spawning a PTY process.
  */
 export interface PTYSpawnOptions {
-  /** The command to execute */
   command: string;
-  /** Command arguments */
   args?: string[];
-  /** Working directory */
   cwd?: string;
-  /** Environment variables (defaults to inheriting process.env) */
   env?: Record<string, string | undefined>;
-  /** Number of columns (default: 80) */
   cols?: number;
-  /** Number of rows (default: 24) */
   rows?: number;
 }
 
-/**
- * Callback for PTY data events.
- * @param data - The data received from the PTY
- */
 export type PTYDataCallback = (data: string) => void;
-
-/**
- * Callback for PTY exit events.
- * @param exitCode - The exit code of the process
- * @param signal - The signal that terminated the process (if any)
- */
 export type PTYExitCallback = (exitCode: number, signal?: number) => void;
 
 /**
- * Manages PTY subprocess lifecycle.
- * 
- * Provides a clean interface for spawning, controlling, and monitoring PTY processes.
- * Supports event-based data and exit handling with multiple callback registration.
- * 
- * @example
- * ```typescript
- * const manager = new PTYManager();
- * 
- * // Register callbacks before spawning
- * manager.onData((data) => console.log('Output:', data));
- * manager.onExit((code) => console.log('Exited with code:', code));
- * 
- * // Spawn the process
- * await manager.spawn({ command: 'gemini', cwd: '/path/to/repo' });
- * 
- * // Interact with the process
- * manager.write('Hello, agent!\n');
- * 
- * // Optionally resize terminal
- * manager.resize(120, 40);
- * 
- * // Clean up when done
- * manager.kill();
- * ```
+ * Manages PTY subprocess lifecycle with fallback to child_process.
  */
 export class PTYManager {
-  /** The underlying node-pty process instance */
-  private ptyProcess: IPty | null = null;
-
-  /** Registered data event callbacks */
+  private ptyProcess: import('node-pty').IPty | null = null;
+  private childProcess: ChildProcess | null = null;
   private dataCallbacks: PTYDataCallback[] = [];
-
-  /** Registered exit event callbacks */
   private exitCallbacks: PTYExitCallback[] = [];
-
-  /** Disposables for cleanup */
-  private disposables: Array<{ dispose: () => void }> = [];
-
-  /** Track running state (set to false on exit) */
   private running = false;
+  private useNativePty = false;
 
   /**
-   * Spawns a new PTY subprocess.
-   * 
-   * Creates a new pseudo-terminal and spawns the specified command within it.
-   * The PTY provides full terminal emulation, supporting interactive programs,
-   * ANSI escape sequences, and proper signal handling.
-   * 
-   * @param options - Configuration options for the PTY spawn
-   * @throws Error if the command cannot be spawned (e.g., command not found)
-   * @returns Promise that resolves when the PTY is ready
+   * Spawns a new PTY/child subprocess.
    */
   public async spawn(options: PTYSpawnOptions): Promise<void> {
     const {
@@ -105,131 +55,110 @@ export class PTYManager {
       rows = 24,
     } = options;
 
-    try {
-      // Spawn the PTY process
-      this.ptyProcess = pty.spawn(command, args, {
-        name: 'xterm-256color',
-        cols,
-        rows,
-        cwd,
-        env,
-      });
+    // Try node-pty first
+    if (pty) {
+      try {
+        this.ptyProcess = pty.spawn(command, args, {
+          name: 'xterm-256color',
+          cols,
+          rows,
+          cwd,
+          env,
+        });
+        this.useNativePty = true;
+        this.running = true;
 
-      this.running = true;
-
-      // Set up data event forwarding
-      const dataDisposable = this.ptyProcess.onData((data) => {
-        for (const callback of this.dataCallbacks) {
-          try {
-            callback(data);
-          } catch (err) {
-            console.error('Error in PTY data callback:', err);
+        this.ptyProcess.onData((data) => {
+          for (const cb of this.dataCallbacks) {
+            try { cb(data); } catch { }
           }
-        }
-      });
-      this.disposables.push(dataDisposable);
+        });
 
-      // Set up exit event forwarding
-      const exitDisposable = this.ptyProcess.onExit(({ exitCode, signal }) => {
-        this.running = false;
-        for (const callback of this.exitCallbacks) {
-          try {
-            callback(exitCode, signal);
-          } catch (err) {
-            console.error('Error in PTY exit callback:', err);
+        this.ptyProcess.onExit(({ exitCode, signal }) => {
+          this.running = false;
+          for (const cb of this.exitCallbacks) {
+            try { cb(exitCode, signal); } catch { }
           }
-        }
-        // Clean up disposables after exit
-        this.cleanup();
-      });
-      this.disposables.push(exitDisposable);
+        });
 
-    } catch (err) {
-      // Handle spawn errors (e.g., command not found)
-      const message = err instanceof Error ? err.message : String(err);
-      throw new Error(`Failed to spawn PTY: ${message}`);
+        return;
+      } catch (err) {
+        console.warn('[PTYManager] node-pty spawn failed, falling back:', err);
+      }
     }
+
+    // Fallback to child_process
+    this.useNativePty = false;
+    this.childProcess = spawn(command, args, {
+      cwd,
+      env: env as NodeJS.ProcessEnv,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      shell: false,
+    });
+    this.running = true;
+
+    this.childProcess.stdout?.on('data', (data: Buffer) => {
+      const str = data.toString();
+      for (const cb of this.dataCallbacks) {
+        try { cb(str); } catch { }
+      }
+    });
+
+    this.childProcess.stderr?.on('data', (data: Buffer) => {
+      const str = data.toString();
+      for (const cb of this.dataCallbacks) {
+        try { cb(str); } catch { }
+      }
+    });
+
+    this.childProcess.on('exit', (code, signal) => {
+      this.running = false;
+      for (const cb of this.exitCallbacks) {
+        try { cb(code ?? 1, signal ? 0 : undefined); } catch { }
+      }
+    });
+
+    this.childProcess.on('error', (err) => {
+      this.running = false;
+      console.error('[PTYManager] Spawn error:', err.message);
+      for (const cb of this.exitCallbacks) {
+        try { cb(1); } catch { }
+      }
+    });
   }
 
-  /**
-   * Writes data to the PTY stdin.
-   * 
-   * @param data - Data to write (typically includes newline for command execution)
-   * @throws Error if PTY has not been spawned
-   */
   public write(data: string): void {
-    if (!this.ptyProcess) {
-      throw new Error('PTY not spawned');
+    if (this.useNativePty && this.ptyProcess) {
+      this.ptyProcess.write(data);
+    } else if (this.childProcess?.stdin) {
+      this.childProcess.stdin.write(data);
     }
-    this.ptyProcess.write(data);
   }
 
-  /**
-   * Registers a callback for PTY data events.
-   * 
-   * @param callback - Function to call when data is received
-   */
   public onData(callback: PTYDataCallback): void {
     this.dataCallbacks.push(callback);
   }
 
-  /**
-   * Registers a callback for PTY exit events.
-   * 
-   * @param callback - Function to call on process exit
-   */
   public onExit(callback: PTYExitCallback): void {
     this.exitCallbacks.push(callback);
   }
 
-  /**
-   * Resizes the PTY terminal.
-   * 
-   * @param cols - Number of columns
-   * @param rows - Number of rows
-   * @throws Error if PTY has not been spawned
-   */
   public resize(cols: number, rows: number): void {
-    if (!this.ptyProcess) {
-      throw new Error('PTY not spawned');
+    if (this.useNativePty && this.ptyProcess) {
+      this.ptyProcess.resize(cols, rows);
     }
-    this.ptyProcess.resize(cols, rows);
+    // child_process doesn't support resize
   }
 
-  /**
-   * Kills the PTY subprocess.
-   * 
-   * @param signal - Signal to send (default: SIGTERM)
-   * @throws Error if PTY has not been spawned
-   */
   public kill(signal?: string): void {
-    if (!this.ptyProcess) {
-      throw new Error('PTY not spawned');
+    if (this.useNativePty && this.ptyProcess) {
+      this.ptyProcess.kill(signal);
+    } else if (this.childProcess) {
+      this.childProcess.kill(signal as NodeJS.Signals | undefined);
     }
-    this.ptyProcess.kill(signal);
   }
 
-  /**
-   * Checks if the PTY is still running.
-   * 
-   * @returns True if the PTY process is active and has not exited
-   */
   public isRunning(): boolean {
     return this.running;
-  }
-
-  /**
-   * Cleans up resources and resets internal state.
-   */
-  private cleanup(): void {
-    for (const disposable of this.disposables) {
-      try {
-        disposable.dispose();
-      } catch {
-        // Ignore disposal errors
-      }
-    }
-    this.disposables = [];
-    this.ptyProcess = null;
   }
 }
