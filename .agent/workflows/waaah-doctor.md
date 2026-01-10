@@ -57,7 +57,7 @@
      ```
    - IF `[ -z "$CHANGES" ]`:
      - `update_progress({ message: "Only non-source changes detected. Skipping analysis.", phase: "IDLE" })`
-     - Proceed to Step 5.
+     - Proceed to Step 6.
    - ELSE:
      - `update_progress({ message: "Detected source changes. Analyzing...", phase: "ANALYSIS" })`
      - Run `find packages -maxdepth 2` to refresh structure map.
@@ -88,15 +88,70 @@
        }
        ```
      - `update_progress({ message: "Coverage violation: <file> at <coverage>%", phase: "ANALYSIS" })`
-   - ELSE:
-     - `update_progress({ message: "Coverage OK for <file>", phase: "ANALYSIS" })`
+   - Proceed to Step 5.
 
-5. **Update State**
+5. **Structure/Quality Analysis**
+   - For each changed file in `$CHANGES`:
+     ```bash
+     # Check file size (lines)
+     LINE_COUNT=$(wc -l < "$FILE")
+     
+     # Check cyclomatic complexity using grep pattern matching for control flow
+     COMPLEXITY=$(grep -cE "(if |else |switch |case |while |for |catch |&&|\|\||\?)" "$FILE" || echo 0)
+     ```
+   - **File Size Check** - IF `LINE_COUNT` > 500:
+     - Record violation:
+       ```json
+       {
+         "type": "file_size",
+         "file": "<file_path>",
+         "lines": <line_count>,
+         "threshold": 500,
+         "message": "File exceeds 500 lines - consider splitting"
+       }
+       ```
+   - **Complexity Check** - IF `COMPLEXITY` > 20:
+     - Record violation:
+       ```json
+       {
+         "type": "complexity",
+         "file": "<file_path>",
+         "score": <complexity>,
+         "threshold": 20,
+         "message": "High cyclomatic complexity - consider refactoring"
+       }
+       ```
+   - **Duplicate Detection** - Check for similar exports/interfaces:
+     ```bash
+     # Extract interface/type/class names from changed files
+     EXPORTS=$(grep -oE "(export (interface|type|class) [A-Z][a-zA-Z0-9]+)" "$FILE" | cut -d' ' -f3)
+     
+     # Search for same names in other files (simple duplication check)
+     for EXPORT in $EXPORTS; do
+       MATCHES=$(grep -rl "export.*$EXPORT" packages/ --include="*.ts" | grep -v "$FILE" | wc -l)
+       if [ "$MATCHES" -gt 0 ]; then
+         # Potential duplicate found
+         echo "Warning: $EXPORT may be duplicated"
+       fi
+     done
+     ```
+   - IF duplicates found:
+     - Record violation:
+       ```json
+       {
+         "type": "duplicate",
+         "name": "<export_name>",
+         "files": ["<file1>", "<file2>"],
+         "message": "Potential duplicate definition found"
+       }
+       ```
+
+6. **Update State**
    - Persist new state:
      ```bash
      NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
      echo "{\"last_sha\": \"$LATEST_SHA\", \"last_run\": \"$NOW\"}" > .waaah/doctor/state.json
      ```
 
-6. **Loop**
+7. **Loop**
    - Return to Step 1.
