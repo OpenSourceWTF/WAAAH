@@ -88,21 +88,23 @@ class AgentRunner {
   private spawnAgent(): void {
     if (this.shouldStop) return;
 
-    const prompt = this.resume
-      ? `Resume the /${this.workflow} workflow. Continue from where you left off.`
-      : `Follow the /${this.workflow} workflow exactly.`;
-
-    let args = [...this.args];
+    let args: string[] = [];
 
     if (this.cli === 'gemini') {
-      // Gemini CLI: use --prompt-interactive for interactive mode
-      // Workspace is set via cwd, not as positional argument
-      // Format: gemini -i "prompt" --yolo
+      // Gemini: uses prompt text, handles its own session
+      const prompt = this.resume
+        ? `Resume the /${this.workflow} workflow. Continue from where you left off.`
+        : `Follow the /${this.workflow} workflow exactly.`;
       args = ['-i', prompt, '--yolo'];
     } else if (this.cli === 'claude') {
-      // Claude CLI: claude --dangerously-skip-permissions "prompt"
-      // Prompt is positional, not a flag
-      args = ['--dangerously-skip-permissions', prompt];
+      // Claude: use --continue for restarts, initial prompt for first run
+      if (this.resume) {
+        // Continue most recent conversation
+        args = ['--dangerously-skip-permissions', '--continue'];
+      } else {
+        const prompt = `Follow the /${this.workflow} workflow exactly.`;
+        args = ['--dangerously-skip-permissions', prompt];
+      }
     }
 
     console.log(`\n🚀 Starting ${this.cli} agent (attempt ${this.restartCount + 1}/${MAX_RESTARTS})...`);
