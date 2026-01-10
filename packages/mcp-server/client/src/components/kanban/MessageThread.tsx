@@ -198,9 +198,9 @@ export const MessageThread: React.FC<MessageThreadProps> = ({
                   </div>
                   <p className="whitespace-pre-wrap break-words">{msg.content}</p>
                   {/* Images */}
-                  {msg.metadata?.images && Array.isArray(msg.metadata.images) && (
+                  {msg.images && msg.images.length > 0 && (
                     <div className="flex gap-2 mt-2 flex-wrap">
-                      {(msg.metadata.images as Array<{ dataUrl: string; name?: string }>).map((img, imgIdx) => (
+                      {msg.images.map((img, imgIdx) => (
                         <img
                           key={imgIdx}
                           src={img.dataUrl}

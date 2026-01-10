@@ -8,22 +8,23 @@ const dashboardContent = fs.readFileSync(dashboardPath, 'utf-8');
 
 describe('Dashboard UI Refinements (Static Analysis)', () => {
 
-  it('should have large numbers for Summary Cards', () => {
-    // Verify text-xl for the stats numbers (Agents, Tasks, Completed)
-    const textLargeMatches = dashboardContent.match(/text-xl/g);
-    expect(textLargeMatches?.length).toBeGreaterThanOrEqual(3);
-
-    // Verify icons h-4 w-4 (smaller icons in current design)
-    const iconMatches = dashboardContent.match(/h-4 w-4/g);
-    expect(iconMatches?.length).toBeGreaterThanOrEqual(1);
+  it('should use custom hooks for data fetching', () => {
+    // Check for useTaskData and useAgentData hooks
+    expect(dashboardContent).toContain('useTaskData');
+    expect(dashboardContent).toContain('useAgentData');
   });
 
-  it('should have Search and Filter controls', () => {
-    // Search Input
-    expect(dashboardContent).toContain('placeholder="SEARCH SCRIBBLINGS..."');
+  it('should have theme controls', () => {
+    // Theme hook
+    expect(dashboardContent).toContain('useTheme');
+    expect(dashboardContent).toContain('setTheme');
+  });
 
-    // Filter Select
-    expect(dashboardContent).toContain('value={statusFilter}');
-    expect(dashboardContent).toContain('<option value="ALL">ALL FINISHED</option>');
+  it('should render KanbanBoard', () => {
+    expect(dashboardContent).toContain('<KanbanBoard');
+  });
+
+  it('should have agent sidebar', () => {
+    expect(dashboardContent).toContain('AgentSidebar');
   });
 });

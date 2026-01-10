@@ -121,18 +121,26 @@ body,
 
 /* Scrollbar styling - theme aware */
 ::-webkit-scrollbar {
-  width: 10px;
-  background: hsl(var(--muted));
+  width: 6px;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: hsl(var(--muted-foreground));
-  border: 1px solid hsl(var(--border));
-  border-radius: 5px;
+  background: hsl(var(--muted-foreground) / 0.3);
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--primary));
+  background: hsl(var(--muted-foreground) / 0.5);
+}
+
+/* Light mode: make scrollbar subtle */
+.light ::-webkit-scrollbar {
+  background: transparent;
+}
+
+.light ::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
 }
 
 /* Theme-aware background utilities for light/dark mode compatibility */

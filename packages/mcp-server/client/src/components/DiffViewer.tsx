@@ -1,100 +1,14 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MessageSquare, Check, Send, ChevronDown, ChevronRight, Plus, FileText, X } from "lucide-react";
-
-interface ReviewComment {
-  id: string;
-  taskId: string;
-  filePath: string;
-  lineNumber: number | null;
-  content: string;
-  authorRole: 'user' | 'agent';
-  authorId?: string;
-  threadId?: string;
-  resolved: boolean;
-  resolvedBy?: string;
-  createdAt: number;
-}
-
-interface DiffLine {
-  content: string;
-  type: 'add' | 'remove' | 'context' | 'header';
-  lineNumber?: { old?: number; new?: number };
-}
-
-interface DiffFile {
-  path: string;
-  lines: DiffLine[];
-}
-
-interface FileStats {
-  path: string;
-  additions: number;
-  deletions: number;
-  modifications: number;
-}
+import { MessageSquare, Check, Send, ChevronDown, ChevronRight, Plus } from "lucide-react";
+import { parseDiff, getFileStats } from '@/utils/diffParser';
+import type { DiffFile, ReviewComment } from '@/utils/diffParser';
+import { FileNavigator } from './diff/FileNavigator';
 
 interface DiffViewerProps {
   taskId: string;
   onAddComment: (filePath: string, lineNumber: number | null, content: string) => void;
-}
-
-// Parse unified diff format
-function parseDiff(diffText: string): DiffFile[] {
-  const files: DiffFile[] = [];
-  const lines = diffText.split('\n');
-  let currentFile: DiffFile | null = null;
-  let oldLine = 0;
-  let newLine = 0;
-
-  for (const line of lines) {
-    if (line.startsWith('diff --git')) {
-      if (currentFile) files.push(currentFile);
-      const match = line.match(/b\/(.+)$/);
-      currentFile = { path: match?.[1] || 'unknown', lines: [] };
-    } else if (line.startsWith('@@')) {
-      if (!currentFile) continue;
-      const match = line.match(/@@ -(\d+),?\d* \+(\d+),?\d* @@/);
-      if (match) {
-        oldLine = parseInt(match[1]);
-        newLine = parseInt(match[2]);
-      }
-      currentFile.lines.push({ content: line, type: 'header' });
-    } else if (currentFile) {
-      if (line.startsWith('+') && !line.startsWith('+++')) {
-        currentFile.lines.push({
-          content: line.slice(1),
-          type: 'add',
-          lineNumber: { new: newLine++ }
-        });
-      } else if (line.startsWith('-') && !line.startsWith('---')) {
-        currentFile.lines.push({
-          content: line.slice(1),
-          type: 'remove',
-          lineNumber: { old: oldLine++ }
-        });
-      } else if (line.startsWith(' ') || line === '') {
-        currentFile.lines.push({
-          content: line.slice(1) || '',
-          type: 'context',
-          lineNumber: { old: oldLine++, new: newLine++ }
-        });
-      }
-    }
-  }
-  if (currentFile) files.push(currentFile);
-  return files;
-}
-
-// Calculate file stats
-function getFileStats(files: DiffFile[]): FileStats[] {
-  return files.map(file => ({
-    path: file.path,
-    additions: file.lines.filter(l => l.type === 'add').length,
-    deletions: file.lines.filter(l => l.type === 'remove').length,
-    modifications: 0 // Could be computed by pairing +/- lines
-  }));
 }
 
 export function DiffViewer({ taskId, onAddComment }: DiffViewerProps) {
@@ -105,7 +19,6 @@ export function DiffViewer({ taskId, onAddComment }: DiffViewerProps) {
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
   const [commentingLine, setCommentingLine] = useState<{ file: string; line: number | null } | null>(null);
   const [newComment, setNewComment] = useState('');
-  const [navOpen, setNavOpen] = useState(false);
 
   // Refs for file sections to enable jump-to
   const fileRefs = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -175,7 +88,6 @@ export function DiffViewer({ taskId, onAddComment }: DiffViewerProps) {
   const jumpToFile = (path: string) => {
     // Expand the file first
     setExpandedFiles(prev => new Set([...prev, path]));
-    setNavOpen(false);
 
     // Scroll to file after a tick
     setTimeout(() => {
@@ -224,72 +136,13 @@ export function DiffViewer({ taskId, onAddComment }: DiffViewerProps) {
 
   return (
     <div className="relative space-y-4">
-      {/* Floating File Navigator Button */}
-      <div className="fixed left-4 top-1/2 -translate-y-1/2 z-50">
-        {!navOpen ? (
-          <Button
-            variant="default"
-            size="sm"
-            className="h-10 w-10 p-0 bg-primary/90 hover:bg-primary shadow-lg border border-primary-foreground/20"
-            onClick={() => setNavOpen(true)}
-            title="Show file navigator"
-          >
-            <FileText className="h-5 w-5" />
-          </Button>
-        ) : (
-          <div className="bg-background/95 backdrop-blur border border-primary/30 shadow-xl w-72 max-h-[60vh] overflow-hidden flex flex-col">
-            {/* Navigator Header */}
-            <div className="flex items-center justify-between px-3 py-2 bg-primary/10 border-b border-primary/20">
-              <div className="flex items-center gap-2">
-                <FileText className="h-4 w-4 text-primary" />
-                <span className="text-sm font-bold text-primary">FILES</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-green-400">+{totalAdditions}</span>
-                <span className="text-xs text-red-400">−{totalDeletions}</span>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6 text-primary/50 hover:text-primary"
-                  onClick={() => setNavOpen(false)}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-
-            {/* File List */}
-            <div className="overflow-y-auto p-1">
-              {fileStats.map(stat => (
-                <button
-                  key={stat.path}
-                  className="w-full text-left px-2 py-1.5 hover:bg-primary/10 flex items-center gap-2 group"
-                  onClick={() => jumpToFile(stat.path)}
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-mono text-primary truncate" title={stat.path}>
-                      {stat.path.split('/').pop()}
-                    </p>
-                    <p className="text-[10px] text-primary/40 truncate">{stat.path}</p>
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    {stat.additions > 0 && (
-                      <span className="text-[10px] px-1 bg-green-500/20 text-green-400 rounded">
-                        +{stat.additions}
-                      </span>
-                    )}
-                    {stat.deletions > 0 && (
-                      <span className="text-[10px] px-1 bg-red-500/20 text-red-400 rounded">
-                        −{stat.deletions}
-                      </span>
-                    )}
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
+      {/* Floating File Navigator */}
+      <FileNavigator
+        fileStats={fileStats}
+        totalAdditions={totalAdditions}
+        totalDeletions={totalDeletions}
+        onJumpToFile={jumpToFile}
+      />
 
       {/* Header with stats */}
       <div className="flex items-center justify-between px-2">

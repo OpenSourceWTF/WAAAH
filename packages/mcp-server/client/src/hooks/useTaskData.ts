@@ -15,7 +15,7 @@ export interface Task {
   response?: Record<string, unknown>;
   context?: Record<string, unknown>;
   history?: { timestamp: number; status: string; agentId?: string; message?: string }[];
-  messages?: { timestamp: number; role: string; content: string }[];
+  messages?: { timestamp: number; role: 'user' | 'agent' | 'system'; content: string; metadata?: Record<string, unknown> }[];
   createdAt?: number;
   completedAt?: number;
 }

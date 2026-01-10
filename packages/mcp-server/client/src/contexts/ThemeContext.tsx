@@ -43,7 +43,7 @@ const TEXT_MAP = {
 };
 
 type Theme = 'WAAAH' | 'LIGHT' | 'DARK';
-type TextKey = keyof typeof TEXT_MAP['WAAAH'];
+export type TextKey = keyof typeof TEXT_MAP['WAAAH'];
 
 interface ThemeContextType {
   theme: Theme;
