@@ -48,78 +48,43 @@ pnpm serve
 
 ## Agent Roles & Workflows
 
-WAAAH includes pre-built workflow directives for specialized agents:
+V7 unifies all agent roles into a single **Orchestrator** agent.
 
 | Workflow | Role | Description |
 |----------|------|-------------|
-| `/waaah-fullstack` | Full Stack Engineer | Implements features, writes code, creates PRs |
-| `/waaah-tester` | Test Engineer | Writes tests, validates code, ensures coverage |
-| `/waaah-pm` | Project Manager | Plans work, writes specs, coordinates tasks |
-| `/waaah-boss` | **Boss / Tech Lead** | Orchestrates other agents (see below) |
+| `/waaah-orc` | Orchestrator | The universal agent that can plan, code, and test |
+| `/waaah-assign` | Assigner | CLI helper to assign tasks |
 
-### Worker Agents (FullStack, Tester, PM)
+### Orchestrator Agent
 
-These agents enter an **autonomous task loop**:
-1. Register with the WAAAH server
-2. Wait for tasks via `wait_for_prompt`
-3. Execute tasks autonomously
-4. Report results via `send_response`
-5. Loop back to step 2
+The `/waaah-orc` agent enters an **autonomous task loop**:
+1. Registers with the WAAAH server
+2. Waits for tasks via `wait_for_prompt`
+3. Executes tasks autonomously (creating Git worktrees)
+4. Reports results via `send_response`
+5. Loops back to step 2
 
-**Start a worker agent**: Open a new Antigravity conversation and run:
+**Start an agent**: Open a new Antigravity conversation and run:
 ```
-/waaah-fullstack
-```
-
-### Boss Agent (Special Role)
-
-The `/waaah-boss` workflow is different—it's an **orchestrator of orchestrators**.
-
-- Does NOT enter a wait loop
-- Pair programs with YOU directly
-- Delegates tasks to worker agents
-- Monitors progress and coordinates work
-
-**Use the Boss when you want to:**
-- Plan and delegate a complex feature across multiple agents
-- Monitor your agent fleet
-- Manually trigger specific agent actions
-
-```
-/waaah-boss
+/waaah-orc
 ```
 
 ---
 
 ## Spinning Up Agents
 
-### Option A: Multiple VS Code Windows
+### Single Window (Recommended)
 
-Open separate VS Code windows for each agent:
+1. Open a new Antigravity chat panel.
+2. Run `/waaah-orc`.
+3. Use the CLI in your terminal to assign tasks:
+   ```bash
+   waaah assign "Implement feature X"
+   ```
 
-1. **Window 1** - Your main workspace (Boss)
-   - Run `/waaah-boss` to pair program with you
-   
-2. **Window 2** - FullStack agent
-   - Open same or different repo
-   - Run `/waaah-fullstack`
-   
-3. **Window 3** - Tester agent
-   - Open same repo
-   - Run `/waaah-tester`
+### Multiple Agents
 
-Each window runs its own Antigravity session with a dedicated agent.
-
-### Option B: New Conversations in Same Window
-
-In a single VS Code window, open multiple Antigravity chat panels:
-
-1. Open Antigravity sidebar
-2. Click "New Conversation" 
-3. Run `/waaah-fullstack` in the new conversation
-4. Repeat for other agents
-
-> **Note:** This works but can be harder to track. Multiple windows is recommended.
+To scale up, open multiple Antigravity windows/panels and run `/waaah-orc` in each. The system will distribute tasks automatically.
 
 ---
 
@@ -129,13 +94,8 @@ In a single VS Code window, open multiple Antigravity chat panels:
 your-project/
 ├── .agent/
 │   └── workflows/
-│       ├── waaah-boss.md        # Orchestrator (pair with you)
-│       ├── waaah-fullstack.md   # Full Stack Engineer loop
-│       ├── waaah-tester.md      # Test Engineer loop
-│       ├── waaah-pm.md          # Project Manager loop
-│       ├── waaah-check-task.md  # Check task status
-│       ├── waaah-delegate.md    # Manual delegation
-│       └── waaah-respond.md     # Send response to CLI
+│       ├── waaah-orc.md         # The Master Workflow
+│       └── waaah-assign.md      # CLI Assignment Helper
 └── .gitignore                   # Add: .agent/
 ```
 
@@ -150,42 +110,28 @@ The `.agent/` directory contains workflow prompts that may include project-speci
 
 ---
 
-## Example: Multi-Agent Feature Development
+## Example: Feature Development
 
 1. **Start the server**: `pnpm serve`
 
-2. **Open 3 VS Code windows** on your project
+2. **Open a VS Code window** on your project
 
-3. **Window 1 (You + Boss)**:
-   ```
-   /waaah-boss
-   ```
-   Plan your feature and delegate:
-   ```
-   @WAAAH @FullStack "Implement user authentication with JWT"
-   @WAAAH @TestEng "Write tests for auth module when FullStack completes"
+3. **Start an Agent**:
+   - Open Chat
+   - Run `/waaah-orc`
+
+4. **Assign Work**:
+   ```bash
+   waaah assign "Implement user authentication with JWT"
    ```
 
-4. **Window 2 (FullStack)**:
-   ```
-   /waaah-fullstack
-   ```
-   Agent waits for tasks, then executes autonomously.
-
-5. **Window 3 (Tester)**:
-   ```
-   /waaah-tester
-   ```
-   Agent waits for test requests.
-
-6. **Monitor via Dashboard**: `http://localhost:3000/admin`
+5. **Monitor via Dashboard**: `http://localhost:3000/admin`
 
 ---
 
 ## Tips for Antigravity
 
 - **Gemini works best**: WAAAH was developed with Gemini. Claude may escape wait loops.
-- **Keep Boss active**: The Boss doesn't loop—keep that conversation active for coordination.
 - **Use the Dashboard**: Real-time visibility at `/admin` helps track agent status.
 - **Customize workflows**: Edit `.agent/workflows/*.md` to tune agent behavior for your project.
 
@@ -198,4 +144,4 @@ The `.agent/` directory contains workflow prompts that may include project-speci
 | `/waaah-*` commands not found | Copy `.agent/` directory to your project root |
 | Agent not registering | Check MCP config and `WAAAH_API_KEY` |
 | Agent stuck in "OFFLINE" | Restart the Antigravity session |
-| Multiple agents same ID | Each window should use different workflow |
+| Multiple agents same ID | Agents now auto-generate IDs |
