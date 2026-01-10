@@ -4,6 +4,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Square } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { useTheme } from '@/contexts/ThemeContext';
+import { apiFetch, API_KEY } from '@/lib/api';
 
 interface ActivityEvent {
   type: string;
@@ -30,7 +31,9 @@ export function ActivityFeed() {
   }, [events, autoScroll]);
 
   useEffect(() => {
-    const eventSource = new EventSource('/admin/delegations/stream');
+    // SSE needs API key as query param since headers can't be set
+    const sseUrl = API_KEY ? `/admin/delegations/stream?apiKey=${API_KEY}` : '/admin/delegations/stream';
+    const eventSource = new EventSource(sseUrl);
 
     eventSource.onmessage = (event) => {
       try {
@@ -73,7 +76,7 @@ export function ActivityFeed() {
 
   // Fetch initial logs
   useEffect(() => {
-    fetch('/admin/logs')
+    apiFetch('/admin/logs')
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) {

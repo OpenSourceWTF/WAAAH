@@ -154,11 +154,10 @@ export function useTaskData(options: UseTaskDataOptions = {}) {
 
     setLoadingMore('completed');
     const newOffset = completedOffset + pageSize;
-    const baseUrl = 'http://localhost:3000';
     const searchParam = search.trim() ? `&q=${encodeURIComponent(search.trim())}` : '';
 
     try {
-      const res = await fetch(`${baseUrl}/admin/tasks?limit=${pageSize}&offset=${newOffset}&status=COMPLETED${searchParam}`);
+      const res = await apiFetch(`/admin/tasks?limit=${pageSize}&offset=${newOffset}&status=COMPLETED${searchParam}`);
       if (res.ok) {
         const data = await res.json();
         if (data.length > 0) {
@@ -184,11 +183,10 @@ export function useTaskData(options: UseTaskDataOptions = {}) {
 
     setLoadingMore('cancelled');
     const newOffset = cancelledOffset + pageSize;
-    const baseUrl = 'http://localhost:3000';
     const searchParam = search.trim() ? `&q=${encodeURIComponent(search.trim())}` : '';
 
     try {
-      const res = await fetch(`${baseUrl}/admin/tasks?limit=${pageSize}&offset=${newOffset}&status=CANCELLED${searchParam}`);
+      const res = await apiFetch(`/admin/tasks?limit=${pageSize}&offset=${newOffset}&status=CANCELLED${searchParam}`);
       if (res.ok) {
         const data = await res.json();
         if (data.length > 0) {

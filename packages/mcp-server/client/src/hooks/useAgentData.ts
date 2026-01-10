@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { apiFetch } from '../lib/api';
 
 /**
  * Agent interface matching the Dashboard's Agent type
@@ -62,7 +63,7 @@ export function useAgentData(options: UseAgentDataOptions = {}) {
     const timeoutId = setTimeout(() => controller.abort(), 3000);
 
     try {
-      const res = await fetch('http://localhost:3000/admin/agents/status', { signal: controller.signal });
+      const res = await apiFetch('/admin/agents/status', { signal: controller.signal });
       clearTimeout(timeoutId);
       if (res.ok) {
         const data = await res.json();

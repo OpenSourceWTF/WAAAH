@@ -6,6 +6,7 @@ import { KanbanBoard } from './KanbanBoard';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useTaskData, useAgentData } from './hooks';
 import { AgentSidebar } from './components/dashboard/AgentSidebar';
+import { apiFetch } from './lib/api';
 
 
 
@@ -47,7 +48,7 @@ export function Dashboard() {
   const handleCancelTask = useCallback(async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     try {
-      await fetch(`/admin/tasks/${id}/cancel`, { method: 'POST' });
+      await apiFetch(`/admin/tasks/${id}/cancel`, { method: 'POST' });
       fetchData(); // Refresh immediately
     } catch (error) {
       console.error("Failed to cancel task", error);
@@ -57,7 +58,7 @@ export function Dashboard() {
   const handleRetryTask = useCallback(async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     try {
-      await fetch(`/admin/tasks/${id}/retry`, { method: 'POST' });
+      await apiFetch(`/admin/tasks/${id}/retry`, { method: 'POST' });
       fetchData(); // Refresh immediately
     } catch (error) {
       console.error("Failed to retry task", error);
@@ -69,7 +70,7 @@ export function Dashboard() {
     if (!window.confirm(`Are you sure you want to SHUTDOWN agent ${id}?`)) return;
 
     try {
-      await fetch('/admin/evict', {
+      await apiFetch('/admin/evict', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ agentId: id, reason: 'Admin Shutdown via Dashboard', action: 'SHUTDOWN' })
@@ -83,7 +84,7 @@ export function Dashboard() {
   const handleApproveTask = useCallback(async (e: React.MouseEvent, taskId: string) => {
     e.stopPropagation();
     try {
-      const res = await fetch(`/admin/tasks/${taskId}/approve`, { method: 'POST' });
+      const res = await apiFetch(`/admin/tasks/${taskId}/approve`, { method: 'POST' });
       if (!res.ok) throw new Error('Failed to approve');
       console.log(`Task ${taskId} approved`);
       fetchData(); // Refresh immediately
@@ -94,7 +95,7 @@ export function Dashboard() {
 
   const handleRejectTask = useCallback(async (taskId: string, feedback: string) => {
     try {
-      const res = await fetch(`/admin/tasks/${taskId}/reject`, {
+      const res = await apiFetch(`/admin/tasks/${taskId}/reject`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ feedback })
@@ -109,7 +110,7 @@ export function Dashboard() {
 
   const handleSendComment = useCallback(async (taskId: string, content: string, replyTo?: string, images?: { dataUrl: string; mimeType: string; name: string }[]) => {
     try {
-      const res = await fetch(`/admin/tasks/${taskId}/comments`, {
+      const res = await apiFetch(`/admin/tasks/${taskId}/comments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content, replyTo, images })
@@ -124,7 +125,7 @@ export function Dashboard() {
 
   const handleAddReviewComment = useCallback(async (taskId: string, filePath: string, lineNumber: number | null, content: string) => {
     try {
-      const res = await fetch(`/admin/tasks/${taskId}/review-comments`, {
+      const res = await apiFetch(`/admin/tasks/${taskId}/review-comments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ filePath, lineNumber, content })

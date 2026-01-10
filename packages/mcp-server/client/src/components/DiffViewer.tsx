@@ -6,6 +6,7 @@ import { parseDiff, getFileStats } from '@/utils/diffParser';
 import type { DiffFile, ReviewComment } from '@/utils/diffParser';
 import { FileNavigator } from './diff/FileNavigator';
 import { tokenize, TOKEN_CLASSES } from '@/utils/syntaxHighlight';
+import { apiFetch } from '@/lib/api';
 
 interface DiffViewerProps {
   taskId: string;
@@ -28,7 +29,7 @@ export function DiffViewer({ taskId, onAddComment }: DiffViewerProps) {
   // Fetch comments only (doesn't reset scroll)
   const fetchComments = useCallback(async () => {
     try {
-      const res = await fetch(`/admin/tasks/${taskId}/review-comments`);
+      const res = await apiFetch(`/admin/tasks/${taskId}/review-comments`);
       if (res.ok) {
         setComments(await res.json());
       }
@@ -41,7 +42,7 @@ export function DiffViewer({ taskId, onAddComment }: DiffViewerProps) {
   const fetchDiff = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch(`/admin/tasks/${taskId}/diff`);
+      const res = await apiFetch(`/admin/tasks/${taskId}/diff`);
 
       if (res.ok) {
         const data = await res.json();
