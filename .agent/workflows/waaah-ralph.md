@@ -15,7 +15,7 @@ description: Interactive task refinement with custom quality gates
 |---|------|
 | 1 | Exit: ALL criteria = 10 |
 | 2 | Max: 5 iterations |
-| 3 | Log: `.waaah/ralph/progress.md` |
+| 3 | Log: `.waaah/ralph/NNN-slug/progress.md` (numbered folders) |
 | 4 | Code: feedback must pass |
 
 ---
@@ -37,16 +37,36 @@ description: Interactive task refinement with custom quality gates
 ```
 INIT
   mkdir -p .waaah/ralph
-  IF progress.md exists:
-    PROMPT "Resume? (y/n)" → IF y: goto LOOP
-
+  
+  # Determine next session number
+  EXISTING = ls .waaah/ralph | grep -E "^[0-9]{3}-" | sort -r | head -1
+  IF EXISTING:
+    LAST_NUM = extract leading 3-digit number from EXISTING
+    NEXT_NUM = LAST_NUM + 1
+  ELSE:
+    NEXT_NUM = 1
+  
+  # Check for in-progress sessions (no "✅ COMPLETE" in progress.md)
+  FOR each folder in .waaah/ralph sorted desc:
+    IF folder/progress.md exists AND NOT contains "✅ COMPLETE":
+      PROMPT "Resume session [folder]? (y/n)" → IF y:
+        SESSION_DIR = .waaah/ralph/[folder]
+        goto LOOP
+  
 COLLECT
   PROMPT "Task?" → TASK
   PROMPT "Criteria? (csv)" → CRITERIA[] | default: [clarity, completeness, correctness]
   TYPE = match(TASK, TASK_TYPES table)
   IF TYPE ∈ {optimize, spec}:
     PROMPT "Switch to /waaah-[TYPE]? (y/n)" → IF y: EXIT + follow
+  
+  # Create session folder with numbered slug
+  SLUG = slugify(first 4 words of TASK)  # e.g., "fix-cli-wrapper"
+  SESSION_DIR = .waaah/ralph/[printf "%03d" NEXT_NUM]-[SLUG]
+  mkdir -p SESSION_DIR
+  
   DISPLAY "Task: [TASK] | Type: [TYPE] | Criteria: [CRITERIA]"
+  DISPLAY "Session: [SESSION_DIR]"
   PROMPT "Start? (y/n)" → IF n: EXIT
 
 EXECUTE
@@ -55,11 +75,11 @@ EXECUTE
     RUN: pnpm typecheck && pnpm test && pnpm lint
     IF fail: RESULT = fix errors first
   SCORES = rate(RESULT, each CRITERIA, 1-10)
-  LOG(iteration=0, SCORES)
-  IF TYPE=code: git commit -m "ralph: iter 0"
+  LOG(SESSION_DIR/progress.md, iteration=0, SCORES)
+  IF TYPE=code: git commit -m "ralph: iter 0 - [SLUG]"
 
 LOOP (i = 1..5)
-  READ progress.md
+  READ SESSION_DIR/progress.md
   FOCUS = argmin(SCORES)
   
   # Improvement strategy by criterion
@@ -76,7 +96,7 @@ LOOP (i = 1..5)
     IF fail: RESULT = fix errors; CONTINUE (don't advance)
   
   SCORES_NEW = rate(RESULT, each CRITERIA, 1-10)
-  LOG(iteration=i, FOCUS, SCORES_NEW, delta)
+  LOG(SESSION_DIR/progress.md, iteration=i, FOCUS, SCORES_NEW, delta)
   IF TYPE=code: git commit -m "ralph: iter [i] - [FOCUS]"
   
   IF all(SCORES_NEW) = 10: goto FINALIZE
@@ -84,7 +104,7 @@ LOOP (i = 1..5)
   SCORES = SCORES_NEW
 
 FINALIZE
-  LOG "✅ COMPLETE"
+  LOG SESSION_DIR/progress.md "✅ COMPLETE"
   DISPLAY:
     [RESULT]
     | Iter | Focus | Δ |
@@ -92,6 +112,24 @@ FINALIZE
     [journey from progress.md]
   PROMPT "1. New task  2. Add criteria  3. Exit"
 ```
+
+---
+
+## FOLDER STRUCTURE
+
+```
+.waaah/ralph/
+├── 001-fix-cli-wrapper/
+│   └── progress.md
+├── 002-add-new-feature/
+│   └── progress.md
+├── 003-refactor-api/
+│   └── progress.md
+└── ...
+```
+
+Each session folder contains:
+- `progress.md` - Full iteration history with scores and changes
 
 ---
 
