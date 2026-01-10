@@ -16,7 +16,7 @@ const cliUrl = urlArgIndex !== -1 && process.argv[urlArgIndex + 1]
   ? process.argv[urlArgIndex + 1]
   : undefined;
 
-const SERVER_URL = cliUrl || process.env.WAAAH_SERVER_URL || 'http://localhost:3456';
+const SERVER_URL = cliUrl || process.env.WAAAH_SERVER_URL || 'http://localhost:3000';
 const AGENT_ID = process.env.AGENT_ID || 'unknown-agent';
 const AGENT_ROLE = process.env.AGENT_ROLE || 'developer';
 const WAAAH_API_KEY = process.env.WAAAH_API_KEY;
