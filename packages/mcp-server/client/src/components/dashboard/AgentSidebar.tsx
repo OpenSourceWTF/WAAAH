@@ -50,11 +50,11 @@ export function AgentSidebar({
   }, []);
 
   const getIndicatorColor = useCallback((agent: Agent) => {
-    if (agent.status === 'OFFLINE') return 'border-gray-500 bg-gray-500/20';
-    if (agent.status === 'PROCESSING') return 'border-yellow-400 bg-yellow-400/20 animate-pulse';
+    if (agent.status === 'OFFLINE') return 'border-gray-600 bg-gray-600/10 opacity-50';
+    if (agent.status === 'PROCESSING') return 'border-cyan-400 bg-cyan-400/20 animate-working-pulse shadow-[0_0_12px_rgba(34,211,238,0.4)]';
     const lastSeenMs = agent.lastSeen ? Date.now() - agent.lastSeen : Infinity;
     if (lastSeenMs > 60000) return 'border-red-500 bg-red-500/20';
-    return 'border-green-500 bg-green-500/20';
+    return 'border-green-500 bg-green-500/30';
   }, []);
 
   const getInitials = useCallback((agent: Agent) => {

@@ -21,14 +21,34 @@ export function createReviewRoutes({ queue, db, workspaceRoot }: ReviewRoutesCon
 
   /**
    * GET /tasks/:taskId/diff
+   * Returns stored diff from task artifacts if available, otherwise falls back to git diff
    */
   router.get('/tasks/:taskId/diff', async (req, res) => {
     const { taskId } = req.params;
-    const branchName = `feature-${taskId}`;
 
     try {
+      // First, check for stored diff in task response
+      const task = queue.getTask(taskId);
+      if (task?.response) {
+        try {
+          const response = typeof task.response === 'string'
+            ? JSON.parse(task.response)
+            : task.response;
+
+          // Check if diff is stored in artifacts
+          if (response?.artifacts?.diff) {
+            res.json({ diff: response.artifacts.diff, source: 'stored' });
+            return;
+          }
+        } catch {
+          // Response parsing failed, fall through to git diff
+        }
+      }
+
+      // Fallback: Try to get diff from git branch
+      const branchName = `feature-${taskId}`;
       const { stdout } = await execAsync(`git diff main...${branchName}`, { cwd: workspaceRoot });
-      res.json({ diff: stdout });
+      res.json({ diff: stdout, source: 'git' });
     } catch (e: any) {
       console.error(`Diff failed for ${taskId}:`, e.message);
       res.status(500).json({ error: 'Failed to fetch diff', details: e.message });

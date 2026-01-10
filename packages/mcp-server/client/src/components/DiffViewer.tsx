@@ -5,6 +5,7 @@ import { MessageSquare, Check, Send, ChevronDown, ChevronRight, Plus } from "luc
 import { parseDiff, getFileStats } from '@/utils/diffParser';
 import type { DiffFile, ReviewComment } from '@/utils/diffParser';
 import { FileNavigator } from './diff/FileNavigator';
+import { tokenize, TOKEN_CLASSES } from '@/utils/syntaxHighlight';
 
 interface DiffViewerProps {
   taskId: string;
@@ -192,7 +193,7 @@ export function DiffViewer({ taskId, onAddComment }: DiffViewerProps) {
 
           {/* Lines */}
           {expandedFiles.has(file.path) && (
-            <div className="font-mono text-xs overflow-x-auto">
+            <div className="text-xs overflow-x-auto normal-case" style={{ fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", monospace' }}>
               {file.lines.map((line, idx) => {
                 const lineNum = line.lineNumber?.new || line.lineNumber?.old;
                 const lineComments = lineNum ? getCommentsForLine(file.path, lineNum) : [];
@@ -228,14 +229,18 @@ export function DiffViewer({ taskId, onAddComment }: DiffViewerProps) {
                         )}
                       </div>
 
-                      {/* Content */}
+                      {/* Content with syntax highlighting */}
                       <div className={`flex-1 py-0.5 px-2 whitespace-pre ${line.type === 'add' ? 'text-green-400' :
                         line.type === 'remove' ? 'text-red-400' : 'text-foreground/70'
                         }`}>
                         {line.type === 'add' && <span className="text-green-500">+</span>}
                         {line.type === 'remove' && <span className="text-red-500">-</span>}
                         {line.type === 'context' && <span className="text-primary/20"> </span>}
-                        {line.content}
+                        {line.type !== 'header' ? (
+                          tokenize(line.content).map((token, ti) => (
+                            <span key={ti} className={TOKEN_CLASSES[token.type]}>{token.value}</span>
+                          ))
+                        ) : line.content}
                       </div>
 
                       {/* Comment indicator */}

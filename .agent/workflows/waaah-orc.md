@@ -170,11 +170,38 @@ LOOP (max 10x):
 ### 2.7 Documentation
 Add TSDoc/JSDoc to all exports: `@param`, `@returns`, `@throws`, `@example`
 
-### 2.8 Submit for Review
+### 2.8 Commit and Submit for Review
+**REQUIRED steps before submitting:**
+```bash
+# 1. Stage and commit all changes
+git add -A
+git commit -m "feat(scope): description
+
+Closes T-{taskNumber}"
+git push origin feature-{taskId}
+
+# 2. Capture metadata for historical record
+BRANCH=$(git branch --show-current)
+COMMIT=$(git rev-parse HEAD)
+DIFF=$(git diff main...HEAD)
+FILES=$(git diff --name-only main...HEAD | tr '\n' ',')
 ```
-send_response({ taskId, status: "IN_REVIEW", message: "feat: ...", artifacts: ["diffs.json"] })
+
+**3. Submit with full artifacts:**
+```
+send_response({ 
+  taskId, 
+  status: "IN_REVIEW", 
+  message: "feat: description of changes",
+  artifacts: {
+    branch: "<branch name>",
+    commit: "<commit sha>",
+    diff: "<full diff content>",
+    files: ["list", "of", "changed", "files"]
+  }
+})
+```
 → Loop to MAIN LOOP
-```
 
 ---
 

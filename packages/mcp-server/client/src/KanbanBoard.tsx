@@ -5,7 +5,7 @@ import { Clock, User } from "lucide-react";
 
 // Import from modular components
 import type { Task } from './components/kanban';
-import { COLUMNS, getStatusBadgeClass, getTaskDuration, formatTaskTitle, formatDate } from './components/kanban';
+import { COLUMNS, getStatusBadgeClass, getTaskDuration, formatTaskTitle, formatDate, formatStatusLabel } from './components/kanban';
 import { ExpandedCardView } from './components/kanban/ExpandedCardView';
 
 interface KanbanBoardProps {
@@ -191,7 +191,7 @@ export const KanbanBoard = React.memo(function KanbanBoard({
                   <CardHeader className="p-3 pb-2 space-y-1">
                     {/* Row 1: Status + NEW badge */}
                     <div className="flex items-center justify-between">
-                      <Badge className={getStatusBadgeClass(task.status)}>{task.status}</Badge>
+                      <Badge className={getStatusBadgeClass(task.status)}>{formatStatusLabel(task.status)}</Badge>
                       {unreadCount > 0 && (
                         <Badge className="bg-amber-500 text-white text-[10px] px-1.5 py-0.5">{unreadCount} PENDING</Badge>
                       )}
