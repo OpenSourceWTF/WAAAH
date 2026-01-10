@@ -74,3 +74,28 @@ export function inferWorkspaceContext(cwd = process.cwd()): WorkspaceContext | u
     path: cwd
   };
 }
+
+/**
+ * Find the workspace root (git repository root) starting from a directory.
+ * Walks up the directory tree until it finds a .git directory.
+ */
+export async function findWorkspaceRoot(startDir: string): Promise<string> {
+  let current = path.resolve(startDir);
+  const root = path.parse(current).root;
+
+  while (current !== root) {
+    try {
+      const gitDir = path.join(current, '.git');
+      const stat = fs.statSync(gitDir);
+      if (stat.isDirectory() || stat.isFile()) {
+        // .git can be a file for worktrees
+        return current;
+      }
+    } catch {
+      // .git doesn't exist, continue up
+    }
+    current = path.dirname(current);
+  }
+
+  throw new Error('Not inside a git repository');
+}
