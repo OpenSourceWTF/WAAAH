@@ -248,7 +248,8 @@ class AgentRunner {
     this.child = spawn(this.cli, args, {
       cwd: this.cwd,
       stdio: 'inherit',
-      env: { ...this.env, NODE_NO_WARNINGS: '1' }
+      env: { ...this.env, NODE_NO_WARNINGS: '1' },
+      detached: true  // Spawn in new process group for clean cleanup
     });
 
     this.lastActivity = Date.now();
@@ -314,8 +315,14 @@ class AgentRunner {
   stop(): void {
     this.shouldStop = true;
     this.cleanup();
-    if (this.child) {
-      this.child.kill('SIGTERM');
+    if (this.child && this.child.pid) {
+      // Kill entire process group (negative PID) to clean up all children
+      try {
+        process.kill(-this.child.pid, 'SIGTERM');
+      } catch {
+        // Process may already be dead
+        this.child.kill('SIGTERM');
+      }
     }
   }
 
