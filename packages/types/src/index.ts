@@ -21,6 +21,8 @@ export interface AgentIdentity {
   lastSeen?: number; // timestamp
   color?: string; // For UI visualization
   currentTask?: string;
+  /** Source of the agent: CLI (waaah-agent wrapper) or IDE (Cursor/Claude/etc) */
+  source?: 'CLI' | 'IDE';
   /** Workspace context for affinity matching */
   workspaceContext?: {
     type: 'local' | 'github';

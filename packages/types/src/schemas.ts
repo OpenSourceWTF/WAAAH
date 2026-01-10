@@ -160,7 +160,8 @@ export const registerAgentSchema = z.object({
   displayName: z.string().optional().describe("Human-readable name for the agent (auto-generated if not provided)"),
   role: z.string().optional().describe("Role of the agent (e.g., 'full-stack-engineer')"),
   capabilities: z.array(StandardCapability).min(1).describe("Capabilities this agent has"),
-  workspaceContext: workspaceContextSchema.optional().describe("Workspace the agent is working in")
+  workspaceContext: workspaceContextSchema.optional().describe("Workspace the agent is working in"),
+  source: z.enum(['CLI', 'IDE']).optional().default('IDE').describe("Source of the agent: CLI (waaah-agent wrapper) or IDE (Cursor/Claude/etc)")
 });
 export type RegisterAgentArgs = z.infer<typeof registerAgentSchema>;
 
