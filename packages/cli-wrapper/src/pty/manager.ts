@@ -24,28 +24,24 @@ export interface PTYSpawnOptions {
   env?: Record<string, string | undefined>;
   cols?: number;
   rows?: number;
-  /** Enable auto-continue when agent waits for user input */
-  autoRespond?: boolean;
+  /** Sanitize output by stripping TUI cursor movement sequences */
+  sanitizeOutput?: boolean;
 }
 
 export type PTYDataCallback = (data: string) => void;
 export type PTYExitCallback = (exitCode: number, signal?: number) => void;
 
-/** Patterns that indicate the agent is waiting for user input */
-const WAIT_PATTERNS = [
-  /continue\?/i,
-  /proceed\?/i,
-  /\(y\/n\)/i,
-  /press enter/i,
-  /waiting for.*input/i,
-  /do you want to/i,
-  /should I/i,
-  /\[Y\/n\]/i,
-  /\[yes\/no\]/i,
-];
-
-/** Auto-response to send when waiting is detected */
-const AUTO_RESPONSE = 'y\n';
+/** Strip TUI cursor movement and screen manipulation sequences */
+const sanitizeTuiOutput = (data: string): string => {
+  // Strip cursor movement, save/restore, clear line/screen, etc.
+  // Preserves colors (SGR sequences like \x1B[32m)
+  return data
+    .replace(/\x1B\[\?25[hl]/g, '')           // Hide/show cursor
+    .replace(/\x1B\[[0-9;]*[ABCDEFGJKST]/g, '') // Cursor movement, clear
+    .replace(/\x1B\[s|\x1B\[u/g, '')            // Save/restore cursor
+    .replace(/\x1B\[\?1049[hl]/g, '')          // Alternate screen buffer
+    .replace(/\x1B\[\d+;\d+H/g, '');            // Cursor positioning
+};
 
 export class PTYManager {
   private ptyProcess: import('node-pty').IPty | null = null;
@@ -54,10 +50,8 @@ export class PTYManager {
   private exitCallbacks: PTYExitCallback[] = [];
   private running = false;
   private useNativePty = false;
-  private autoRespond = false;
-  private lastOutputTime = Date.now();
-  private outputBuffer = '';
-  private heartbeatInterval: NodeJS.Timeout | null = null;
+  private sanitizeOutput = false;
+  private childPid: number | null = null;
 
   public async spawn(options: PTYSpawnOptions): Promise<void> {
     const {
@@ -67,10 +61,10 @@ export class PTYManager {
       env = process.env as Record<string, string>,
       cols = 80,
       rows = 24,
-      autoRespond = true, // Default to auto-respond
+      sanitizeOutput = false,
     } = options;
 
-    this.autoRespond = autoRespond;
+    this.sanitizeOutput = sanitizeOutput;
 
     // Try node-pty first
     if (pty) {
@@ -84,23 +78,23 @@ export class PTYManager {
         });
         this.useNativePty = true;
         this.running = true;
+        this.childPid = this.ptyProcess.pid;
 
         this.ptyProcess.onData((data) => {
-          this.handleOutput(data);
+          const output = this.sanitizeOutput ? sanitizeTuiOutput(data) : data;
           for (const cb of this.dataCallbacks) {
-            try { cb(data); } catch { }
+            try { cb(output); } catch { }
           }
         });
 
         this.ptyProcess.onExit(({ exitCode, signal }) => {
           this.running = false;
-          this.stopHeartbeat();
+          this.childPid = null;
           for (const cb of this.exitCallbacks) {
             try { cb(exitCode, signal); } catch { }
           }
         });
 
-        this.startHeartbeat();
         return;
       } catch (err) {
         console.warn('[PTYManager] node-pty spawn failed, falling back:', err);
@@ -130,32 +124,34 @@ export class PTYManager {
     this.childProcess = spawn(spawnCommand, spawnArgs, {
       cwd,
       env: { ...env, NODE_NO_WARNINGS: '1' } as NodeJS.ProcessEnv,
-      stdio: ['pipe', 'pipe', 'pipe'], // Piped IO now works because 'script' provides the PTY!
+      stdio: ['pipe', 'pipe', 'pipe'],
       shell: false,
+      detached: true, // Create new process group for clean shutdown
     });
     this.running = true;
+    this.childPid = this.childProcess.pid ?? null;
 
     // Forward stdout to data callbacks
     this.childProcess.stdout?.on('data', (data: Buffer) => {
       const str = data.toString();
-      this.handleOutput(str);
+      const output = this.sanitizeOutput ? sanitizeTuiOutput(str) : str;
       for (const cb of this.dataCallbacks) {
-        try { cb(str); } catch { }
+        try { cb(output); } catch { }
       }
     });
 
     // Forward stderr to data callbacks too
     this.childProcess.stderr?.on('data', (data: Buffer) => {
       const str = data.toString();
-      this.handleOutput(str);
+      const output = this.sanitizeOutput ? sanitizeTuiOutput(str) : str;
       for (const cb of this.dataCallbacks) {
-        try { cb(str); } catch { }
+        try { cb(output); } catch { }
       }
     });
 
     this.childProcess.on('exit', (code, signal) => {
       this.running = false;
-      this.stopHeartbeat();
+      this.childPid = null;
       for (const cb of this.exitCallbacks) {
         try { cb(code ?? 1, signal ? 0 : undefined); } catch { }
       }
@@ -163,61 +159,14 @@ export class PTYManager {
 
     this.childProcess.on('error', (err) => {
       this.running = false;
-      this.stopHeartbeat();
+      this.childPid = null;
       console.error('[PTYManager] Spawn error:', err.message);
       for (const cb of this.exitCallbacks) {
         try { cb(1); } catch { }
       }
     });
-
-    this.startHeartbeat();
   }
 
-  private handleOutput(data: string): void {
-    this.lastOutputTime = Date.now();
-    this.outputBuffer += data;
-
-    // Keep only last 500 chars for pattern matching
-    if (this.outputBuffer.length > 500) {
-      this.outputBuffer = this.outputBuffer.slice(-500);
-    }
-  }
-
-  private startHeartbeat(): void {
-    // Check every 5 seconds for stuck prompts
-    this.heartbeatInterval = setInterval(() => {
-      if (!this.running || !this.autoRespond) return;
-
-      // Strip ANSI codes for reliable pattern matching
-      // eslint-disable-next-line no-control-regex
-      const cleanOutput = this.outputBuffer.replace(/\x1B\[\d+;?\d*m/g, '').replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '');
-
-      // Check if output matches a wait pattern
-      for (const pattern of WAIT_PATTERNS) {
-        if (pattern.test(cleanOutput)) {
-          console.log('\n[Heartbeat] Detected wait prompt, auto-responding...');
-          this.write(AUTO_RESPONSE);
-          this.outputBuffer = ''; // Clear buffer after responding
-          break;
-        }
-      }
-
-      // If no output for 2 minutes, send a nudge
-      const idleTime = Date.now() - this.lastOutputTime;
-      if (idleTime > 120_000) {
-        console.log('\n[Heartbeat] Agent idle for 2 minutes, nudging...');
-        this.write('continue\n');
-        this.lastOutputTime = Date.now();
-      }
-    }, 5000);
-  }
-
-  private stopHeartbeat(): void {
-    if (this.heartbeatInterval) {
-      clearInterval(this.heartbeatInterval);
-      this.heartbeatInterval = null;
-    }
-  }
 
   public write(data: string): void {
     if (this.useNativePty && this.ptyProcess) {
@@ -241,13 +190,26 @@ export class PTYManager {
     }
   }
 
-  public kill(signal?: string): void {
-    this.stopHeartbeat();
-    if (this.useNativePty && this.ptyProcess) {
-      this.ptyProcess.kill(signal);
-    } else if (this.childProcess) {
-      this.childProcess.kill(signal as NodeJS.Signals | undefined);
+  public kill(signal: NodeJS.Signals = 'SIGTERM'): void {
+    // Kill entire process group to prevent orphans
+    if (this.childPid) {
+      try {
+        // Negative PID kills the entire process group
+        process.kill(-this.childPid, signal);
+      } catch {
+        // Fallback to direct kill if process group kill fails
+        if (this.useNativePty && this.ptyProcess) {
+          this.ptyProcess.kill(signal);
+        } else if (this.childProcess) {
+          this.childProcess.kill(signal);
+        }
+      }
     }
+    this.childPid = null;
+  }
+
+  public getPid(): number | null {
+    return this.childPid;
   }
 
   public isRunning(): boolean {

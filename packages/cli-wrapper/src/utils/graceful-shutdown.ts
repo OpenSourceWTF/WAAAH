@@ -81,8 +81,11 @@ export class GracefulShutdown {
     };
   }
 
+  private emergencyCleanup: (() => void) | null = null;
+
   /**
    * Installs signal handlers for SIGINT and SIGTERM.
+   * Also installs emergency cleanup handlers for unexpected exits.
    * 
    * @example
    * ```typescript
@@ -93,14 +96,36 @@ export class GracefulShutdown {
   public install(): void {
     const handler = this.createSignalHandler();
 
-    // Install handlers
+    // Install signal handlers
     this.signalHandlers.set('SIGINT', handler);
     this.signalHandlers.set('SIGTERM', handler);
 
     process.on('SIGINT', handler);
     process.on('SIGTERM', handler);
 
-    this.log('Signal handlers installed (SIGINT, SIGTERM)');
+    // Emergency cleanup for unexpected exits (orphan prevention)
+    this.emergencyCleanup = () => {
+      if (!this.isShuttingDown) {
+        try {
+          // Attempt synchronous kill - best effort
+          this.options.killAgent().catch(() => { });
+        } catch { /* ignore */ }
+      }
+    };
+
+    process.on('exit', this.emergencyCleanup);
+    process.on('uncaughtException', (err) => {
+      console.error('Uncaught exception:', err);
+      this.emergencyCleanup?.();
+      process.exit(1);
+    });
+    process.on('unhandledRejection', (reason) => {
+      console.error('Unhandled rejection:', reason);
+      this.emergencyCleanup?.();
+      process.exit(1);
+    });
+
+    this.log('Signal handlers installed (SIGINT, SIGTERM, exit, uncaught)');
   }
 
   /**
