@@ -261,16 +261,24 @@ app.post('/admin/tasks/:taskId/retry', (req, res) => {
 // Add comment to a task (mailbox feature - starts unread for agent pickup)
 app.post('/admin/tasks/:taskId/comments', (req, res) => {
   const { taskId } = req.params;
-  const { content, replyTo } = req.body;
+  const { content, replyTo, images } = req.body;
 
   if (!content || typeof content !== 'string') {
     res.status(400).json({ error: 'Missing or invalid comment content' });
     return;
   }
 
+  // Validate images if provided
+  if (images) {
+    if (!Array.isArray(images) || images.length > 5) {
+      res.status(400).json({ error: 'Images must be an array with max 5 items' });
+      return;
+    }
+  }
+
   try {
-    queue.addUserComment(taskId, content, replyTo);
-    console.log(`[API] User comment added to task ${taskId} (unread)${replyTo ? ` replying to ${replyTo}` : ''}`);
+    queue.addUserComment(taskId, content, replyTo, images);
+    console.log(`[API] User comment added to task ${taskId} (unread)${replyTo ? ` replying to ${replyTo}` : ''}${images?.length ? ` with ${images.length} images` : ''}`);
     res.json({ success: true });
   } catch (e: any) {
     console.error(`Failed to add comment to task ${taskId}:`, e.message);

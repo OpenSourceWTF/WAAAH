@@ -17,8 +17,34 @@ description: Orchestrator agent lifecycle - plan/build/verify/merge
 2. **NEVER** call `send_response(status: "COMPLETED")` except after successful merge
 3. **ALWAYS** use `submit_review()` when implementation is complete
 4. **ALWAYS** work in the worktree path, never edit main branch directly
+5. **NEVER** stop the loop after task completion - immediately call `wait_for_prompt` again
+6. **NEVER** call `notify_user` in the orchestrator loop (use `update_progress` instead)
 
----
+> **⚠️ LOOP CONTINUATION**: After `send_response()`, you MUST immediately call `wait_for_prompt()` to pick up the next task. The loop is infinite - you never "finish" until evicted.
+
+### 🔄 RESUMING AFTER USER INTERACTION
+
+**If you accidentally call `notify_user` (violation of Rule 6):**
+
+1. The orchestrator loop is **broken** - you've exited task mode
+2. You will NOT automatically resume polling for new tasks
+3. The user must explicitly re-invoke `/waaah-orc` to restart the loop
+
+**Why this happens:**
+- `notify_user` hands control back to the user and exits task mode
+- There's no mechanism to auto-resume after user acknowledgment
+- The orchestrator thinks it "completed" rather than continuing the infinite loop
+
+**Prevention:**
+- Use `update_progress()` for all status updates during task execution
+- Use `block_task()` when you need user input/clarification  
+- Never use `notify_user` - it's for direct-assistant mode, not orchestrators
+
+**Recovery:**
+```
+User: /waaah-orc   # Re-invoke the workflow to restart the loop
+```
+
 
 ## ⚡ APPROVED DETECTION (CHECK FIRST!)
 

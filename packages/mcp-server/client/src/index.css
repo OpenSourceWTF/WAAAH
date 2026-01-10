@@ -119,13 +119,113 @@ body,
   color: var(--color-foreground);
 }
 
-/* Scrollbar styling for that hacker feel */
+/* Scrollbar styling - theme aware */
 ::-webkit-scrollbar {
   width: 10px;
-  background: black;
+  background: hsl(var(--muted));
 }
 
 ::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground));
+  border: 1px solid hsl(var(--border));
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
   background: hsl(var(--primary));
-  border: 1px solid black;
+}
+
+/* Theme-aware background utilities for light/dark mode compatibility */
+.bg-surface {
+  background-color: hsl(var(--muted));
+}
+
+.bg-surface-elevated {
+  background-color: hsl(var(--secondary));
+}
+
+/* Light mode specific overrides for better contrast */
+.light .bg-black\/5,
+.light .bg-black\/10,
+.light .bg-black\/20,
+.light .bg-black\/30 {
+  background-color: hsl(var(--muted)) !important;
+}
+
+.light .bg-black\/40,
+.light .bg-black\/50 {
+  background-color: hsl(var(--secondary) / 0.8) !important;
+}
+
+.light .text-primary\/40,
+.light .text-primary\/50 {
+  color: hsl(var(--muted-foreground)) !important;
+}
+
+.light .border-primary\/20,
+.light .border-primary\/30 {
+  border-color: hsl(var(--border)) !important;
+}
+
+/* Light mode swimlane backgrounds */
+.light .bg-card\/80 {
+  background-color: hsl(var(--card)) !important;
+}
+
+/* Light mode message bubbles - improve contrast */
+.light .bg-blue-600 {
+  background-color: hsl(217 91% 55%) !important;
+}
+
+.light .bg-slate-700 {
+  background-color: hsl(215 20% 85%) !important;
+}
+
+.light .bg-slate-700\/20 {
+  background-color: hsl(215 20% 90%) !important;
+}
+
+/* Light mode status badges */
+.light .bg-green-500\/10 {
+  background-color: hsl(142 76% 90%) !important;
+}
+
+.light .bg-amber-500\/10 {
+  background-color: hsl(38 92% 90%) !important;
+}
+
+.light .bg-blue-500\/10 {
+  background-color: hsl(217 91% 90%) !important;
+}
+
+.light .bg-primary\/5,
+.light .bg-primary\/10 {
+  background-color: hsl(var(--muted)) !important;
+}
+
+/* Light mode text improvements - ensure readable contrast */
+.light .text-primary\/60,
+.light .text-primary\/70,
+.light .text-primary\/80,
+.light .text-primary\/90 {
+  color: hsl(var(--foreground)) !important;
+}
+
+/* Light mode: Make all light text colors dark */
+.light .text-slate-100,
+.light .text-slate-200,
+.light .text-slate-300,
+.light .text-gray-100,
+.light .text-gray-200,
+.light .text-gray-300 {
+  color: hsl(0 0% 20%) !important;
+}
+
+.light .text-white {
+  color: hsl(0 0% 100%) !important;
+}
+
+/* Light mode foreground text */
+.light .text-foreground {
+  color: hsl(var(--foreground)) !important;
 }

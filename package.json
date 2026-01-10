@@ -24,6 +24,7 @@
     "test": "pnpm -r run test",
     "lint": "pnpm -r run lint",
     "serve": "tsx packages/mcp-server/src/index.ts",
+    "dev": "concurrently -n 'server,client' -c 'cyan,magenta' 'pnpm serve' 'pnpm --filter @opensourcewtf/waaah-admin-client dev'",
     "serve:prod": "node packages/mcp-server/dist/index.js",
     "cli": "tsx packages/cli/src/index.ts",
     "bot": "tsx --watch packages/bot/src/index.ts",
@@ -46,6 +47,7 @@
   "devDependencies": {
     "@types/node": "^20.10.5",
     "@vitest/coverage-v8": "^4.0.16",
+    "concurrently": "^9.2.1",
     "tsx": "^4.21.0",
     "typescript": "^5.3.3",
     "vitest": "^4.0.16"

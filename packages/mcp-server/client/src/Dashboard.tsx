@@ -1,41 +1,15 @@
-import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { /* ListChecks - LEGACY: used in deprecated Tasks list view */ Skull, Search, Filter, MessageSquare, ChevronDown, ChevronUp, RefreshCw, XCircle, Power, Sun, Moon, PanelLeftClose, PanelLeftOpen, Pin, Clock, Cpu } from "lucide-react";
+// Tabs removed - KanbanBoard is now the sole/primary view
+import { Skull, ChevronDown, ChevronUp, RefreshCw, XCircle, Power, Sun, Moon, Clock, PanelLeftClose, PanelLeftOpen, Pin, Cpu } from "lucide-react";
 import { KanbanBoard } from './KanbanBoard';
-import { ActivityFeed } from '@/components/ActivityFeed';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useTaskData, useAgentData, type Task } from './hooks';
 
-// Types
-interface Agent {
-  id: string;
-  role: string;
-  displayName: string;
-  status: 'OFFLINE' | 'WAITING' | 'PROCESSING';
-  lastSeen?: number;
-  currentTasks?: string[];
-  capabilities?: string[];  // Task 1: expandable agent cards
-  createdAt?: number;       // Task 1: expandable agent cards
-}
-
-interface Task {
-  id: string;
-  command: string;
-  prompt: string;
-  title?: string;  // Task 3: task title support
-  status: string;
-  text?: string; // For history items
-  toAgentId?: string;
-  toAgentRole?: string;
-  response?: Record<string, unknown>;
-  context?: Record<string, unknown>;
-  history?: { timestamp: number; status: string; agentId?: string; message?: string }[];
-  messages?: { timestamp: number; role: string; content: string }[];
-  createdAt?: number;
-  completedAt?: number;
-}
+// Types imported from hooks
+// Agent and Task types are now in hooks/useAgentData.ts and hooks/useTaskData.ts
 
 function TaskSkeleton() {
   return (
@@ -54,21 +28,32 @@ function TaskSkeleton() {
 
 export function Dashboard() {
   const { theme, setTheme, t } = useTheme();
-  const [agents, setAgents] = useState<Agent[]>([]);
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [recentCompleted, setRecentCompleted] = useState<Task[]>([]);
-  const [recentCancelled, setRecentCancelled] = useState<Task[]>([]);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
-    const saved = localStorage.getItem('waaah_sidebar_open');
-    return saved !== null ? JSON.parse(saved) : true;
-  });
 
-  // Persist Sidebar State
-  useEffect(() => {
-    localStorage.setItem('waaah_sidebar_open', JSON.stringify(isSidebarOpen));
-  }, [isSidebarOpen]);
+  // Use custom hooks for data fetching with deduplication (prevents animation interruption)
+  const {
+    activeTasks,
+    recentCompleted,
+    recentCancelled,
+    stats,
+    connected,
+    refetch: refetchTasks  // Used by handlers after mutations
+  } = useTaskData(2000);
 
-  // History State
+  const {
+    agents,
+    getRelativeTime,
+    refetch: refetchAgents
+  } = useAgentData(2000);
+
+  // Combined refetch for backward compatibility with fetchData calls
+  const fetchData = useCallback(() => {
+    refetchTasks();
+    refetchAgents();
+  }, [refetchTasks, refetchAgents]);
+
+
+
+  // History State (kept inline for now - infinite scroll logic is complex)
   const [history, setHistory] = useState<Task[]>([]);
   const [historyOffset, setHistoryOffset] = useState(0);
   const [historyHasMore, setHistoryHasMore] = useState(true);
@@ -83,15 +68,13 @@ export function Dashboard() {
   // Expandable Cards State
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
 
-  // Task 1: Expandable Agent Cards - pin/hover state
+  // Sidebar collapsed/expanded state (collapsed = indicator bar only, expanded = overlay panel)
+  const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
+  const [isSidebarPinned, setIsSidebarPinned] = useState(false);
+
+  // Agent pin/hover state for expanded view
   const [pinnedAgents, setPinnedAgents] = useState<Set<string>>(new Set());
   const [hoveredAgent, setHoveredAgent] = useState<string | null>(null);
-
-  const [botCount, setBotCount] = useState(0);
-  const [stats, setStats] = useState({ total: 0, completed: 0 });
-  const [connected, setConnected] = useState(true);
-
-  // Modal state removed - KanbanBoard handles expansion inline
 
   // Debounce Search
   useEffect(() => {
@@ -100,48 +83,6 @@ export function Dashboard() {
     }, 500);
     return () => clearTimeout(timer);
   }, [searchQuery]);
-
-  // Initial Data Fetch
-  const fetchData = async () => {
-    try {
-      const [agentsRes, tasksRes, botRes, statsRes, recentRes, cancelledRes] = await Promise.all([
-        fetch('/admin/agents/status'),
-        fetch('/admin/tasks'),
-        fetch('/admin/bot/status'),
-        fetch('/admin/stats'),
-        fetch('/admin/tasks/history?limit=10&status=COMPLETED'),
-        fetch('/admin/tasks/history?limit=10&status=CANCELLED,FAILED')
-      ]);
-
-      if (agentsRes.ok) setAgents(await agentsRes.json());
-      if (tasksRes.ok) setTasks(await tasksRes.json());
-      if (botRes.ok) {
-        const data = await botRes.json();
-        setBotCount(data.count);
-      }
-      if (statsRes.ok) setStats(await statsRes.json());
-      if (recentRes.ok) setRecentCompleted(await recentRes.json());
-      if (cancelledRes.ok) setRecentCancelled(await cancelledRes.json());
-
-      setConnected(true);
-    } catch (e) {
-      console.error('Fetch error:', e);
-      setConnected(false);
-    }
-  };
-
-  // Poll for live data (agents, active tasks)
-  useEffect(() => {
-    fetchData();
-    const interval = setInterval(fetchData, 2000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // Filter Active Tasks: Exclude terminal states - memoized to prevent recalc
-  const activeTasks = useMemo(() =>
-    tasks.filter(t => !['COMPLETED', 'FAILED', 'BLOCKED', 'CANCELLED'].includes(t.status)),
-    [tasks]
-  );
 
   // Infinite Scroll Fetch Logic
   const fetchHistory = useCallback(async (isInitial = false) => {
@@ -284,20 +225,20 @@ export function Dashboard() {
     }
   }, []);
 
-  const handleSendComment = useCallback(async (taskId: string, content: string, replyTo?: string) => {
+  const handleSendComment = useCallback(async (taskId: string, content: string, replyTo?: string, images?: { dataUrl: string; mimeType: string; name: string }[]) => {
     try {
       const res = await fetch(`/admin/tasks/${taskId}/comments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content, replyTo })
+        body: JSON.stringify({ content, replyTo, images })
       });
       if (!res.ok) throw new Error('Failed to send comment');
-      console.log(`Comment sent to task ${taskId}${replyTo ? ` (reply to ${replyTo})` : ''}`);
+      console.log(`Comment sent to task ${taskId}${replyTo ? ` (reply to ${replyTo})` : ''}${images?.length ? ` with ${images.length} images` : ''}`);
       fetchData(); // Refresh to show new comment
     } catch (error) {
       console.error("Failed to send comment", error);
     }
-  }, []);
+  }, [fetchData]);
 
   const handleAddReviewComment = useCallback(async (taskId: string, filePath: string, lineNumber: number | null, content: string) => {
     try {
@@ -407,7 +348,7 @@ export function Dashboard() {
     });
   };
 
-  // Task 1: Toggle agent pin
+  // Toggle agent pin for expanded view
   const toggleAgentPin = (agentId: string) => {
     setPinnedAgents(prev => {
       const next = new Set(prev);
@@ -420,17 +361,7 @@ export function Dashboard() {
     });
   };
 
-  // Task 1: Relative time helper
-  const getRelativeTime = (ts?: number) => {
-    if (!ts) return 'Unknown';
-    const diff = Date.now() - ts;
-    const mins = Math.floor(diff / 60000);
-    if (mins < 1) return 'Just now';
-    if (mins < 60) return `${mins}m ago`;
-    const hours = Math.floor(mins / 60);
-    if (hours < 24) return `${hours}h ago`;
-    return `${Math.floor(hours / 24)}d ago`;
-  };
+  // getRelativeTime is now provided by useAgentData hook
 
   const renderTaskCard = (task: Task) => {
     const isExpanded = expandedTasks.has(task.id);
@@ -571,252 +502,231 @@ export function Dashboard() {
             <Button variant="ghost" size="icon" className={`h-8 w-8 ${theme === 'DARK' ? 'bg-primary text-primary-foreground' : 'text-primary'}`} onClick={() => setTheme('DARK')} title="Dark Mode"><Moon className="h-4 w-4" /></Button>
             <Button variant="ghost" size="icon" className={`h-8 w-8 ${theme === 'WAAAH' ? 'bg-primary text-primary-foreground' : 'text-primary'}`} onClick={() => setTheme('WAAAH')} title="WAAAH Mode"><Skull className="h-4 w-4" /></Button>
           </div>
-          <Badge variant={connected ? "default" : "destructive"} className="gap-2 text-lg px-4 py-1 border-2 border-primary">
-            <span className={`inline-block h-3 w-3 ${connected ? 'bg-primary-foreground' : 'bg-primary-foreground'} animate-ping mr-2`}></span>
-            {connected ? (
-              botCount === 0 ? t('ZERO_BOYZ') : (
-                theme === 'WAAAH'
-                  ? `${t('SIGNAL_CONNECTED')}\u00a0\u00a0(${botCount})`
-                  : `${botCount} ${t('SIGNAL_CONNECTED')}`
-              )
-            ) : t('DISCONNECTED')}
+          <Badge variant={connected ? "default" : "destructive"} className="gap-2 text-sm px-3 py-1 border border-primary/50">
+            <span className={`inline-block h-2 w-2 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500'} ${connected ? 'animate-pulse' : ''}`}></span>
+            {connected ? 'CONNECTED' : 'DISCONNECTED'}
           </Badge>
-          <Button variant="ghost" size="icon" onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="ml-2 text-primary hover:bg-primary/10">
-            {isSidebarOpen ? <PanelLeftClose className="h-6 w-6" /> : <PanelLeftOpen className="h-6 w-6" />}
-          </Button>
+
         </div>
       </header>
 
       {/* 2. Main Content Area (Flex Row) */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden min-w-0">
 
         {/* Left: Main Tabs Area (Scrollable within tabs) */}
-        <div className="flex-1 overflow-hidden p-4 flex flex-col bg-background">
+        <div className="flex-1 overflow-hidden p-4 flex flex-col bg-background min-w-0">
 
           {/* Overview Stats */}
 
 
-          {/* Tabs Content - Main Part, Flex 1 to take remaining space */}
-          <div className="flex-1 min-h-0 flex flex-col">
-            <Tabs defaultValue="kanban" className="flex flex-col h-full space-y-6">
-              <TabsList className="bg-transparent border-b-2 border-primary w-full justify-start rounded-none p-0 h-auto gap-0 flex-none">
-                <TabsTrigger value="kanban" className="rounded-none border-x-2 border-t-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-xl px-6 py-2">KANBAN</TabsTrigger>
-                {/* LEGACY VIEW - Tasks list deprecated in favor of Kanban. Preserved for future use.
-                <TabsTrigger value="tasks" className="rounded-none border-x-2 border-t-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-xl px-6 py-2">{t('TASKS_TITLE').toLowerCase()} ({activeTasks.length})</TabsTrigger>
-                */}
-                <TabsTrigger value="history" className="rounded-none border-x-2 border-t-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-xl px-6 py-2">{t('HISTORY_TITLE').toLowerCase()}</TabsTrigger>
-                <TabsTrigger value="logs" className="rounded-none border-x-2 border-t-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-xl px-6 py-2 flex items-center gap-2"><MessageSquare className="h-4 w-4" /> {t('LOGS_TITLE').toLowerCase()}</TabsTrigger>
-              </TabsList>
-
-              {/* KANBAN TAB */}
-              <TabsContent value="kanban" className="flex-1 overflow-hidden m-0 pt-4 h-full">
-                <KanbanBoard
-                  tasks={activeTasks}
-                  completedTasks={recentCompleted}
-                  cancelledTasks={recentCancelled}
-                  onCancelTask={handleCancelTask}
-                  onRetryTask={handleRetryTask}
-                  onApproveTask={handleApproveTask}
-                  onRejectTask={handleRejectTask}
-                  onSendComment={handleSendComment}
-                  onAddReviewComment={handleAddReviewComment}
-                  onViewHistory={handleViewHistory}
-                />
-              </TabsContent>
-
-              {/* LEGACY VIEW - Tasks list tab deprecated in favor of Kanban. Preserved for future use.
-              <TabsContent value="tasks" className="flex-1 overflow-y-auto m-0 pt-4 pr-2 scrollbar-thin scrollbar-thumb-primary scrollbar-track-black space-y-4">
-                {activeTasks.length === 0 && (
-                  <div className="flex flex-col items-center justify-center p-12 border-2 border-dashed border-primary/50 text-primary/50 bg-primary/5">
-                    <ListChecks className="h-8 w-8 mb-3 opacity-50" />
-                    <p>{t('NO_TASKS')}</p>
-                  </div>
-                )}
-                {activeTasks.map(task => renderTaskCard(task))}
-              </TabsContent>
-              */}
-
-              {/* HISTORY TAB */}
-              <TabsContent value="history" className="flex-1 overflow-y-auto m-0 pt-4 pr-2 scrollbar-thin scrollbar-thumb-primary scrollbar-track-black space-y-4">
-
-                {/* Search and Filter Controls */}
-                <div className="flex flex-col md:flex-row gap-4 mb-6 border-b border-primary/30 pb-6">
-                  <div className="relative flex-1">
-                    <Search className="absolute left-3 top-3 h-4 w-4 text-primary/50" />
-                    <input
-                      type="text"
-                      placeholder="SEARCH SCRIBBLINGS..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full bg-input border-2 border-primary/30 p-2 pl-10 text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:shadow-[0_0_10px_rgba(57,255,20,0.3)] transition-all font-mono uppercase"
-                    />
-                  </div>
-
-                  <div className="relative w-full md:w-64">
-                    <Filter className="absolute left-3 top-3 h-4 w-4 text-primary/50" />
-                    <select
-                      value={statusFilter}
-                      onChange={(e) => setStatusFilter(e.target.value)}
-                      className="w-full bg-input border-2 border-primary/30 p-2 pl-10 text-foreground focus:outline-none focus:border-primary focus:shadow-[0_0_10px_rgba(57,255,20,0.3)] appearance-none cursor-pointer font-mono uppercase"
-                    >
-                      <option value="ALL">ALL FINISHED</option>
-                      <option value="COMPLETED">COMPLETED</option>
-                      <option value="FAILED">FAILED</option>
-                      <option value="BLOCKED">BLOCKED</option>
-                      <option value="CANCELLED">CANCELLED</option>
-                    </select>
-                    <div className="absolute right-3 top-3 pointer-events-none text-primary/50">▼</div>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  {history.length === 0 && !isHistoryLoading && (
-                    <div className="text-center p-12 border-2 border-dashed border-primary/50 text-primary/50">
-                      {t('NO_HISTORY')}
-                    </div>
-                  )}
-
-                  {history.map(task => renderTaskCard(task))}
-
-                  {/* Loading Skeletons */}
-                  {isHistoryLoading && (
-                    <div className="space-y-2">
-                      <TaskSkeleton />
-                      <TaskSkeleton />
-                    </div>
-                  )}
-
-                  {/* Intersection Observer Sentinel */}
-                  <div ref={observerTarget} className="h-4 w-full" />
-
-                  {!historyHasMore && history.length > 0 && (
-                    <div className="text-center text-xs text-primary/50 py-4 border-t border-primary/20 mt-4">END OF SCRIBBLINGS</div>
-                  )}
-                </div>
-              </TabsContent>
-
-              {/* LOGS TAB */}
-              <TabsContent value="logs" className="flex-1 min-h-0 flex flex-col m-0 pt-4 overflow-hidden">
-                <div className="flex-1 min-h-0 overflow-hidden border-2 border-primary/20">
-                  <ActivityFeed />
-                </div>
-              </TabsContent>
-
-            </Tabs>
+          {/* KanbanBoard - Primary View (tabs removed) */}
+          <div className="flex-1 min-h-0 overflow-hidden pt-4">
+            <KanbanBoard
+              tasks={activeTasks}
+              completedTasks={recentCompleted}
+              cancelledTasks={recentCancelled}
+              onCancelTask={handleCancelTask}
+              onRetryTask={handleRetryTask}
+              onApproveTask={handleApproveTask}
+              onRejectTask={handleRejectTask}
+              onSendComment={handleSendComment}
+              onAddReviewComment={handleAddReviewComment}
+            />
           </div>
         </div>
 
-        {/* Right: Sidebar (Collapsible) */}
-        <div className={`${isSidebarOpen ? 'w-96 border-l-2' : 'w-0 border-l-0'} transition-all duration-300 border-primary bg-card flex flex-col h-full overflow-hidden`}>
-
-          {/* 1. Agent Status (Occupies full height of sidebar now, or just flexible) */}
-          <div className="flex-1 overflow-y-auto p-6 scrollbar-thin scrollbar-thumb-primary scrollbar-track-black">
-            <h2 className="text-lg font-black tracking-widest text-primary mb-4 border-b border-primary pb-2 flex items-center justify-between sticky top-0 bg-card z-10">
-              {t('AGENTS_TITLE')}
-              <span className="text-xs bg-primary text-primary-foreground px-2 py-1 rounded-sm">{agents.length}</span>
-            </h2>
-            <div className="space-y-3">
-              {agents.length === 0 && <div className="text-sm text-primary/50 italic">NO AGENTS AROUND...</div>}
-              {agents.map(agent => {
-                const isPinned = pinnedAgents.has(agent.id);
-                const isHovered = hoveredAgent === agent.id;
-                const isExpanded = isPinned || isHovered;
-
-                return (
-                  <div
-                    key={agent.id}
-                    className={`border-2 transition-all cursor-pointer group ${isPinned
-                      ? 'border-primary bg-primary/10 shadow-[0_0_10px_hsl(var(--glow)/0.3)]'
-                      : 'border-primary/50 hover:border-primary bg-card hover:bg-primary/10'
-                      }`}
-                    onClick={() => toggleAgentPin(agent.id)}
-                    onMouseEnter={() => setHoveredAgent(agent.id)}
-                    onMouseLeave={() => setHoveredAgent(null)}
-                  >
-                    {/* Header Row */}
-                    <div className="flex items-center justify-between p-3">
-                      <div className="space-y-1 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-bold text-primary group-hover:text-foreground transition-colors">
-                            {agent.displayName || agent.id}
-                          </span>
-                          {isPinned && <Pin className="h-3 w-3 text-primary" />}
-                        </div>
-                        <div className="text-xs text-primary/60 font-mono tracking-tighter">[{agent.role}]</div>
-                        {agent.currentTasks && agent.currentTasks.length > 0 && (() => {
-                          const mostRecentTask = agent.currentTasks[agent.currentTasks.length - 1];
-                          return (
-                            <div className="mt-1">
-                              <Badge variant="outline" className="text-[10px] h-4 px-1 border-primary/50 text-primary/80 font-mono bg-black/20">
-                                {mostRecentTask}
-                              </Badge>
-                            </div>
-                          );
-                        })()}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Badge className={`${getStatusBadgeClass(agent.status)} ${agent.status === 'PROCESSING' ? 'animate-pulse' : ''}`}>
-                          {agent.status}
-                        </Badge>
-                        {isExpanded ? <ChevronUp className="h-4 w-4 text-primary" /> : <ChevronDown className="h-4 w-4 text-primary opacity-50" />}
-                      </div>
-                    </div>
-
-                    {/* Expanded Content */}
-                    <div className={`overflow-hidden transition-all duration-300 ${isExpanded ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'}`}>
-                      <div className="px-3 pb-3 pt-2 border-t border-primary/20 bg-primary/5 space-y-3">
-                        {/* Time Info */}
-                        <div className="grid grid-cols-2 gap-2 text-xs">
-                          <div className="flex items-center gap-1 text-primary/70">
-                            <Clock className="h-3 w-3" />
-                            <span>Created: {agent.createdAt ? formatDate(agent.createdAt) : 'Unknown'}</span>
-                          </div>
-                          <div className="flex items-center gap-1 text-primary/70">
-                            <span>Last seen: {getRelativeTime(agent.lastSeen)}</span>
-                          </div>
-                        </div>
-
-                        {/* Capabilities */}
-                        <div>
-                          <div className="flex items-center gap-1 text-xs text-primary/50 mb-1">
-                            <Cpu className="h-3 w-3" />
-                            <span>CAPABILITIES:</span>
-                          </div>
-                          {agent.capabilities && agent.capabilities.length > 0 ? (
-                            <div className="flex flex-wrap gap-1">
-                              {agent.capabilities.map((cap, i) => (
-                                <Badge key={i} variant="outline" className="text-[10px] h-5 px-2 border-primary/30 text-primary/70 bg-black/20 font-mono">
-                                  {cap}
-                                </Badge>
-                              ))}
-                            </div>
-                          ) : (
-                            <span className="text-[10px] text-primary/40 italic font-mono">NO CAPABILITIES LISTED</span>
-                          )}
-                        </div>
-
-                        {/* Actions Row */}
-                        <div className="flex justify-between items-center pt-2 border-t border-primary/10">
-                          <div className="flex items-center gap-1 text-[10px] text-primary/40 font-mono">
-                            ID: {agent.id}
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-6 px-2 gap-1 bg-white text-black hover:bg-red-500 hover:text-white transition-all rounded-sm text-xs"
-                            onClick={(e) => handleEvictAgent(e, agent.id)}
-                          >
-                            <Power className="h-3 w-3" /> Shutdown
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+        {/* Right: Agent Sidebar (Inline expanding - pushes content) */}
+        <div
+          className={`border-l-2 border-primary bg-card flex flex-col h-full transition-all duration-300 ${(isSidebarExpanded || isSidebarPinned) ? 'w-80' : 'w-14'}`}
+          onMouseEnter={() => setIsSidebarExpanded(true)}
+          onMouseLeave={() => { if (!isSidebarPinned) setIsSidebarExpanded(false); }}
+        >
+          {/* Header / Toggle */}
+          <div className="flex-shrink-0 flex items-center justify-between p-2 border-b border-primary/30 bg-primary/10">
+            {(isSidebarExpanded || isSidebarPinned) && (
+              <h2 className="text-sm font-black tracking-widest text-primary flex items-center gap-2">
+                {t('AGENTS_TITLE')}
+                <span className="text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded-sm">{agents.length}</span>
+              </h2>
+            )}
+            <button
+              onClick={() => {
+                if (isSidebarPinned) {
+                  setIsSidebarPinned(false);
+                  setIsSidebarExpanded(false);
+                } else {
+                  setIsSidebarPinned(true);
+                  setIsSidebarExpanded(true);
+                }
+              }}
+              className={`w-10 h-10 flex items-center justify-center hover:bg-primary/20 transition-colors rounded-sm border-2 ${isSidebarPinned ? 'bg-primary/20 border-primary' : 'border-transparent'} ${!(isSidebarExpanded || isSidebarPinned) ? 'mx-auto' : 'ml-auto'}`}
+              title={isSidebarPinned ? "Unpin sidebar" : "Pin sidebar open"}
+            >
+              {(isSidebarExpanded || isSidebarPinned)
+                ? <PanelLeftClose className={`h-4 w-4 ${isSidebarPinned ? 'text-foreground' : 'text-primary'}`} />
+                : <PanelLeftOpen className="h-4 w-4 text-primary" />}
+            </button>
           </div>
 
+          {/* Collapsed View: Agent Indicators */}
+          {!(isSidebarExpanded || isSidebarPinned) && (
+            <div className="flex-1 overflow-y-auto py-2 px-2">
+              <div className="flex flex-col items-center gap-2">
+                {agents.length === 0 && (
+                  <div className="w-10 h-10 border-2 border-dashed border-primary/30 rounded-sm flex items-center justify-center">
+                    <span className="text-primary/30 text-xs">?</span>
+                  </div>
+                )}
+                {agents.map(agent => {
+                  const getIndicatorColor = () => {
+                    if (agent.status === 'OFFLINE') return 'border-gray-500 bg-gray-500/20';
+                    if (agent.status === 'PROCESSING') return 'border-yellow-400 bg-yellow-400/20 animate-pulse';
+                    const lastSeenMs = agent.lastSeen ? Date.now() - agent.lastSeen : Infinity;
+                    if (lastSeenMs > 60000) return 'border-red-500 bg-red-500/20';
+                    return 'border-green-500 bg-green-500/20';
+                  };
+
+                  const currentTask = agent.currentTasks && agent.currentTasks.length > 0
+                    ? agent.currentTasks[agent.currentTasks.length - 1] : null;
+
+                  const getInitials = () => {
+                    const name = agent.displayName || agent.id;
+                    const words = name.split(/[\s-_]+/);
+                    if (words.length > 1) return (words[0][0] + words[1][0]).toUpperCase();
+                    return name.substring(0, 2).toUpperCase();
+                  };
+
+                  return (
+                    <div key={agent.id} className="relative group">
+                      <div
+                        className={`w-10 h-10 border-2 rounded-sm flex items-center justify-center cursor-pointer transition-all hover:scale-110 hover:shadow-[0_0_15px_hsl(var(--glow)/0.5)] ${getIndicatorColor()}`}
+                        onClick={() => setIsSidebarExpanded(true)}
+                      >
+                        <span className="text-xs font-bold text-foreground">{getInitials()}</span>
+                      </div>
+                      {/* Tooltip */}
+                      <div className="absolute right-full mr-3 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-50">
+                        <div className="bg-card border-2 border-primary p-3 shadow-lg shadow-primary/20 min-w-[200px] max-w-[280px]">
+                          <div className="flex items-center justify-between gap-2 mb-2">
+                            <span className="font-bold text-sm text-primary truncate">{agent.displayName || agent.id}</span>
+                            <Badge className={`${getStatusBadgeClass(agent.status)} text-[10px] shrink-0`}>{agent.status}</Badge>
+                          </div>
+                          <div className="text-xs text-primary/60 font-mono mb-2">[{agent.role}]</div>
+                          {currentTask && (
+                            <div className="border-t border-primary/20 pt-2 mt-2">
+                              <div className="text-[10px] text-primary/50 uppercase mb-1">Current Task:</div>
+                              <div className="text-xs text-foreground font-mono truncate">{currentTask}</div>
+                            </div>
+                          )}
+                          <div className="text-[10px] text-primary/40 mt-2 flex items-center gap-1">
+                            <Clock className="h-3 w-3" />{getRelativeTime(agent.lastSeen)}
+                          </div>
+                        </div>
+                        <div className="absolute left-full top-1/2 -translate-y-1/2 w-0 h-0 border-t-[6px] border-t-transparent border-b-[6px] border-b-transparent border-l-[6px] border-l-primary"></div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Expanded View: Full Agent Cards */}
+          {(isSidebarExpanded || isSidebarPinned) && (
+            <div className="flex-1 overflow-y-auto p-3">
+              <div className="space-y-2">
+                {agents.length === 0 && (
+                  <div className="w-full p-3 border-2 border-dashed border-primary/30 rounded-sm flex items-center justify-center">
+                    <span className="text-primary/30 text-sm">NO AGENTS</span>
+                  </div>
+                )}
+                {agents.map(agent => {
+                  const isPinned = pinnedAgents.has(agent.id);
+                  const isHovered = hoveredAgent === agent.id;
+                  const isExpanded = isPinned || isHovered;
+
+                  return (
+                    <div
+                      key={agent.id}
+                      className={`border-2 transition-all cursor-pointer group ${isPinned
+                        ? 'border-primary bg-primary/10 shadow-[0_0_10px_hsl(var(--glow)/0.3)]'
+                        : 'border-primary/50 hover:border-primary bg-card hover:bg-primary/10'
+                        }`}
+                      onClick={() => toggleAgentPin(agent.id)}
+                      onMouseEnter={() => setHoveredAgent(agent.id)}
+                      onMouseLeave={() => setHoveredAgent(null)}
+                    >
+                      {/* Header Row */}
+                      <div className="flex items-center justify-between p-2">
+                        <div className="space-y-0.5 flex-1 min-w-0">
+                          <div className="flex items-center gap-1">
+                            <span className="text-sm font-bold text-primary group-hover:text-foreground transition-colors truncate">
+                              {agent.displayName || agent.id}
+                            </span>
+                            {isPinned && <Pin className="h-3 w-3 text-primary flex-shrink-0" />}
+                          </div>
+                          <div className="text-[10px] text-primary/60 font-mono">[{agent.role}]</div>
+                        </div>
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <Badge className={`${getStatusBadgeClass(agent.status)} text-[10px] ${agent.status === 'PROCESSING' ? 'animate-pulse' : ''}`}>
+                            {agent.status}
+                          </Badge>
+                          {isExpanded ? <ChevronUp className="h-3 w-3 text-primary" /> : <ChevronDown className="h-3 w-3 text-primary opacity-50" />}
+                        </div>
+                      </div>
+
+                      {/* Expanded Content */}
+                      <div className={`overflow-hidden transition-all duration-300 ${isExpanded ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'}`}>
+                        <div className="px-2 pb-2 pt-1 border-t border-primary/20 bg-primary/5 space-y-2">
+                          {/* Time Info */}
+                          <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-primary/70">
+                            <div className="flex items-center gap-1">
+                              <Clock className="h-3 w-3" />
+                              <span>Created: {agent.createdAt ? formatDate(agent.createdAt) : 'Unknown'}</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <span>Seen: {getRelativeTime(agent.lastSeen)}</span>
+                            </div>
+                          </div>
+
+                          {/* Capabilities */}
+                          <div>
+                            <div className="flex items-center gap-1 text-[10px] text-primary/50 mb-1">
+                              <Cpu className="h-3 w-3" /><span>CAPABILITIES:</span>
+                            </div>
+                            {agent.capabilities && agent.capabilities.length > 0 ? (
+                              <div className="flex flex-wrap gap-1">
+                                {agent.capabilities.map((cap, i) => (
+                                  <Badge key={i} variant="outline" className="text-[9px] h-4 px-1 border-primary/30 text-primary/70 bg-black/20 font-mono">
+                                    {cap}
+                                  </Badge>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-[10px] text-primary/40 italic font-mono">NONE</span>
+                            )}
+                          </div>
+
+                          {/* Actions */}
+                          <div className="flex justify-between items-center pt-1 border-t border-primary/10">
+                            <div className="text-[9px] text-primary/40 font-mono truncate">{agent.id}</div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-5 px-2 gap-1 bg-white text-black hover:bg-red-500 hover:text-white transition-all rounded-sm text-[10px]"
+                              onClick={(e) => handleEvictAgent(e, agent.id)}
+                            >
+                              <Power className="h-3 w-3" /> Kill
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
       </div>

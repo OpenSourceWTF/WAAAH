@@ -327,8 +327,12 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
    * Add a user comment to a task (starts as unread for agent pickup).
    * Used for the mailbox feature - live comments during task execution.
    */
-  addUserComment(taskId: string, content: string, replyTo?: string): void {
-    this.addMessage(taskId, 'user', content, { messageType: 'comment' }, false, 'comment', replyTo);
+  addUserComment(taskId: string, content: string, replyTo?: string, images?: { dataUrl: string; mimeType: string; name: string }[]): void {
+    const metadata: Record<string, unknown> = { messageType: 'comment' };
+    if (images && images.length > 0) {
+      metadata.images = images;
+    }
+    this.addMessage(taskId, 'user', content, metadata, false, 'comment', replyTo);
   }
 
   /**
