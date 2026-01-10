@@ -7,6 +7,8 @@ import tailwindcss from '@tailwindcss/vite'
 export default defineConfig({
   base: '/admin/',
   plugins: [react(), tailwindcss()],
+  // Allow WAAAH_* env vars to be exposed to the client (consistent with CLI/mcp-proxy)
+  envPrefix: ['VITE_', 'WAAAH_'],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

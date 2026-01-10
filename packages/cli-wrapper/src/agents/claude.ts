@@ -80,9 +80,16 @@ export class ClaudeAgent extends BaseAgent {
    * @returns Array of CLI arguments
    */
   protected getCliArgs(): string[] {
-    // Claude CLI typically uses subcommands
-    // Start in interactive/chat mode
-    return [];
+    const prompt = this.config.resume
+      ? `Resume the /${this.config.workflow} workflow. Continue from where you left off.`
+      : `Follow the /${this.config.workflow} workflow exactly.`;
+
+    // Claude CLI: claude [options] [prompt]
+    // Use --dangerously-skip-permissions for autonomous operation (like gemini's --yolo)
+    return [
+      '--dangerously-skip-permissions',
+      prompt
+    ];
   }
 
   /**

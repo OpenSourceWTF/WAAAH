@@ -2,9 +2,39 @@
  * CLI API utilities - Shared HTTP client and error handling
  */
 import axios from 'axios';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
 
 const SERVER_URL = process.env.WAAAH_SERVER_URL || 'http://localhost:3000';
-const WAAAH_API_KEY = process.env.WAAAH_API_KEY;
+
+/**
+ * Get API key from environment or credentials file
+ * Priority: WAAAH_API_KEY env -> ~/.waaah/credentials.json
+ */
+function getApiKey(): string | undefined {
+  // Check env first
+  if (process.env.WAAAH_API_KEY) {
+    return process.env.WAAAH_API_KEY;
+  }
+
+  // Check credentials file
+  const credFile = path.join(os.homedir(), '.waaah', 'credentials.json');
+  try {
+    if (fs.existsSync(credFile)) {
+      const creds = JSON.parse(fs.readFileSync(credFile, 'utf-8'));
+      if (creds['api-key']) {
+        return creds['api-key'];
+      }
+    }
+  } catch {
+    // Ignore errors, return undefined
+  }
+
+  return undefined;
+}
+
+const WAAAH_API_KEY = getApiKey();
 
 // Configure axios defaults
 if (WAAAH_API_KEY) {
@@ -53,7 +83,7 @@ export function handleError(error: unknown, exitOnFail = true): void {
  */
 export async function checkServerConnection(): Promise<boolean> {
   try {
-    await axios.get(`${SERVER_URL}/debug/state`, { timeout: 3000 });
+    await axios.get(`${SERVER_URL}/health`, { timeout: 3000 });
     return true;
   } catch {
     return false;

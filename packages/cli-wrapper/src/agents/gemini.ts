@@ -75,10 +75,17 @@ export class GeminiAgent extends BaseAgent {
 
   /**
    * Returns the arguments to pass to the Gemini CLI.
-   * @returns Array of CLI arguments
+   * @returns Array of CLI arguments including prompt and workspace
    */
   protected getCliArgs(): string[] {
-    return [];
+    const prompt = this.config.resume
+      ? `Resume the /${this.config.workflow} workflow. Continue from where you left off.`
+      : `Follow the /${this.config.workflow} workflow exactly.`;
+
+    // Use --prompt-interactive (-i) for interactive mode
+    // Workspace is set via cwd in PTYManager, not as positional argument
+    // Format: gemini -i "prompt" --yolo
+    return ['-i', prompt, '--yolo'];
   }
 
   /**

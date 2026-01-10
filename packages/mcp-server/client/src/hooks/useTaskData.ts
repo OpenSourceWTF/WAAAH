@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { apiFetch } from '../lib/api';
 
 /**
  * Task interface matching the Dashboard's Task type
@@ -86,18 +87,17 @@ export function useTaskData(options: UseTaskDataOptions = {}) {
     const timeoutId = setTimeout(() => controller.abort(), 3000);
 
     try {
-      const baseUrl = 'http://localhost:3000';
       // Build search query param
       const searchParam = search.trim() ? `&q=${encodeURIComponent(search.trim())}` : '';
 
       // Fetch active tasks (with active=true for in-memory filtering + search)
       // plus paginated completed/cancelled from DB
       const [tasksRes, botRes, statsRes, completedRes, cancelledRes] = await Promise.all([
-        fetch(`${baseUrl}/admin/tasks?active=true&limit=1000${searchParam}`, { signal: controller.signal }),
-        fetch(`${baseUrl}/admin/bot/status`, { signal: controller.signal }),
-        fetch(`${baseUrl}/admin/stats`, { signal: controller.signal }),
-        fetch(`${baseUrl}/admin/tasks?limit=${pageSize}&offset=0&status=COMPLETED${searchParam}`, { signal: controller.signal }),
-        fetch(`${baseUrl}/admin/tasks?limit=${pageSize}&offset=0&status=CANCELLED${searchParam}`, { signal: controller.signal })
+        apiFetch(`/admin/tasks?active=true&limit=1000${searchParam}`, { signal: controller.signal }),
+        apiFetch(`/admin/bot/status`, { signal: controller.signal }),
+        apiFetch(`/admin/stats`, { signal: controller.signal }),
+        apiFetch(`/admin/tasks?limit=${pageSize}&offset=0&status=COMPLETED${searchParam}`, { signal: controller.signal }),
+        apiFetch(`/admin/tasks?limit=${pageSize}&offset=0&status=CANCELLED${searchParam}`, { signal: controller.signal })
       ]);
 
       clearTimeout(timeoutId);

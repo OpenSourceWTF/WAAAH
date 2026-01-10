@@ -92,9 +92,15 @@ class AgentRunner {
       ? `Resume the /${this.workflow} workflow. Continue from where you left off.`
       : `Follow the /${this.workflow} workflow exactly.`;
 
-    const args = [...this.args];
-    if (this.cli === 'gemini' || this.cli === 'claude') {
-      // Replace or add prompt
+    let args = [...this.args];
+
+    if (this.cli === 'gemini') {
+      // Gemini CLI: use --prompt-interactive for interactive mode
+      // Workspace is set via cwd, not as positional argument
+      // Format: gemini -i "prompt" --yolo
+      args = ['-i', prompt, '--yolo'];
+    } else if (this.cli === 'claude') {
+      // Claude uses -p flag
       const promptIdx = args.indexOf('-p');
       if (promptIdx >= 0) {
         args[promptIdx + 1] = prompt;
@@ -111,7 +117,7 @@ class AgentRunner {
     this.child = spawn(this.cli, args, {
       cwd: this.cwd,
       stdio: 'inherit',
-      env: this.env
+      env: { ...this.env, NODE_NO_WARNINGS: '1' }
     });
 
     this.lastActivity = Date.now();

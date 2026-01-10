@@ -14,8 +14,7 @@ export const MCP_TOOL_DEFINITIONS = [
         agentId: { type: 'string', description: 'Unique identifier for the agent' },
         role: {
           type: 'string',
-          enum: ['boss', 'project-manager', 'full-stack-engineer', 'test-engineer', 'ops-engineer', 'designer', 'developer', 'code-monk'],
-          description: 'The role of the agent'
+          description: 'The role of the agent. Recommended: boss, orchestrator, code-doctor, project-manager, full-stack-engineer, test-engineer, ops-engineer, designer, developer. Any custom role is allowed.'
         },
         displayName: { type: 'string', description: 'Human-readable name for the agent' },
         capabilities: { type: 'array', items: { type: 'string' }, description: 'List of capabilities/tools the agent has' }

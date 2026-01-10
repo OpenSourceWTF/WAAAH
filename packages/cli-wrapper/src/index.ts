@@ -7,6 +7,14 @@
  * @packageDocumentation
  */
 
+// Suppress punycode deprecation warning
+process.removeAllListeners('warning');
+process.on('warning', (warning) => {
+  if (warning.name !== 'DeprecationWarning' || !warning.message.includes('punycode')) {
+    console.warn(warning);
+  }
+});
+
 import { Command } from 'commander';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -196,9 +204,7 @@ async function runAgent(options: any) {
   const shutdown = new GracefulShutdown({
     sessionManager,
     killAgent: async () => {
-      // We need access to the PTY process to kill it. 
-      // The BaseAgent interface needs a 'stop' method.
-      // We'll trust whatever agent implementation to kill itself.
+      await agent.stop();
     },
     getSessionState: () => session
   });

@@ -58,7 +58,7 @@ NAME = "Dr. " + pick(ADJECTIVES) + " " + pick(ANIMALS) + " " + NUMBER
 ```
 register_agent({ 
   displayName: NAME,
-  role: "doctor",
+  role: "code-doctor",
   capabilities: ["code-analysis"] 
 })
 → MAIN LOOP
