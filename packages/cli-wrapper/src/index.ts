@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 /**
- * CLI Agent Wrapper - Entry point
+ * CLI Agent Launcher - Simple entry point
  * 
- * Spawns and manages external CLI coding agents (gemini, claude) with WAAAH MCP integration.
+ * Sets up MCP config and launches native CLI agents (gemini, claude).
+ * Uses exec to replace the process, giving the user the native experience.
  * 
  * @packageDocumentation
  */
@@ -18,18 +19,13 @@ process.on('warning', (warning) => {
 import { Command } from 'commander';
 import * as path from 'path';
 import * as fs from 'fs';
+import { execSync, spawn } from 'child_process';
 
 import { GeminiAgent } from './agents/gemini.js';
 import { ClaudeAgent } from './agents/claude.js';
-import { PTYManager } from './pty/manager.js';
-import { SessionManager } from './session/manager.js';
-import { CrashRecovery } from './session/recovery.js';
 import { MCPInjector } from './config/mcp-injector.js';
 import { GitUtils } from './utils/git.js';
-import { GracefulShutdown } from './utils/graceful-shutdown.js';
 import { WorkflowInjector } from './workflow/injector.js';
-import { LoopDetector } from './monitor/loop-detector.js';
-import { RestartHandler } from './monitor/restart-handler.js';
 
 // Re-exports for library usage
 export { BaseAgent } from './agents/base.js';
@@ -59,7 +55,7 @@ export async function main(): Promise<void> {
 
   program
     .name('waaah-agent')
-    .description('WAAAH CLI Agent Wrapper - Run autonomous coding agents')
+    .description('WAAAH CLI Agent Launcher - Start agents with proper MCP config')
     .version(pkg.version)
     .option('--start <agent>', 'Agent to start (gemini, claude)')
     .option('--as <workflow>', 'Workflow to execute (default: waaah-orc)', 'waaah-orc')
@@ -68,7 +64,7 @@ export async function main(): Promise<void> {
     .option('--server <url>', 'WAAAH MCP Server URL', 'http://localhost:3456')
     .action(async (options) => {
       try {
-        await runAgent(options);
+        await launchAgent(options);
       } catch (error) {
         console.error('\n❌ Fatal Error:', error instanceof Error ? error.message : String(error));
         process.exit(1);
@@ -78,7 +74,7 @@ export async function main(): Promise<void> {
   await program.parseAsync(process.argv);
 }
 
-async function runAgent(options: any) {
+async function launchAgent(options: any) {
   const { start: agentType, as: workflow, resume, skipMcp, server } = options;
 
   if (!agentType) {
@@ -92,133 +88,95 @@ async function runAgent(options: any) {
   }
 
   const cwd = process.cwd();
-  console.log(`🚀 Starting WAAAH Agent Wrapper (${agentType})...`);
 
-  // 1. Workspace Detection
+  // 1. Print banner
+  console.log('🤖 WAAAH Agent Launcher');
+  console.log(`   Agent: ${agentType}`);
+  console.log(`   Workflow: ${workflow}`);
+
+  // 2. Workspace Detection
   const git = new GitUtils();
   const workspaceInfo = await git.detectWorkspaceInteractive(cwd, {
     warnIfNotRepo: true,
-    offerInit: true
+    offerInit: false
   });
   const workspaceRoot = workspaceInfo.path;
-  console.log(`📂 Workspace: ${workspaceRoot}`);
+  console.log(`   Workspace: ${workspaceRoot}`);
 
-  // 2. Session Management & Recovery
-  const sessionManager = new SessionManager(workspaceRoot);
-  const recovery = new CrashRecovery(workspaceRoot);
-
-  if (resume) {
-    console.log('🔄 Attempting to resume previous session...');
-    const result = await recovery.resumeSession(options.resume === true ? undefined : options.resume); // resume can be flag or ID if we enhanced args
-    if (result.status === 'resumed' && result.session) {
-      console.log(`✅ Resumed session: ${result.session.id}`);
-      // TODO: Load previous state/logs if needed
-    } else {
-      console.log('⚠️ Could not resume session. Starting fresh.');
-    }
-  } else {
-    // Check for crashed sessions
-    const crashed = recovery.detectCrashedSession();
-    if (crashed) {
-      console.log(recovery.getRecoveryPrompt(crashed));
-      // In non-interactive mode or simple CLI, we might skip this confirm for now or implement strict input
-      // For now, simple logic: if they didn't ask to resume, we start fresh but warn.
-      console.log('   (Run with --resume to recover this session)');
-    }
-  }
-
-  // Create new session if not resuming
-  const session = await sessionManager.create(agentType, workflow);
-  console.log(`📝 Session ID: ${session.id}`);
-
-  // 3. Agent Initialization
-  const agentConfig = {
-    workflow,
-    resume: !!resume,
-    workspaceRoot
-  };
-
-  let agent;
-  if (agentType === 'gemini') {
-    agent = new GeminiAgent(agentConfig);
-  } else {
-    agent = new ClaudeAgent(agentConfig);
-  }
-
-  // 4. Pre-flight Checks
-  console.log('🔍 Performing pre-flight checks...');
+  // 3. Agent Pre-flight Checks
+  const agentConfig = { workflow, resume: !!resume, workspaceRoot };
+  const agent = agentType === 'gemini'
+    ? new GeminiAgent(agentConfig)
+    : new ClaudeAgent(agentConfig);
 
   if (!(await agent.checkInstalled())) {
-    console.error(`❌ ${agentType} CLI is not installed.`);
-    if (agentType === 'gemini') {
-      console.log((agent as GeminiAgent).getInstallInstructions());
-    } else {
-      console.log((agent as ClaudeAgent).getInstallInstructions());
-    }
+    console.error(`\n❌ ${agentType} CLI is not installed.`);
+    console.log(agent.getInstallInstructions());
     process.exit(1);
   }
 
   if (!(await agent.checkAuthenticated())) {
-    console.error(`❌ ${agentType} CLI is not authenticated.`);
+    console.error(`\n❌ ${agentType} CLI is not authenticated.`);
     process.exit(1);
   }
 
-  // 5. MCP Configuration
+  // 4. MCP Configuration
   if (!skipMcp) {
     const injector = new MCPInjector();
     const hasConfig = await injector.hasWaaahConfig(agentType as 'gemini' | 'claude');
 
     if (!hasConfig) {
-      console.log('⚙️  Configuring WAAAH MCP...');
+      console.log('\n⚙️  Configuring WAAAH MCP...');
       await injector.inject(agentType as 'gemini' | 'claude', { url: server });
       console.log('✅ MCP configured.');
-    } else {
-      console.log('✅ MCP Configuration found.');
     }
   }
 
-  // 6. Workflow Injection Setup
+  // 5. Check workflow exists
   const workflowInjector = new WorkflowInjector(workspaceRoot);
   const workflowExists = await workflowInjector.exists(workflow);
 
   if (!workflowExists) {
-    console.warn(`⚠️  Workflow '${workflow}' not found in .agent/workflows/`);
-    console.warn(`   Agent will start without initial workflow prompt.`);
+    console.warn(`\n⚠️  Workflow '${workflow}' not found in .agent/workflows/`);
   }
 
-  // 7. Loop & Restart Monitoring
-  const loopDetector = new LoopDetector();
-  const restartHandler = new RestartHandler({
-    onLog: (msg) => console.log(`[Monitor] ${msg}`),
-    onRestart: async (event) => {
-      console.log(`\n🔄 Restarting agent (Attempt ${event.attempt})...`);
-      // Kill current, wait, respawn logic would go here
-      // For MVP V1 of this CLI, we might just exit and let the user restart, 
-      // or implement the full respawn loop.
-      // Implementing full respawn requires wrapping the spawn logic in a loop.
-      // For now, we'll log it.
-    }
+  // 6. Build the command
+  const prompt = resume
+    ? `Resume the /${workflow} workflow. Continue from where you left off.`
+    : `Follow the /${workflow} workflow exactly.`;
+
+  let command: string;
+  let args: string[];
+
+  if (agentType === 'gemini') {
+    command = 'gemini';
+    args = ['-i', prompt, '--yolo'];
+  } else {
+    command = 'claude';
+    args = ['--dangerously-skip-permissions', prompt];
+  }
+
+  // 7. Launch the native CLI (replace this process)
+  console.log('\n' + '─'.repeat(60));
+  console.log(`Launching: ${command} ${args.join(' ')}`);
+  console.log('─'.repeat(60) + '\n');
+
+  // Use spawn with stdio inherit to give user native experience
+  // Then exit when the child exits
+  const child = spawn(command, args, {
+    cwd: workspaceRoot,
+    stdio: 'inherit',
+    env: process.env,
   });
 
-  // 8. Graceful Shutdown
-  const shutdown = new GracefulShutdown({
-    sessionManager,
-    killAgent: async () => {
-      await agent.stop();
-    },
-    getSessionState: () => session
+  // Forward signals to child
+  process.on('SIGINT', () => child.kill('SIGINT'));
+  process.on('SIGTERM', () => child.kill('SIGTERM'));
+
+  // Exit with child's exit code
+  child.on('exit', (code) => {
+    process.exit(code ?? 0);
   });
-  shutdown.install();
-
-  // 9. Start the Agent
-  // NOTE: restartOnExit disabled - Gemini/Claude have built-in restart handling
-  console.log('');
-  console.log(`🤖 Starting ${agentType} agent...`);
-  console.log(`   Workflow: ${workflow}`);
-  console.log('');
-
-  // Start the agent (blocks until all restarts exhausted or clean exit)
-  await agent.start();
 }
 
 // Run main if executed directly
