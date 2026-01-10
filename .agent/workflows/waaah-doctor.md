@@ -145,13 +145,55 @@
          "message": "Potential duplicate definition found"
        }
        ```
+   - Proceed to Step 6.
 
-6. **Update State**
+6. **Task Assignment (The Prescription)**
+   - For each violation in `VIOLATIONS`:
+     - **Violation Type → Agent Capability Mapping:**
+       | Violation Type | Target Capability | Priority |
+       |----------------|-------------------|----------|
+       | `coverage` | `test-engineer` | high |
+       | `file_size` | `code-monk` | normal |
+       | `complexity` | `code-monk` | normal |
+       | `duplicate` | `code-monk` | high |
+     - Call `assign_task` with:
+       ```javascript
+       assign_task({
+         targetAgentId: "<agent-by-capability>",
+         prompt: `## Doctor Prescription: ${violation.type}
+         
+**File:** ${violation.file}
+**Issue:** ${violation.message}
+**Current Value:** ${violation.value || violation.score || violation.coverage}
+**Threshold:** ${violation.threshold}
+
+### Action Required
+${violation.type === 'coverage' 
+  ? 'Add or improve tests to achieve 90%+ coverage for this file.'
+  : violation.type === 'file_size'
+    ? 'Refactor this file into smaller, focused modules.'
+    : violation.type === 'complexity'
+      ? 'Simplify control flow and extract helper functions.'
+      : 'Consolidate duplicate definitions into a shared module.'}
+`,
+         priority: violation.type === 'coverage' || violation.type === 'duplicate' ? 'high' : 'normal',
+         context: {
+           source: 'waaah-doctor',
+           violation: violation,
+           specPath: '/home/dtai/projects/WAAAH/.waaah/specs/002-waaah-doctor/spec.md'
+         }
+       })
+       ```
+     - `update_progress({ message: "Created task for: ${violation.file} (${violation.type})", phase: "PRESCRIBING" })`
+   - Store created task IDs for reporting.
+   - Proceed to Step 7.
+
+7. **Update State**
    - Persist new state:
      ```bash
      NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
      echo "{\"last_sha\": \"$LATEST_SHA\", \"last_run\": \"$NOW\"}" > .waaah/doctor/state.json
      ```
 
-7. **Loop**
+8. **Loop**
    - Return to Step 1.
