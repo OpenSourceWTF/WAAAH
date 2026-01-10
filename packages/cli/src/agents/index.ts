@@ -1,6 +1,6 @@
 /**
  * @fileoverview Agent module exports.
- * Provides the base class and types for CLI agent implementations.
+ * Provides the base class, types, and agent implementations.
  */
 
 export {
@@ -10,3 +10,9 @@ export {
   type ErrorCallback,
   type ExitCallback,
 } from './base.js';
+
+export {
+  GeminiAgent,
+  GeminiNotInstalledError,
+  GeminiLoginRequiredError,
+} from './gemini.js';
