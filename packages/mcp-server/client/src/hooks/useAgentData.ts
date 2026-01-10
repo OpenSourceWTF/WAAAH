@@ -19,14 +19,19 @@ export interface Agent {
  */
 export type AgentStatusColor = 'green' | 'yellow' | 'red' | 'gray';
 
+interface UseAgentDataOptions {
+  pollInterval?: number;
+}
+
 /**
  * Custom hook for agent data fetching with deduplication to prevent animation interruptions.
  * Uses refs to compare new data with previous, only triggering re-renders on actual changes.
  * 
- * @param pollInterval - Polling interval in milliseconds (default: 2000)
+ * @param options - Configuration options
  * @returns Agent data and computed state
  */
-export function useAgentData(pollInterval = 2000) {
+export function useAgentData(options: UseAgentDataOptions = {}) {
+  const { pollInterval = 2000 } = options;
   const [agents, setAgents] = useState<Agent[]>([]);
 
   // Ref for previous data comparison

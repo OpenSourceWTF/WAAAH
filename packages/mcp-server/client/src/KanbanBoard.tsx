@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Clock, User } from "lucide-react";
+import { Clock, User, Loader2 } from "lucide-react";
 
 // Import from modular components
 import type { Task } from './components/kanban';
@@ -18,8 +18,14 @@ interface KanbanBoardProps {
   onRejectTask: (id: string, feedback: string) => void;
   onSendComment: (taskId: string, content: string, replyTo?: string, images?: { id: string; dataUrl: string; mimeType: string; name: string }[]) => void;
   onAddReviewComment: (taskId: string, filePath: string, lineNumber: number | null, content: string) => void;
-  onViewHistory: () => void;
+  onViewHistory?: () => void;
   onTaskClick?: (task: Task) => void;
+  // Infinite scroll props
+  onLoadMoreCompleted?: () => void;
+  onLoadMoreCancelled?: () => void;
+  hasMoreCompleted?: boolean;
+  hasMoreCancelled?: boolean;
+  loadingMore?: 'completed' | 'cancelled' | null;
 }
 
 // Helper to create a fingerprint of tasks for comparison
@@ -32,7 +38,10 @@ function arePropsEqual(prev: KanbanBoardProps, next: KanbanBoardProps): boolean 
   return (
     tasksFingerprint(prev.tasks) === tasksFingerprint(next.tasks) &&
     tasksFingerprint(prev.completedTasks) === tasksFingerprint(next.completedTasks) &&
-    tasksFingerprint(prev.cancelledTasks) === tasksFingerprint(next.cancelledTasks)
+    tasksFingerprint(prev.cancelledTasks) === tasksFingerprint(next.cancelledTasks) &&
+    prev.hasMoreCompleted === next.hasMoreCompleted &&
+    prev.hasMoreCancelled === next.hasMoreCancelled &&
+    prev.loadingMore === next.loadingMore
   );
 }
 
@@ -45,7 +54,12 @@ export const KanbanBoard = React.memo(function KanbanBoard({
   onApproveTask,
   onRejectTask,
   onSendComment,
-  onAddReviewComment
+  onAddReviewComment,
+  onLoadMoreCompleted,
+  onLoadMoreCancelled,
+  hasMoreCompleted,
+  hasMoreCancelled,
+  loadingMore
 }: KanbanBoardProps) {
   // Expanded card state
   const [expandedTask, setExpandedTask] = useState<Task | null>(null);
@@ -243,6 +257,39 @@ export const KanbanBoard = React.memo(function KanbanBoard({
             })}
             {columns[col.id].length === 0 && (
               <div className="text-center text-primary/30 text-xs py-8 italic">No tasks</div>
+            )}
+            {/* Load More Button for DONE/CANCELLED columns */}
+            {col.id === 'DONE' && hasMoreCompleted && onLoadMoreCompleted && (
+              <button
+                onClick={onLoadMoreCompleted}
+                disabled={loadingMore === 'completed'}
+                className="w-full py-2 text-xs text-primary/60 hover:text-primary hover:bg-primary/10 border border-dashed border-primary/30 mt-2 disabled:opacity-50"
+              >
+                {loadingMore === 'completed' ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Loading...
+                  </span>
+                ) : (
+                  'Load More'
+                )}
+              </button>
+            )}
+            {col.id === 'CANCELLED' && hasMoreCancelled && onLoadMoreCancelled && (
+              <button
+                onClick={onLoadMoreCancelled}
+                disabled={loadingMore === 'cancelled'}
+                className="w-full py-2 text-xs text-primary/60 hover:text-primary hover:bg-primary/10 border border-dashed border-primary/30 mt-2 disabled:opacity-50"
+              >
+                {loadingMore === 'cancelled' ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Loading...
+                  </span>
+                ) : (
+                  'Load More'
+                )}
+              </button>
             )}
           </div>
         </div>

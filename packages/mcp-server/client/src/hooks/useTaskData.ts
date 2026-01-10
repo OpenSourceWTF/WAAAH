@@ -20,19 +20,36 @@ export interface Task {
   completedAt?: number;
 }
 
+interface UseTaskDataOptions {
+  pollInterval?: number;
+  search?: string;
+  pageSize?: number; // Items per page for pagination
+}
+
+const DEFAULT_PAGE_SIZE = 50;
+
 /**
- * Custom hook for task data fetching with deduplication to prevent animation interruptions.
+ * Custom hook for task data fetching with deduplication and infinite scroll support.
  * Uses refs to compare new data with previous, only triggering re-renders on actual changes.
  * 
- * @param pollInterval - Polling interval in milliseconds (default: 2000)
- * @returns Task data and loading states
+ * @param options - Configuration options including pollInterval, search query, and pageSize
+ * @returns Task data, loading states, and pagination controls
  */
-export function useTaskData(pollInterval = 2000) {
+export function useTaskData(options: UseTaskDataOptions = {}) {
+  const { pollInterval = 2000, search = '', pageSize = DEFAULT_PAGE_SIZE } = options;
+
   // State for tasks
   const [tasks, setTasks] = useState<Task[]>([]);
   const [recentCompleted, setRecentCompleted] = useState<Task[]>([]);
   const [recentCancelled, setRecentCancelled] = useState<Task[]>([]);
   const [connected, setConnected] = useState(true);
+
+  // Pagination state for completed/cancelled swimlanes
+  const [completedOffset, setCompletedOffset] = useState(0);
+  const [cancelledOffset, setCancelledOffset] = useState(0);
+  const [hasMoreCompleted, setHasMoreCompleted] = useState(true);
+  const [hasMoreCancelled, setHasMoreCancelled] = useState(true);
+  const [loadingMore, setLoadingMore] = useState<'completed' | 'cancelled' | null>(null);
 
   // Stats
   const [botCount, setBotCount] = useState(0);
@@ -70,12 +87,17 @@ export function useTaskData(pollInterval = 2000) {
 
     try {
       const baseUrl = 'http://localhost:3000';
-      const [tasksRes, botRes, statsRes, recentRes, cancelledRes] = await Promise.all([
-        fetch(`${baseUrl}/admin/tasks`, { signal: controller.signal }),
+      // Build search query param
+      const searchParam = search.trim() ? `&q=${encodeURIComponent(search.trim())}` : '';
+
+      // Fetch active tasks (with active=true for in-memory filtering + search)
+      // plus paginated completed/cancelled from DB
+      const [tasksRes, botRes, statsRes, completedRes, cancelledRes] = await Promise.all([
+        fetch(`${baseUrl}/admin/tasks?active=true&limit=1000${searchParam}`, { signal: controller.signal }),
         fetch(`${baseUrl}/admin/bot/status`, { signal: controller.signal }),
         fetch(`${baseUrl}/admin/stats`, { signal: controller.signal }),
-        fetch(`${baseUrl}/admin/tasks/history?limit=10&status=COMPLETED`, { signal: controller.signal }),
-        fetch(`${baseUrl}/admin/tasks/history?limit=10&status=CANCELLED,FAILED`, { signal: controller.signal })
+        fetch(`${baseUrl}/admin/tasks?limit=${pageSize}&offset=0&status=COMPLETED${searchParam}`, { signal: controller.signal }),
+        fetch(`${baseUrl}/admin/tasks?limit=${pageSize}&offset=0&status=CANCELLED${searchParam}`, { signal: controller.signal })
       ]);
 
       clearTimeout(timeoutId);
@@ -102,21 +124,87 @@ export function useTaskData(pollInterval = 2000) {
         updateIfChanged(data, prevStatsRef, setStats);
       }
 
-      if (recentRes.ok) {
-        const data = await recentRes.json();
+      if (completedRes.ok) {
+        const data = await completedRes.json();
         updateIfChanged(data, prevCompletedRef, setRecentCompleted);
+        // Reset pagination state since we're fetching from offset 0
+        setCompletedOffset(0);
+        setHasMoreCompleted(data.length >= pageSize);
       }
 
       if (cancelledRes.ok) {
         const data = await cancelledRes.json();
         updateIfChanged(data, prevCancelledRef, setRecentCancelled);
+        // Reset pagination state since we're fetching from offset 0
+        setCancelledOffset(0);
+        setHasMoreCancelled(data.length >= pageSize);
       }
     } catch (e) {
       clearTimeout(timeoutId);
       console.error('Task fetch error:', e);
       setConnected(false);
     }
-  }, [updateIfChanged]);
+  }, [updateIfChanged, search, pageSize]);
+
+  /**
+   * Load more completed tasks (infinite scroll)
+   */
+  const loadMoreCompleted = useCallback(async () => {
+    if (loadingMore || !hasMoreCompleted) return;
+
+    setLoadingMore('completed');
+    const newOffset = completedOffset + pageSize;
+    const baseUrl = 'http://localhost:3000';
+    const searchParam = search.trim() ? `&q=${encodeURIComponent(search.trim())}` : '';
+
+    try {
+      const res = await fetch(`${baseUrl}/admin/tasks?limit=${pageSize}&offset=${newOffset}&status=COMPLETED${searchParam}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.length > 0) {
+          setRecentCompleted(prev => [...prev, ...data]);
+          setCompletedOffset(newOffset);
+          setHasMoreCompleted(data.length >= pageSize);
+        } else {
+          setHasMoreCompleted(false);
+        }
+      }
+    } catch (e) {
+      console.error('Error loading more completed tasks:', e);
+    } finally {
+      setLoadingMore(null);
+    }
+  }, [completedOffset, hasMoreCompleted, loadingMore, pageSize, search]);
+
+  /**
+   * Load more cancelled tasks (infinite scroll)
+   */
+  const loadMoreCancelled = useCallback(async () => {
+    if (loadingMore || !hasMoreCancelled) return;
+
+    setLoadingMore('cancelled');
+    const newOffset = cancelledOffset + pageSize;
+    const baseUrl = 'http://localhost:3000';
+    const searchParam = search.trim() ? `&q=${encodeURIComponent(search.trim())}` : '';
+
+    try {
+      const res = await fetch(`${baseUrl}/admin/tasks?limit=${pageSize}&offset=${newOffset}&status=CANCELLED${searchParam}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.length > 0) {
+          setRecentCancelled(prev => [...prev, ...data]);
+          setCancelledOffset(newOffset);
+          setHasMoreCancelled(data.length >= pageSize);
+        } else {
+          setHasMoreCancelled(false);
+        }
+      }
+    } catch (e) {
+      console.error('Error loading more cancelled tasks:', e);
+    } finally {
+      setLoadingMore(null);
+    }
+  }, [cancelledOffset, hasMoreCancelled, loadingMore, pageSize, search]);
 
   // Polling effect
   useEffect(() => {
@@ -139,6 +227,12 @@ export function useTaskData(pollInterval = 2000) {
     botCount,
     stats,
     connected,
-    refetch: fetchTaskData
+    refetch: fetchTaskData,
+    // Pagination controls
+    loadMoreCompleted,
+    loadMoreCancelled,
+    hasMoreCompleted,
+    hasMoreCancelled,
+    loadingMore
   };
 }

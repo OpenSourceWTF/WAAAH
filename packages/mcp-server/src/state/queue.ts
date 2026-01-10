@@ -649,8 +649,8 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
     offset?: number;
     search?: string;
   } = {}): Task[] {
-    const { status, agentId, limit = 50, offset = 0 } = options;
-    return this.repo.getHistory({ status: status as TaskStatus | undefined, limit, offset, agentId });
+    const { status, agentId, limit = 50, offset = 0, search } = options;
+    return this.repo.getHistory({ status: status as TaskStatus | 'ACTIVE' | undefined, limit, offset, agentId, search });
   }
 
   /** Get all agents currently waiting with their capabilities (from DB) - implements ISchedulerQueue */

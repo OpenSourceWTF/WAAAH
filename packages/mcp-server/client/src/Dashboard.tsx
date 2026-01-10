@@ -1,7 +1,7 @@
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Skull, Sun, Moon } from "lucide-react";
+import { Skull, Sun, Moon, Search } from "lucide-react";
 import { KanbanBoard } from './KanbanBoard';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useTaskData, useAgentData } from './hooks';
@@ -12,6 +12,9 @@ import { AgentSidebar } from './components/dashboard/AgentSidebar';
 export function Dashboard() {
   const { theme, setTheme, t } = useTheme();
 
+  // Search state for server-side filtering
+  const [searchQuery, setSearchQuery] = useState('');
+
   // Use custom hooks for data fetching with deduplication (prevents animation interruption)
   const {
     activeTasks,
@@ -19,14 +22,20 @@ export function Dashboard() {
     recentCancelled,
     stats,
     connected,
-    refetch: refetchTasks  // Used by handlers after mutations
-  } = useTaskData(2000);
+    refetch: refetchTasks,
+    // Infinite scroll controls
+    loadMoreCompleted,
+    loadMoreCancelled,
+    hasMoreCompleted,
+    hasMoreCancelled,
+    loadingMore
+  } = useTaskData({ pollInterval: 2000, search: searchQuery });
 
   const {
     agents,
     getRelativeTime,
     refetch: refetchAgents
-  } = useAgentData(2000);
+  } = useAgentData({ pollInterval: 2000 });
 
   // Combined refetch for backward compatibility with fetchData calls
   const fetchData = useCallback(() => {
@@ -181,6 +190,28 @@ export function Dashboard() {
           </div>
         </div>
 
+        {/* Search Input - flex-1 to fill available space */}
+        <div className="flex-1 flex items-center justify-center max-w-md">
+          <div className="relative w-full">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-primary/50" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search tasks..."
+              className="w-full pl-10 pr-10 py-2 text-sm bg-black/30 border border-primary/30 text-foreground placeholder:text-primary/40 focus:outline-none focus:border-primary lowercase"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-primary/50 hover:text-primary text-lg leading-none"
+              >
+                ×
+              </button>
+            )}
+          </div>
+        </div>
+
         <div className="flex items-center gap-4">
           <div className="flex bg-primary/10 border border-primary/20 rounded-md p-1 gap-1">
             <Button variant="ghost" size="icon" className={`h-8 w-8 ${theme === 'LIGHT' ? 'bg-primary text-primary-foreground' : 'text-primary'}`} onClick={() => setTheme('LIGHT')} title="Light Mode"><Sun className="h-4 w-4" /></Button>
@@ -213,6 +244,11 @@ export function Dashboard() {
               onRejectTask={handleRejectTask}
               onSendComment={handleSendComment}
               onAddReviewComment={handleAddReviewComment}
+              onLoadMoreCompleted={loadMoreCompleted}
+              onLoadMoreCancelled={loadMoreCancelled}
+              hasMoreCompleted={hasMoreCompleted}
+              hasMoreCancelled={hasMoreCancelled}
+              loadingMore={loadingMore}
             />
           </div>
         </div>

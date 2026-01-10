@@ -64,26 +64,33 @@ export function createTaskRoutes({ queue, workspaceRoot }: TaskRoutesConfig): Ro
 
   /**
    * GET /tasks
-   * Retrieves tasks with optional filtering.
+   * Unified task retrieval - all queries go through database.
+   * 
+   * Query params:
+   * - status: Filter by specific status (e.g., COMPLETED, CANCELLED)
+   * - excludeTerminal=true: Exclude terminal states (COMPLETED, FAILED, BLOCKED, CANCELLED)
+   * - q: Search by task ID, title, prompt, or assignedTo
+   * - limit/offset: Pagination (default limit=50)
+   * - agentId: Filter by assigned agent
    */
   router.get('/tasks', (req, res) => {
-    const { status, agentId, limit, offset, q, active } = req.query;
+    const { status, agentId, limit, offset, q, excludeTerminal, active } = req.query;
+    const searchQuery = (q as string)?.trim() || '';
 
-    // Backward compatibility: if active=true, only return non-terminal tasks
-    if (active === 'true') {
-      const allTasks = queue.getAll();
-      const activeTasks = allTasks.filter(t => !['COMPLETED', 'FAILED', 'BLOCKED', 'CANCELLED'].includes(t.status));
-      res.json(activeTasks);
-      return;
+    // Build status filter - support excludeTerminal for active swimlanes
+    // Also support legacy 'active=true' as alias for excludeTerminal=true
+    let statusFilter = status as string | undefined;
+    if ((excludeTerminal === 'true' || active === 'true') && !statusFilter) {
+      // Return non-terminal tasks by excluding terminal statuses
+      statusFilter = 'ACTIVE'; // Special value handled by queue
     }
 
-    // Default: return filtered tasks from database
     const tasks = queue.getTaskHistory({
-      status: status as string,
+      status: statusFilter,
       agentId: agentId as string,
       limit: limit ? parseInt(limit as string, 10) : 50,
       offset: offset ? parseInt(offset as string, 10) : 0,
-      search: q as string
+      search: searchQuery
     });
     res.json(tasks);
   });

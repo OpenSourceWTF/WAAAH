@@ -22,8 +22,8 @@ export interface ITaskRepository {
   getByStatuses(statuses: TaskStatus[]): Task[];
   /** Get tasks assigned to a specific agent */
   getByAssignedTo(agentId: string): Task[];
-  /** Get task history with filtering */
-  getHistory(options: { status?: TaskStatus; limit?: number; offset?: number; agentId?: string }): Task[];
+  /** Get task history with filtering and search */
+  getHistory(options: { status?: TaskStatus | 'ACTIVE'; limit?: number; offset?: number; agentId?: string; search?: string }): Task[];
   /** Get queue statistics */
   getStats(): { total: number; byStatus: Record<string, number> };
   /** Add a message to a task */
@@ -141,17 +141,34 @@ export class TaskRepository implements ITaskRepository {
     return rows.map(r => this.mapRowToTask(r));
   }
 
-  getHistory(options: { status?: TaskStatus; limit?: number; offset?: number; agentId?: string }): Task[] {
+  getHistory(options: { status?: TaskStatus | 'ACTIVE'; limit?: number; offset?: number; agentId?: string; search?: string }): Task[] {
     let query = 'SELECT * FROM tasks WHERE 1=1';
     const params: any[] = [];
 
-    if (options.status) {
-      query += ' AND status = ?';
-      params.push(options.status);
+    if (options.status === 'ACTIVE') {
+      // ACTIVE = exclude terminal states
+      query += ' AND status NOT IN (?, ?, ?, ?)';
+      params.push('COMPLETED', 'FAILED', 'BLOCKED', 'CANCELLED');
+    } else if (options.status) {
+      // Handle comma-separated statuses (e.g., "CANCELLED,FAILED")
+      const statuses = options.status.split(',').map(s => s.trim());
+      if (statuses.length === 1) {
+        query += ' AND status = ?';
+        params.push(statuses[0]);
+      } else {
+        query += ` AND status IN (${statuses.map(() => '?').join(',')})`;
+        params.push(...statuses);
+      }
     }
     if (options.agentId) {
       query += ' AND assignedTo = ?';
       params.push(options.agentId);
+    }
+    // Full-text search on id, title, prompt, and assignedTo
+    if (options.search && options.search.trim()) {
+      const searchTerm = `%${options.search.trim()}%`;
+      query += ' AND (id LIKE ? OR title LIKE ? OR prompt LIKE ? OR assignedTo LIKE ?)';
+      params.push(searchTerm, searchTerm, searchTerm, searchTerm);
     }
 
     query += ' ORDER BY createdAt DESC';
