@@ -15,7 +15,7 @@ import * as readline from 'readline';
 const WAAAH_MCP_NAME = 'waaah';
 
 /** Default server address */
-const DEFAULT_SERVER_URL = 'http://localhost:3456';
+const DEFAULT_SERVER_URL = 'http://localhost:3000';
 
 /**
  * MCP server configuration.
@@ -181,7 +181,7 @@ export class MCPInjector {
    * @example
    * ```typescript
    * const backupPath = await injector.inject('gemini', {
-   *   url: 'http://localhost:3456',
+   *   url: 'http://localhost:3000',
    *   apiKey: 'optional-key'
    * });
    * console.log('Backup created at:', backupPath);
@@ -271,7 +271,7 @@ export class MCPInjector {
    * Prompts user for MCP server configuration via readline.
    * 
    * Asks for:
-   * 1. Server address (default: http://localhost:3456)
+   * 1. Server address (default: http://localhost:3000)
    * 2. API key (optional)
    * 
    * @returns Promise resolving to the user's config choices
@@ -279,8 +279,8 @@ export class MCPInjector {
    * @example
    * ```typescript
    * const config = await injector.promptForConfig();
-   * // User input: server=http://localhost:3456, apiKey=
-   * // config = { url: 'http://localhost:3456' }
+   * // User input: server=http://localhost:3000, apiKey=
+   * // config = { url: 'http://localhost:3000' }
    * ```
    */
   public async promptForConfig(): Promise<MCPServerConfig> {

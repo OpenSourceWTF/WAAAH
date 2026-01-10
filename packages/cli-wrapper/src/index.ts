@@ -61,7 +61,7 @@ export async function main(): Promise<void> {
     .option('--as <workflow>', 'Workflow to execute (default: waaah-orc)', 'waaah-orc')
     .option('--resume', 'Resume previous session if available')
     .option('--skip-mcp', 'Skip MCP configuration check', false)
-    .option('--server <url>', 'WAAAH MCP Server URL', 'http://localhost:3456')
+    .option('--server <url>', 'WAAAH MCP Server URL', 'http://localhost:3000')
     .action(async (options) => {
       try {
         await launchAgent(options);
