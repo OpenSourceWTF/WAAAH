@@ -60,8 +60,8 @@ async function promptProxyMethod(): Promise<'global' | 'npx'> {
 
   return new Promise((resolve) => {
     console.log('\n   How should the WAAAH proxy be invoked?');
-    console.log('   1. Global link (requires: pnpm link --global in packages/mcp-proxy)');
-    console.log('   2. npx from npm (downloads @opensourcewtf/waaah-mcp-proxy)');
+    console.log('   1. Globally installed (uses waaah-proxy command)');
+    console.log('   2. npx from npm (downloads @opensourcewtf/waaah-mcp-proxy each time)');
 
     rl.question('   Choose (1 or 2) [default: 1]: ', (answer) => {
       rl.close();
