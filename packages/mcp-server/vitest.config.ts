@@ -11,7 +11,10 @@ export default defineConfig({
     globals: true,
     include: ['tests/**/*.test.ts'],
     coverage: {
-      provider: 'v8'
+      provider: 'v8',
+      reporter: ['text', 'text-summary', 'json-summary'],
+      reportsDirectory: './coverage',
+      enabled: true
     }
   }
 });

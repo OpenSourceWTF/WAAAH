@@ -313,7 +313,7 @@ This is a monorepo managed with `pnpm workspaces`.
 | [`packages/mcp-server`](packages/mcp-server) | Central orchestration server with Admin Dashboard |
 | [`packages/mcp-server/client`](packages/mcp-server/client) | Mission Command Dashboard (React + Vite) |
 | [`packages/mcp-proxy`](packages/mcp-proxy) | Stdio↔HTTP bridge for agents |
-| [`packages/cli`](packages/cli) + [`cli-wrapper`](packages/cli-wrapper) | `waaah` CLI: task management + agent spawning with PTY |
+| [`packages/cli`](packages/cli) | `waaah` CLI: task management + agent spawning |
 | [`packages/bot`](packages/bot) | Unified Discord/Slack bot |
 | [`packages/types`](packages/types) | Shared TypeScript definitions and Zod schemas |
 

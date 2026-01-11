@@ -1,6 +1,6 @@
 # @opensourcewtf/waaah-cli
 
-Command-line interface for interacting with the WAAAH server.
+Unified command-line interface for WAAAH: task management and agent spawning.
 
 ## Installation
 
@@ -17,6 +17,25 @@ npm install -g @opensourcewtf/waaah-cli
 
 ## Commands
 
+### Agent Management
+
+```bash
+# Start a Gemini agent with default orchestrator workflow
+waaah agent --start gemini
+
+# Start with specific workflow
+waaah agent --start gemini --as waaah-orc-agent
+
+# Start Claude agent
+waaah agent --start claude
+
+# Resume previous session
+waaah agent --start gemini --resume
+
+# Dry run (show command without executing)
+waaah agent --start gemini --dry-run
+```
+
 ### Task Management
 
 ```bash
@@ -28,35 +47,18 @@ waaah send orchestrator-1 "Fix the tests"
 
 # Send with priority
 waaah send "URGENT: Fix production bug" --priority critical
-```
 
-### Agent Management
-
-```bash
-# List all registered agents
-waaah list-agents
+# List agents
+waaah list
 
 # Check agent status
 waaah status orchestrator-1
-
-# Evict an agent
-waaah evict orchestrator-1
 ```
 
 ### Queue Management
 
 ```bash
-# View task queue
-waaah queue
-
-# Clear the queue
-waaah clear
-```
-
-### Debugging
-
-```bash
-# Show server debug info
+# View debug info
 waaah debug
 
 # Interactive mode (watch queue)
@@ -67,13 +69,22 @@ waaah
 
 | Command | Description |
 |---------|-------------|
+| `agent --start <cli>` | Start agent (gemini, claude) |
 | `send [target] <prompt>` | Send task to agent |
-| `list-agents` | List registered agents |
+| `list` | List registered agents |
 | `status <agentId>` | Get agent status |
-| `queue` | View task queue |
-| `clear` | Clear task queue |
-| `evict <agentId>` | Evict an agent |
 | `debug` | Show server debug info |
+| `answer <taskId> <answer>` | Answer a blocked task |
+| `task <action>` | Task management |
+
+## Agent Adapters
+
+The CLI supports multiple AI agent CLIs:
+
+| CLI | Status | Notes |
+|-----|--------|-------|
+| `gemini` | ✅ | Full support |
+| `claude` | ✅ | Full support |
 
 ## Development
 
