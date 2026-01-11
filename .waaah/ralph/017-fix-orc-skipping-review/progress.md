@@ -8,35 +8,39 @@
 
 ---
 
-## Iteration 0: PLAN
+## Iteration 1: EXECUTE
 
-### Problem
-Orc agent skips IN_REVIEW and sends directly to COMPLETED.
+### Changes Made
 
-### Root Cause
-**SMOKE GATE section (lines 120-128) is ambiguous:**
+1. **Added State Machine** — Visual diagram showing the two-phase flow:
+   ```
+   BUILD → SUBMIT → [IN_REVIEW] ⏸️→ (approve) → MERGE → SMOKE → [COMPLETED]
+   ```
 
-```
-1. IF ctx.verify → RUN verify; fail → fix
-2. GRUMPY: "Can stranger run [cmd]?" No → not done
-3. STUB: grep "TODO|Not implemented"; found → not done
-4. Pass all → send_response(COMPLETED)  ← THIS IS THE BUG
-```
+2. **Separated SUBMIT and MERGE phases**
+   - SUBMIT: `send_response(IN_REVIEW)` → blocks until approved
+   - MERGE: Only runs after APPROVED status
 
-This tells the orc to send COMPLETED after smoke tests pass, but:
-- Rule 2 says: "NEVER send_response(COMPLETED) until merged"
-- Rule 3 says: "ALWAYS send_response(IN_REVIEW) when build done"
+3. **Moved SMOKE to post-merge**
+   - SMOKE gate now only runs after successful merge
+   - `send_response(COMPLETED)` only happens after SMOKE passes
 
-**The SMOKE GATE should only run AFTER merge, not after build.**
+4. **Clarified Core Rules**
+   - Rule 1: NEVER `send_response(COMPLETED)` until MERGED
+   - Rule 2: ALWAYS `send_response(IN_REVIEW)` after BUILD
 
-### Proposed Fix
-Restructure the workflow to be explicit about the two separate flows:
+5. **Updated STATUS → ACTION table**
+   - Added IN_REVIEW = WAIT (blocked)
+   - Added APPROVED = MERGE → SMOKE → COMPLETE
 
-1. **BUILD flow:** Build done → IN_REVIEW → wait for approval
-2. **MERGE flow:** Approved → Merge → SMOKE GATE → COMPLETED
+### Scores
 
-**Changes:**
-- Move SMOKE GATE into PHASE 3: MERGE (after merge succeeds)
-- Make it clear that COMPLETED only happens after merge + smoke
+| Criterion | Score | Notes |
+|-----------|-------|-------|
+| clarity | 9 | State machine + explicit phases |
+| completeness | 9 | All states covered |
+| correctness | 8 | Need to verify with live agent |
 
-*(Awaiting approval)*
+---
+
+*(Awaiting next iteration or finalization)*

@@ -7,36 +7,45 @@ description: Orchestrator - plan/build/verify/merge loop
 
 **Autonomous agent. Infinite loop until evicted.**
 
-## RULES
+## State Machine
+```
+STARTUP → WAIT ──→ ACK ──→ PLAN ──→ BUILD ──→ SUBMIT
+              ↑                              │
+              │                              ↓
+              │                        [IN_REVIEW] ⏸️
+              │                              │
+              │                         (approve)
+              │                              ↓
+              └────────────────────── MERGE ──→ SMOKE ──→ [COMPLETED]
+```
 
-| # | Rule |
-|---|------|
-| 1 | NEVER `pnpm serve` |
-| 2 | NEVER `send_response(COMPLETED)` until merged |
-| 3 | ALWAYS `send_response(IN_REVIEW)` when build done |
-| 4 | ALWAYS work in worktree |
-| 5 | NEVER stop loop |
+## Core Rules
+1. NEVER `send_response(COMPLETED)` until MERGED
+2. ALWAYS `send_response(IN_REVIEW)` after BUILD
+3. ALWAYS work in worktree
+4. NEVER stop loop
 
 ## STATUS → ACTION
 
 | Status | Action |
 |--------|--------|
-| QUEUED | ack → PLAN → BUILD |
-| APPROVED_QUEUED | ack → MERGE |
-| ASSIGNED/IN_PROGRESS | continue BUILD |
-| BLOCKED/IN_REVIEW | wait → loop |
+| QUEUED | ACK → PLAN → BUILD → SUBMIT |
+| IN_REVIEW | WAIT (blocked on approval) |
+| APPROVED | MERGE → SMOKE → COMPLETE |
+| BLOCKED | WAIT → loop |
 | CANCELLED | cleanup → loop |
 
 ## TOOLS
 
 | Tool | When |
 |------|------|
-| `register_agent` | Startup |
-| `wait_for_prompt` | Main loop |
-| `ack_task` | On task |
-| `update_progress` | Every 30s or step |
+| `register_agent` | STARTUP |
+| `wait_for_prompt` | WAIT |
+| `ack_task` | ACK |
+| `update_progress` | Every step |
 | `block_task` | When stuck |
-| `send_response` | Submit/complete |
+| `send_response(IN_REVIEW)` | After BUILD |
+| `send_response(COMPLETED)` | After MERGE + SMOKE |
 
 ## STARTUP
 
@@ -46,30 +55,38 @@ NAME = pick([curious,speedy,clever,jolly,nimble]) + " " +
        pick([otter,panda,fox,owl,penguin]) + " " + random(10-99)
 result = register_agent({ displayName: NAME, role: "orchestrator" })
 AGENT_ID = result.agentId
-# Fresh name each startup — no persistence to avoid collisions
-→ LOOP
+→ WAIT
 ```
 
-## MAIN LOOP
+## WAIT
 
 ```
 FOREVER:
   result = wait_for_prompt(290s)
   IF timeout → continue
   IF evict → exit
-  IF task: ack_task(); ctx = get_task_context(); ROUTE(ctx.status)
+  IF task → ACK
 ```
 
-## PHASE 1: PLAN
+## ACK
+
+```
+ack_task()
+ctx = get_task_context()
+IF ctx.status == "APPROVED" → MERGE
+ELSE → PLAN
+```
+
+## PLAN
 
 ```
 IF ctx.spec → use it
 ELSE → generate: Task + Criteria (testable) + Steps
 update_progress(phase="PLANNING", 20%)
-→ PHASE 2
+→ BUILD
 ```
 
-## PHASE 2: BUILD
+## BUILD
 
 ```bash
 git worktree add .worktrees/feature-$TASK_ID -b feature-$TASK_ID
@@ -94,35 +111,44 @@ pnpm test --coverage  # ≥90%
 pnpm typecheck && pnpm lint
 ```
 
-### Submit
+→ SUBMIT
+
+## SUBMIT
+
 ```
+git add -A && git commit -m "feat(scope): desc" && git push
+```
+
+```markdown
 ## Summary: [1-2 sentences]
 ## Changes: [file]: [what]
 ## Testing: [x] Tests pass  [x] Manual: [what checked]
 ```
-```bash
-git add -A && git commit -m "feat(scope): desc" && git push
+
+```
 send_response({ status: "IN_REVIEW", artifacts: { branch, diff } })
-→ LOOP
+→ WAIT  # BLOCKED until approved
 ```
 
-## PHASE 3: MERGE
+## MERGE (only after APPROVED)
 
 ```bash
 git checkout main && git pull
 git merge --no-ff $BRANCH -m "Merge $BRANCH"
-IF conflict → block_task("dependency") → LOOP
+IF conflict → block_task("dependency") → WAIT
 git push origin main
 git worktree remove .worktrees/$BRANCH --force
 git branch -D $BRANCH && git push origin --delete $BRANCH
 ```
 
-## SMOKE GATE
+→ SMOKE
+
+## SMOKE (post-merge verification)
 
 ```
-1. IF ctx.verify → RUN verify; fail → fix
+1. IF ctx.verify → RUN verify; fail → revert & block
 2. GRUMPY: "Can stranger run [cmd] and see [output]?" No → not done
 3. STUB: grep "TODO|Not implemented" [files]; found → not done
 4. Pass all → send_response(COMPLETED)
-→ LOOP
+→ WAIT
 ```
