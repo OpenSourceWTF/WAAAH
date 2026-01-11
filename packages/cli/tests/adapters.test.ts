@@ -43,15 +43,15 @@ describe('CLI Adapters', () => {
 
     describe('buildArgs', () => {
       it('builds args for new session', () => {
-        const args = geminiAdapter.buildArgs('waaah-orc-loop', false);
+        const args = geminiAdapter.buildArgs('waaah-orc-agent', false);
         expect(args).toContain('-i');
         expect(args).toContain('--yolo');
-        expect(args.some(a => a.includes('waaah-orc-loop'))).toBe(true);
+        expect(args.some(a => a.includes('waaah-orc-agent'))).toBe(true);
         expect(args.some(a => a.includes('Follow'))).toBe(true);
       });
 
       it('builds args for resume session', () => {
-        const args = geminiAdapter.buildArgs('waaah-orc-loop', true);
+        const args = geminiAdapter.buildArgs('waaah-orc-agent', true);
         expect(args).toContain('-i');
         expect(args.some(a => a.includes('Resume'))).toBe(true);
       });
@@ -179,18 +179,18 @@ describe('CLI Adapters', () => {
 
     describe('buildArgs', () => {
       it('builds args for new session with prompt first', () => {
-        const args = claudeAdapter.buildArgs('waaah-orc-loop', false);
+        const args = claudeAdapter.buildArgs('waaah-orc-agent', false);
         expect(args).toContain('--dangerously-skip-permissions');
         expect(args).toContain('--mcp-config');
         // Prompt should be first arg
-        expect(args[0]).toContain('waaah-orc-loop');
+        expect(args[0]).toContain('waaah-orc-agent');
       });
 
       it('builds args for resume session without prompt', () => {
-        const args = claudeAdapter.buildArgs('waaah-orc-loop', true);
+        const args = claudeAdapter.buildArgs('waaah-orc-agent', true);
         expect(args).toContain('--resume');
         expect(args).toContain('--dangerously-skip-permissions');
-        expect(args).not.toContain('waaah-orc-loop'); // No prompt in resume mode
+        expect(args).not.toContain('waaah-orc-agent'); // No prompt in resume mode
       });
     });
 

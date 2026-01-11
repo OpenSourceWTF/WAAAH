@@ -99,5 +99,5 @@ export const initCommand = new Command('init')
     console.log(`\n✅ WAAAH project initialized successfully!`);
     console.log(`\nNext steps:`);
     console.log(`  1. Start the WAAAH server: waaah serve`);
-    console.log(`  2. Run an agent: /waaah-orc`);
+    console.log(`  2. Run an agent: /waaah-orc-agent`);
   });

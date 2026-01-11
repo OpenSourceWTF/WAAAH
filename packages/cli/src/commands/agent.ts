@@ -7,7 +7,7 @@
  * @example
  * ```bash
  * waaah agent --start=gemini
- * waaah agent --start=gemini --as=waaah-orc-loop
+ * waaah agent --start=gemini --as=waaah-orc-agent
  * waaah agent --start=claude --resume
  * waaah agent --start=gemini --dry-run
  * ```
@@ -19,7 +19,7 @@ import * as path from 'path';
 import * as readline from 'readline';
 import { getAdapter, getSupportedCLIs, isSupportedCLI, ExitCode } from '../adapters/index.js';
 
-const DEFAULT_WORKFLOW = 'waaah-orc-loop';
+const DEFAULT_WORKFLOW = 'waaah-orc-agent';
 const DEFAULT_SERVER = 'http://localhost:3000';
 
 /** Find git root from cwd */
