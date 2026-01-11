@@ -7,6 +7,17 @@ export const SUPPORTED_CLIS = ['gemini', 'claude'] as const;
 export type SupportedCLI = typeof SUPPORTED_CLIS[number];
 export type AgentType = 'gemini' | 'claude';
 
+/** Read WAAAH_API_KEY from workspace .env file */
+function getApiKeyFromEnv(): string {
+  try {
+    const envPath = path.join(process.cwd(), '.env');
+    const content = fs.readFileSync(envPath, 'utf-8');
+    const match = content.match(/WAAAH_API_KEY=(.+)/);
+    if (match) return match[1].trim();
+  } catch { /* .env not found */ }
+  return 'dev-key-123'; // Fallback for dev
+}
+
 export function isSupportedCLI(cli: string): cli is SupportedCLI {
   return SUPPORTED_CLIS.includes(cli as SupportedCLI);
 }
@@ -140,7 +151,7 @@ export async function configureMcp(agentType: AgentType, serverUrl: string): Pro
       command: 'waaah-proxy',
       args: ['--url', serverUrl],
       env: {
-        WAAAH_API_KEY: process.env.WAAAH_API_KEY || 'dev-key-123'
+        WAAAH_API_KEY: process.env.WAAAH_API_KEY || getApiKeyFromEnv()
       }
     };
   } else {
@@ -148,7 +159,7 @@ export async function configureMcp(agentType: AgentType, serverUrl: string): Pro
       command: 'npx',
       args: ['-y', '@opensourcewtf/waaah-mcp-proxy', '--url', serverUrl],
       env: {
-        WAAAH_API_KEY: process.env.WAAAH_API_KEY || 'dev-key-123'
+        WAAAH_API_KEY: process.env.WAAAH_API_KEY || getApiKeyFromEnv()
       }
     };
   }
