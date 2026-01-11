@@ -41,9 +41,15 @@ description: Orchestrator - plan/build/verify/merge loop
 ## STARTUP
 
 ```
-NAME = pick([curious,speedy,clever,jolly,nimble]) + " " + 
-       pick([otter,panda,fox,owl,penguin]) + " " + random(10-99)
-register_agent({ displayName: NAME, role: "orchestrator" })
+mkdir -p .waaah/orc
+IF exists .waaah/orc/agent.json:
+  AGENT_ID = load(.waaah/orc/agent.json).id
+  register_agent({ id: AGENT_ID })  # Re-register with SAME id
+ELSE:
+  NAME = pick([curious,speedy,clever,jolly,nimble]) + " " + 
+         pick([otter,panda,fox,owl,penguin]) + " " + random(10-99)
+  AGENT_ID = register_agent({ displayName: NAME, role: "orchestrator" })
+  save(.waaah/orc/agent.json, { id: AGENT_ID, name: NAME })
 → LOOP
 ```
 

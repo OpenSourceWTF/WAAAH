@@ -1,7 +1,7 @@
 import { Task, TaskStatus } from '@opensourcewtf/waaah-types';
-import { type ITaskRepository } from '../task-repository.js';
-import { AgentMatchingService } from './agent-matching-service.js';
-import { QueuePersistence } from '../persistence/queue-persistence.js';
+import type { ITaskRepository } from '../task-repository.js';
+import type { AgentMatchingService } from './agent-matching-service.js';
+import type { QueuePersistence } from '../persistence/queue-persistence.js';
 
 export class TaskLifecycleService {
   constructor(
@@ -111,38 +111,6 @@ export class TaskLifecycleService {
     this.persistence.clearPendingAck(taskId);
 
     console.log(`[Lifecycle] Task ${taskId} force-retried by admin`);
-    return { success: true };
-  }
-
-  ackTask(taskId: string, agentId: string): { success: boolean; error?: string } {
-    const pendingAck = this.persistence.getPendingAck(taskId);
-
-    if (!pendingAck) {
-      return { success: false, error: 'No pending ACK found for task' };
-    }
-
-    if (pendingAck.agentId !== agentId) {
-      return { success: false, error: `Task was sent to ${pendingAck.agentId}, not ${agentId}` };
-    }
-
-    const task = this.repo.getById(taskId);
-    if (!task) return { success: false, error: 'Task not found' };
-
-    task.assignedTo = agentId;
-    task.status = 'ASSIGNED';
-
-    if (!task.history) task.history = [];
-    task.history.push({
-      timestamp: Date.now(),
-      status: 'ASSIGNED',
-      agentId: agentId,
-      message: `Task assigned to ${agentId}`
-    });
-
-    this.repo.update(task);
-    this.persistence.clearPendingAck(taskId);
-    console.log(`[Lifecycle] Task ${taskId} ACKed by ${agentId}, now ASSIGNED`);
-
     return { success: true };
   }
 

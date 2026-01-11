@@ -1,10 +1,10 @@
 import { Task, StandardCapability } from '@opensourcewtf/waaah-types';
-import { ITaskRepository } from '../task-repository.js';
-import { QueuePersistence } from '../persistence/queue-persistence.js';
-import { AgentMatchingService } from './agent-matching-service.js';
-import { EvictionService, EvictionSignal } from '../eviction-service.js';
-import { TypedEventEmitter } from '../queue-events.js';
-import { WaitResult } from '../queue.interface.js';
+import type { ITaskRepository } from '../task-repository.js';
+import type { QueuePersistence } from '../persistence/queue-persistence.js';
+import type { AgentMatchingService } from './agent-matching-service.js';
+import type { EvictionService, EvictionSignal } from '../eviction-service.js';
+import type { TypedEventEmitter } from '../queue-events.js';
+import type { WaitResult } from '../queue.interface.js';
 
 export class PollingService {
   constructor(

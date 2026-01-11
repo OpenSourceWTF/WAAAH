@@ -1,4 +1,4 @@
-import { type ITaskRepository } from '../task-repository.js';
+import type { ITaskRepository } from '../task-repository.js';
 
 /**
  * Service for handling task messages and comments.

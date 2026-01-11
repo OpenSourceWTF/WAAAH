@@ -38,10 +38,15 @@ description: Autonomous QA daemon - monitors repo health
 ## STARTUP
 
 ```
-NAME = "Dr. " + pick([curious,speedy,clever,jolly,nimble]) + " " +
-       pick([otter,panda,fox,owl,penguin]) + " " + random(10-99)
-register_agent({ displayName: NAME, role: "code-doctor" })
 mkdir -p .waaah/doctor
+IF exists .waaah/doctor/agent.json:
+  AGENT_ID = load(.waaah/doctor/agent.json).id
+  register_agent({ id: AGENT_ID })  # Re-register with SAME id
+ELSE:
+  NAME = "Dr. " + pick([curious,speedy,clever,jolly,nimble]) + " " +
+         pick([otter,panda,fox,owl,penguin]) + " " + random(10-99)
+  AGENT_ID = register_agent({ displayName: NAME, role: "code-doctor" })
+  save(.waaah/doctor/agent.json, { id: AGENT_ID, name: NAME })
 IF no state.json → create { last_sha: "" }
 → LOOP
 ```
