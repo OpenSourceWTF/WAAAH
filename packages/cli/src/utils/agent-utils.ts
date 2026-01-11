@@ -43,11 +43,11 @@ export async function checkCLIInstalled(cli: SupportedCLI): Promise<boolean> {
 export function getConfigPath(agentType: AgentType): string {
   const home = process.env.HOME || '';
   return agentType === 'gemini'
-    ? `${home}/.gemini/settings.json` 
+    ? `${home}/.gemini/settings.json`
     : `${home}/.claude/claude_desktop_config.json`;
 }
 
-export function getMcpConfig(agentType: AgentType): { url: string } | null {
+export function getMcpConfig(agentType: AgentType): { url: string; hasApiKey: boolean } | null {
   try {
     const configPath = getConfigPath(agentType);
     const content = fs.readFileSync(configPath, 'utf-8');
@@ -59,7 +59,9 @@ export function getMcpConfig(agentType: AgentType): { url: string } | null {
     if (waaah.args) {
       const urlIdx = waaah.args.indexOf('--url');
       if (urlIdx !== -1 && waaah.args[urlIdx + 1]) {
-        return { url: waaah.args[urlIdx + 1] };
+        // Check if API key is configured
+        const hasApiKey = !!(waaah.env?.WAAAH_API_KEY);
+        return { url: waaah.args[urlIdx + 1], hasApiKey };
       }
     }
     return null;
@@ -136,12 +138,18 @@ export async function configureMcp(agentType: AgentType, serverUrl: string): Pro
   if (proxyMethod === 'global') {
     config.mcpServers.waaah = {
       command: 'waaah-proxy',
-      args: ['--url', serverUrl]
+      args: ['--url', serverUrl],
+      env: {
+        WAAAH_API_KEY: process.env.WAAAH_API_KEY || 'dev-key-123'
+      }
     };
   } else {
     config.mcpServers.waaah = {
       command: 'npx',
-      args: ['-y', '@opensourcewtf/waaah-mcp-proxy', '--url', serverUrl]
+      args: ['-y', '@opensourcewtf/waaah-mcp-proxy', '--url', serverUrl],
+      env: {
+        WAAAH_API_KEY: process.env.WAAAH_API_KEY || 'dev-key-123'
+      }
     };
   }
 
@@ -162,6 +170,9 @@ export async function ensureMcpConfig(agentType: AgentType, serverUrl: string): 
     if (update) {
       await configureMcp(agentType, serverUrl);
     }
+  } else if (!current.hasApiKey) {
+    console.log('\n⚙️  WAAAH MCP missing API key, updating config...');
+    await configureMcp(agentType, serverUrl);
   } else {
     console.log(`\n✅ MCP configured (${serverUrl})`);
   }
