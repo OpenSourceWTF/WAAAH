@@ -112,34 +112,14 @@ export const MessageThread: React.FC<MessageThreadProps> = ({
           </div>
         </div>
 
-        {/* Response/Output Injection (if available) */}
-        {task.response && (
-          <div className="flex gap-2 justify-start">
-            <div className="max-w-[90%] p-2 rounded text-xs bg-green-700 text-white">
-              <div className="flex items-center gap-2 mb-1">
-                <Badge className="bg-green-900 text-white text-[10px] px-1 py-0">RESPONSE</Badge>
-                <span className="text-[10px] opacity-70">
-                  {task.completedAt ? new Date(task.completedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'pending'}
-                </span>
-              </div>
-              <pre className="whitespace-pre-wrap break-words font-mono text-[11px]">
-                {(() => {
-                  if (typeof task.response === 'string') return task.response;
-                  const resp = task.response as Record<string, unknown>;
-                  if (resp?.message && typeof resp.message === 'string') return resp.message;
-                  if (resp?.output && typeof resp.output === 'string') return resp.output;
-                  return JSON.stringify(task.response, null, 2);
-                })()}
-              </pre>
-            </div>
-          </div>
-        )}
 
-        {/* Build interleaved timeline: messages + status events */}
+
+        {/* Build interleaved timeline: messages + status events + response */}
         {(() => {
           type TimelineItem =
             | { type: 'message'; data: NonNullable<typeof task.messages>[0]; timestamp: number }
-            | { type: 'status'; data: NonNullable<typeof task.history>[0]; timestamp: number };
+            | { type: 'status'; data: NonNullable<typeof task.history>[0]; timestamp: number }
+            | { type: 'response'; timestamp: number };
 
           const items: TimelineItem[] = [];
 
@@ -152,6 +132,11 @@ export const MessageThread: React.FC<MessageThreadProps> = ({
           task.history?.forEach(evt => {
             items.push({ type: 'status', data: evt, timestamp: evt.timestamp });
           });
+
+          // Add response as timeline item (if task completed)
+          if (task.response && task.completedAt) {
+            items.push({ type: 'response', timestamp: task.completedAt });
+          }
 
           // Sort chronologically
           items.sort((a, b) => a.timestamp - b.timestamp);
@@ -175,6 +160,31 @@ export const MessageThread: React.FC<MessageThreadProps> = ({
                     <span className="font-mono">{evt.status}</span>
                     {evt.agentId && <span>• {evt.agentId}</span>}
                     <span>{new Date(evt.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                  </div>
+                </div>
+              );
+            }
+
+            // Response (final output)
+            if (item.type === 'response') {
+              return (
+                <div key={`response-${idx}`} className="flex gap-2 justify-start">
+                  <div className="max-w-[90%] p-2 rounded text-xs bg-green-700 text-white">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Badge className="bg-green-900 text-white text-[10px] px-1 py-0">RESPONSE</Badge>
+                      <span className="text-[10px] opacity-70">
+                        {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                    <pre className="whitespace-pre-wrap break-words font-mono text-[11px]">
+                      {(() => {
+                        if (typeof task.response === 'string') return task.response;
+                        const resp = task.response as Record<string, unknown>;
+                        if (resp?.message && typeof resp.message === 'string') return resp.message;
+                        if (resp?.output && typeof resp.output === 'string') return resp.output;
+                        return JSON.stringify(task.response, null, 2);
+                      })()}
+                    </pre>
                   </div>
                 </div>
               );
@@ -223,7 +233,7 @@ export const MessageThread: React.FC<MessageThreadProps> = ({
                   {/* Images */}
                   {msg.images && msg.images.length > 0 && (
                     <div className="flex gap-2 mt-2 flex-wrap">
-                      {msg.images.map((img, imgIdx) => (
+                      {msg.images.map((img: { dataUrl: string; name?: string }, imgIdx: number) => (
                         <img
                           key={imgIdx}
                           src={img.dataUrl}

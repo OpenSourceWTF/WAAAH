@@ -50,8 +50,9 @@ export function createReviewRoutes({ queue, db, workspaceRoot }: ReviewRoutesCon
       const { stdout } = await execAsync(`git diff main...${branchName}`, { cwd: workspaceRoot });
       res.json({ diff: stdout, source: 'git' });
     } catch (e: any) {
-      console.error(`Diff failed for ${taskId}:`, e.message);
-      res.status(500).json({ error: 'Failed to fetch diff', details: e.message });
+      // Return empty diff gracefully (branch may not exist for retried tasks)
+      console.log(`[Diff] No diff available for ${taskId}: ${e.message}`);
+      res.json({ diff: '', source: 'none' });
     }
   });
 

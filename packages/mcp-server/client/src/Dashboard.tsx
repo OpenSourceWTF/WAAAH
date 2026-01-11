@@ -138,27 +138,25 @@ export function Dashboard() {
     }
   }, []);
 
-  // Helper for status badge style -- CUSTOM COLORS (memoized)
-  const getStatusBadgeClass = useCallback((status: string) => {
-    const base = "text-xs font-bold px-2 py-1 border border-black";
-    switch (status) {
-      case 'COMPLETED': return `${base} bg-green-600 text-white border-green-800`;
-      case 'FAILED':
-      case 'CANCELLED': return `${base} bg-red-600 text-white border-red-800`;
-      case 'ASSIGNED':
-      case 'IN_PROGRESS':
-      case 'PROCESSING': return `${base} bg-blue-600 text-white border-blue-800`;
-      case 'QUEUED':
-      case 'PENDING_ACK':
-      case 'WAITING': return `${base} bg-yellow-500 text-black border-yellow-700`;
-      case 'BLOCKED':
-      case 'PENDING':
-      case 'PENDING_RES':
-      case 'REVIEW':
-      case 'IN_REVIEW': return `${base} bg-white text-black border-gray-400`;
-      default: return `${base} bg-gray-600 text-white`;
-    }
-  }, []);
+  // Status badge styles - lookup map
+  const STATUS_BADGE_CLASSES: Record<string, string> = {
+    COMPLETED: 'bg-green-600 text-white border-green-800',
+    FAILED: 'bg-red-600 text-white border-red-800',
+    CANCELLED: 'bg-red-600 text-white border-red-800',
+    ASSIGNED: 'bg-blue-600 text-white border-blue-800',
+    IN_PROGRESS: 'bg-blue-600 text-white border-blue-800',
+    PROCESSING: 'bg-blue-600 text-white border-blue-800',
+    QUEUED: 'bg-yellow-500 text-black border-yellow-700',
+    PENDING_ACK: 'bg-yellow-500 text-black border-yellow-700',
+    WAITING: 'bg-yellow-500 text-black border-yellow-700',
+    BLOCKED: 'bg-white text-black border-gray-400',
+    PENDING: 'bg-white text-black border-gray-400',
+    PENDING_RES: 'bg-white text-black border-gray-400',
+    REVIEW: 'bg-white text-black border-gray-400',
+    IN_REVIEW: 'bg-white text-black border-gray-400',
+  };
+  const getStatusBadgeClass = useCallback((status: string) =>
+    `text-xs font-bold px-2 py-1 border border-black ${STATUS_BADGE_CLASSES[status] || 'bg-gray-600 text-white'}`, []);
 
   return (
     <div className="flex flex-col h-screen bg-background text-primary uppercase font-mono tracking-wider">

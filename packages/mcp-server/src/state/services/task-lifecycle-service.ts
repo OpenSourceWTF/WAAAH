@@ -30,7 +30,10 @@ export class TaskLifecycleService {
 
   enqueue(task: Task): string | null {
     const depsOk = this.checkDependencies(task);
-    depsOk || (task.status = 'BLOCKED', console.log(`[Lifecycle] Task ${task.id} BLOCKED by dependencies`));
+    if (!depsOk) {
+      task.status = 'BLOCKED';
+      console.log(`[Lifecycle] Task ${task.id} BLOCKED by dependencies`);
+    }
 
     try {
       this.repo.insert(task);
@@ -44,29 +47,52 @@ export class TaskLifecycleService {
 
   updateStatus(taskId: string, status: TaskStatus, response?: any): Task | null {
     const task = this.repo.getById(taskId);
-    task && (
-      task.status = status,
-      response && (task.response = response, task.completedAt = Date.now()),
-      addHistoryEntry(task, status, response ? 'Status updated with response' : `Status changed to ${status}`, task.assignedTo),
-      this.repo.update(task)
-    );
+    
+    if (task) {
+      task.status = status;
+      if (response) {
+        task.response = response;
+        task.completedAt = Date.now();
+      }
+      
+      const message = response ? 'Status updated with response' : `Status changed to ${status}`;
+      addHistoryEntry(task, status, message, task.assignedTo);
+      this.repo.update(task);
+    }
+    
     return task;
   }
 
   cancelTask(taskId: string): ActionResult {
     const task = this.repo.getById(taskId);
-    return !task ? { success: false, error: 'Task not found' }
-      : TERMINAL_STATES.includes(task.status) ? { success: false, error: `Task is already ${task.status}` }
-        : (this.updateStatus(taskId, 'CANCELLED'), this.persistence.clearPendingAck(taskId),
-          console.log(`[Lifecycle] Task ${taskId} cancelled by admin`), { success: true });
+    
+    if (!task) {
+      return { success: false, error: 'Task not found' };
+    }
+    
+    if (TERMINAL_STATES.includes(task.status)) {
+      return { success: false, error: `Task is already ${task.status}` };
+    }
+    
+    this.updateStatus(taskId, 'CANCELLED');
+    this.persistence.clearPendingAck(taskId);
+    console.log(`[Lifecycle] Task ${taskId} cancelled by admin`);
+    
+    return { success: true };
   }
 
   forceRetry(taskId: string): ActionResult {
     const task = this.repo.getById(taskId);
 
-    return !task ? { success: false, error: 'Task not found' }
-      : !RETRYABLE_STATES.includes(task.status) ? { success: false, error: `Task status ${task.status} is not retryable` }
-        : this.doForceRetry(task, taskId);
+    if (!task) {
+      return { success: false, error: 'Task not found' };
+    }
+    
+    if (!RETRYABLE_STATES.includes(task.status)) {
+      return { success: false, error: `Task status ${task.status} is not retryable` };
+    }
+    
+    return this.doForceRetry(task, taskId);
   }
 
   private doForceRetry(task: Task, taskId: string): ActionResult {
@@ -83,10 +109,19 @@ export class TaskLifecycleService {
     const task = this.repo.getById(taskId);
     const pendingAck = task && this.persistence.getPendingAck(taskId);
 
-    return !task ? { success: false, error: 'Task not found' }
-      : task.status !== 'PENDING_ACK' ? { success: false, error: 'Task is not in PENDING_ACK state' }
-        : pendingAck?.agentId !== agentId ? { success: false, error: `ACK failed: Expected agent ${pendingAck?.agentId} but got ${agentId}` }
-          : this.doAckTask(task, taskId, agentId);
+    if (!task) {
+      return { success: false, error: 'Task not found' };
+    }
+    
+    if (task.status !== 'PENDING_ACK') {
+      return { success: false, error: 'Task is not in PENDING_ACK state' };
+    }
+    
+    if (pendingAck?.agentId !== agentId) {
+      return { success: false, error: `ACK failed: Expected agent ${pendingAck?.agentId} but got ${agentId}` };
+    }
+    
+    return this.doAckTask(task, taskId, agentId);
   }
 
   private doAckTask(task: Task, taskId: string, agentId: string): ActionResult {
