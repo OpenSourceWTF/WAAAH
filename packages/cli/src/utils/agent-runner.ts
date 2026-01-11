@@ -54,12 +54,13 @@ export class AgentRunner {
           '--mcp-config', configPath
         ];
       } else {
-        // Pass prompt as positional argument for interactive mode
+        // Pass prompt as FIRST positional argument for interactive mode
+        // Must be FIRST because --mcp-config consumes remaining args
         const prompt = `Follow the /${this.workflow} workflow exactly.`;
         args = [
+          prompt,  // Prompt MUST be first
           '--dangerously-skip-permissions',
-          '--mcp-config', configPath,
-          prompt  // Positional prompt - starts interactive session with this prompt
+          '--mcp-config', configPath
         ];
       }
     }
