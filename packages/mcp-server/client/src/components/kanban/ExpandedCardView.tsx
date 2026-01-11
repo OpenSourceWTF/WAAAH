@@ -41,6 +41,10 @@ export const ExpandedCardView: React.FC<ExpandedCardViewProps> = ({
   // Image preview state
   const [previewImage, setPreviewImage] = useState<string | null>(null);
 
+  // Unblock modal state
+  const [showUnblockModal, setShowUnblockModal] = useState(false);
+  const [unblockReason, setUnblockReason] = useState('');
+
   // Resizable messenger width (persisted)
   const [messagesWidth, setMessagesWidth] = useState(() => {
     const saved = localStorage.getItem('waaah-messages-width');
@@ -114,13 +118,7 @@ export const ExpandedCardView: React.FC<ExpandedCardViewProps> = ({
           )}
           {canUnblock && onUnblockTask && (
             <Button variant="default" size="sm" className="h-8 gap-1 text-xs bg-orange-600 hover:bg-orange-700 text-white"
-              onClick={() => {
-                const reason = window.prompt('Enter reason for unblocking (required):');
-                if (reason && reason.trim()) {
-                  onUnblockTask(task.id, reason.trim());
-                  onClose();
-                }
-              }}>
+              onClick={() => setShowUnblockModal(true)}>
               <RefreshCw className="h-3 w-3" /> Unblock
             </Button>
           )}
@@ -378,6 +376,47 @@ export const ExpandedCardView: React.FC<ExpandedCardViewProps> = ({
       </div>
 
       <ImagePreviewModal imageUrl={previewImage} onClose={() => setPreviewImage(null)} />
+
+      {/* Unblock Modal */}
+      {showUnblockModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="bg-card border-2 border-orange-500 p-6 rounded-lg shadow-lg max-w-md w-full">
+            <h3 className="text-lg font-bold text-orange-500 mb-4">Unblock Task</h3>
+            <p className="text-sm text-primary/70 mb-4">
+              Provide clarification or answer to help the agent proceed:
+            </p>
+            <textarea
+              value={unblockReason}
+              onChange={(e) => setUnblockReason(e.target.value)}
+              placeholder="Enter reason for unblocking (required)..."
+              className="w-full h-24 p-3 text-sm bg-black/30 border border-primary/30 text-foreground placeholder:text-primary/40 focus:outline-none focus:border-orange-500 resize-none"
+              autoFocus
+            />
+            <div className="flex gap-3 mt-4 justify-end">
+              <button
+                onClick={() => { setShowUnblockModal(false); setUnblockReason(''); }}
+                className="px-4 py-2 text-sm border border-primary/30 text-primary/70 hover:bg-primary/10"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  if (unblockReason.trim() && onUnblockTask) {
+                    onUnblockTask(task.id, unblockReason.trim());
+                    setShowUnblockModal(false);
+                    setUnblockReason('');
+                    onClose();
+                  }
+                }}
+                disabled={!unblockReason.trim()}
+                className="px-4 py-2 text-sm bg-orange-600 text-white hover:bg-orange-700 disabled:opacity-50"
+              >
+                Unblock Task
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

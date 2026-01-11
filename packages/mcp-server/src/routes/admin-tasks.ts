@@ -206,7 +206,10 @@ export function createTaskRoutes({ queue, workspaceRoot }: TaskRoutesConfig): Ro
       return;
     }
 
-    const task = queue.getTask(taskId);
+    let task = queue.getTask(taskId);
+    if (!task) {
+      task = queue.getTaskFromDB(taskId);
+    }
     if (!task) {
       res.status(404).json({ error: 'Task not found' });
       return;
