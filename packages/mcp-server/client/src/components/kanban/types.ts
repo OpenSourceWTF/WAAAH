@@ -40,6 +40,8 @@ export interface Task {
   history?: { timestamp: number; status: string; agentId?: string; message?: string }[];
   createdAt?: number;
   completedAt?: number;
+  /** Source of task creation: UI (dashboard), CLI (command line), or Agent (delegation) */
+  source?: 'UI' | 'CLI' | 'Agent';
 }
 
 export interface KanbanBoardProps {

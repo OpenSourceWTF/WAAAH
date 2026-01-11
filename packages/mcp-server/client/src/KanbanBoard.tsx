@@ -206,7 +206,7 @@ export const KanbanBoard = React.memo(function KanbanBoard({
                   onClick={() => handleCardClick(task)}
                 >
                   <CardHeader className="p-3 pb-2 space-y-1">
-                    {/* Row 1: Status + BLOCKED/NEW badge */}
+                    {/* Row 1: Status + BLOCKED/NEW badge + Source badge */}
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1">
                         <Badge className={getStatusBadgeClass(task.status)}>{formatStatusLabel(task.status)}</Badge>
@@ -214,9 +214,18 @@ export const KanbanBoard = React.memo(function KanbanBoard({
                           <Badge className="bg-orange-500 text-white text-[10px] px-1.5 py-0.5 border border-orange-700">⛔ BLOCKED</Badge>
                         )}
                       </div>
-                      {unreadCount > 0 && (
-                        <Badge className="bg-amber-500 text-white text-[10px] px-1.5 py-0.5">{unreadCount} PENDING</Badge>
-                      )}
+                      <div className="flex items-center gap-1">
+                        {unreadCount > 0 && (
+                          <Badge className="bg-amber-500 text-white text-[10px] px-1.5 py-0.5">{unreadCount} PENDING</Badge>
+                        )}
+                        {/* Source badge */}
+                        {task.source && (
+                          <Badge className={`text-[10px] px-1.5 py-0.5 ${task.source === 'UI' ? 'bg-blue-500 text-white border border-blue-700' :
+                              task.source === 'CLI' ? 'bg-green-500 text-white border border-green-700' :
+                                'bg-purple-500 text-white border border-purple-700'
+                            }`}>{task.source}</Badge>
+                        )}
+                      </div>
                     </div>
                     {/* Row 2: Agent (if assigned) */}
                     {task.assignedTo && (
