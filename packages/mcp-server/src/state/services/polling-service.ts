@@ -5,6 +5,7 @@ import { AgentMatchingService } from './agent-matching-service.js';
 import { EvictionService, EvictionSignal } from '../eviction-service.js';
 import { TypedEventEmitter } from '../queue-events.js';
 import { WaitResult } from '../queue.interface.js';
+import { TaskLifecycleService } from './task-lifecycle-service.js';
 
 export class PollingService {
   constructor(
@@ -12,7 +13,8 @@ export class PollingService {
     private readonly persistence: QueuePersistence,
     private readonly matchingService: AgentMatchingService,
     private readonly evictionService: EvictionService,
-    private readonly queue: TypedEventEmitter
+    private readonly queue: TypedEventEmitter,
+    private readonly lifecycle: TaskLifecycleService
   ) {}
 
   async waitForTask(
@@ -33,11 +35,7 @@ export class PollingService {
     const pendingTask = this.matchingService.findPendingTaskForAgent(agentId, capabilities);
     if (pendingTask) {
       this.persistence.clearAgentWaiting(agentId);
-      // We need to update status to PENDING_ACK
-      // We can't call queue.updateStatus directly if we don't have access to it easily, 
-      // but we have repo.
-      pendingTask.status = 'PENDING_ACK';
-      this.repo.updateStatus(pendingTask.id, 'PENDING_ACK');
+      this.lifecycle.updateStatus(pendingTask.id, 'PENDING_ACK');
       this.persistence.setPendingAck(pendingTask.id, agentId);
       return pendingTask;
     }

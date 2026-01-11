@@ -1,14 +1,11 @@
-import { type ITaskRepository } from '../task-repository.js';
+import type { ITaskRepository } from '../task-repository.js';
 
 /**
- * Service for handling task messages and comments.
+ * Manages message operations for tasks.
  */
 export class MessageService {
   constructor(private readonly repo: ITaskRepository) {}
 
-  /**
-   * Add a generic message to a task.
-   */
   addMessage(
     taskId: string,
     role: 'user' | 'agent' | 'system',
@@ -20,7 +17,7 @@ export class MessageService {
   ): void {
     try {
       this.repo.addMessage(taskId, role, content, metadata, isRead, replyTo);
-      console.log(`[MessageService] Added message to task ${taskId} from ${role} (type: ${messageType || 'default'})`);
+      console.log(`[MessageService] Added message to task ${taskId} from ${role} (isRead: ${isRead}, type: ${messageType || 'default'}${replyTo ? `, replyTo: ${replyTo}` : ''})`);
     } catch (e: any) {
       console.error(`[MessageService] Failed to add message to task ${taskId}: ${e.message}`);
     }
@@ -30,12 +27,7 @@ export class MessageService {
    * Add a user comment to a task (starts as unread for agent pickup).
    * Used for the mailbox feature - live comments during task execution.
    */
-  addUserComment(
-    taskId: string,
-    content: string,
-    replyTo?: string,
-    images?: { dataUrl: string; mimeType: string; name: string }[]
-  ): void {
+  addUserComment(taskId: string, content: string, replyTo?: string, images?: { dataUrl: string; mimeType: string; name: string }[]): void {
     const metadata: Record<string, unknown> = { messageType: 'comment' };
     if (images && images.length > 0) {
       metadata.images = images;
@@ -67,9 +59,6 @@ export class MessageService {
     }
   }
 
-  /**
-   * Get all messages for a task.
-   */
   getMessages(taskId: string): any[] {
     try {
       return this.repo.getMessages(taskId);

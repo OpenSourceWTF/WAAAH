@@ -7,8 +7,6 @@
  * - Uses TaskRepository as SINGLE SOURCE OF TRUTH for task data
  * - Uses TypedEventEmitter for type-safe events
  * - Delegates scheduling to HybridScheduler
- * - Delegates message handling to MessageService
- * - Delegates polling to PollingService
  * - ALL STATE IS DATABASE-BACKED (no in-memory maps)
  * 
  * @module state/queue
@@ -30,6 +28,8 @@ import { QueuePersistence } from './persistence/queue-persistence.js';
 import { SystemPromptService } from './services/system-prompt-service.js';
 import { AgentMatchingService } from './services/agent-matching-service.js';
 import { MessageService } from './services/message-service.js';
+import { TaskLifecycleService } from './services/task-lifecycle-service.js';
+import { TaskQueryService } from './services/task-query-service.js';
 import { PollingService } from './services/polling-service.js';
 
 /**
@@ -58,8 +58,14 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
   /** Service for agent matching logic */
   private readonly matchingService: AgentMatchingService;
 
-  /** Service for message handling */
+  /** Service for message operations */
   private readonly messageService: MessageService;
+
+  /** Service for task lifecycle transitions */
+  private readonly lifecycleService: TaskLifecycleService;
+
+  /** Service for task queries */
+  private readonly queryService: TaskQueryService;
 
   /** Service for polling operations */
   private readonly pollingService: PollingService;
@@ -84,21 +90,18 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
     this.persistence = new QueuePersistence(this.db);
     this.systemPromptService = new SystemPromptService(this.db);
     this.matchingService = new AgentMatchingService(this.repo, this.persistence);
-    // Core Services
-    this.lifecycleService = new TaskLifecycleService(this.repo, this.matchingService, this.persistence);
-    console.log('[Queue] lifecycleService initialized:', !!this.lifecycleService);
     this.messageService = new MessageService(this.repo);
-
-    // Initialize eviction service
+    this.lifecycleService = new TaskLifecycleService(this.repo, this, this.persistence);
+    this.queryService = new TaskQueryService(this.repo, this.persistence);
     this.evictionService = new EvictionService(this.db, this);
 
-    // Initialize polling service
     this.pollingService = new PollingService(
       this.repo,
       this.persistence,
       this.matchingService,
       this.evictionService,
-      this
+      this,
+      this.lifecycleService
     );
 
     // Initialize scheduler with this queue (implements ISchedulerQueue directly)
@@ -110,7 +113,23 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
 
   /** Reset PENDING_ACK tasks and waiting agents on startup */
   private resetStaleState(): void {
-    this.lifecycleService.resetStaleState();
+    try {
+      // Reset PENDING_ACK tasks to QUEUED
+      const stale = this.repo.getByStatus('PENDING_ACK');
+      for (const task of stale) {
+        console.log(`[Queue] Resetting PENDING_ACK task ${task.id} to QUEUED on startup`);
+        this.lifecycleService.updateStatus(task.id, 'QUEUED');
+        this.persistence.clearPendingAck(task.id);
+      }
+
+      // Clear all waiting agents
+      this.persistence.resetWaitingAgents();
+
+      console.log(`[Queue] Loaded ${this.repo.getActive().length} active tasks from DB`);
+    } catch {
+      // Database may not be initialized yet (tests)
+      console.log('[Queue] Database not ready, skipping stale state reset');
+    }
   }
 
   // ===== Task Lifecycle =====
@@ -151,97 +170,19 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
     }
   }
 
-  /**
-   * Updates task status and optionally sets response.
-   */
   updateStatus(taskId: string, status: TaskStatus, response?: any): void {
-    const task = this.repo.getById(taskId);
-    if (task) {
-      task.status = status;
-      if (response) {
-        task.response = response;
-        task.completedAt = Date.now();
-      }
-
-      // Record History Event
-      if (!task.history) task.history = [];
-      task.history.push({
-        timestamp: Date.now(),
-        status,
-        agentId: task.assignedTo,
-        message: response ? 'Status updated with response' : `Status changed to ${status}`
-      });
-
-      this.persistUpdate(task);
-
-      // Emit completion event for listeners
-      if (['COMPLETED', 'FAILED', 'BLOCKED'].includes(status)) {
-        this.emit('completion', task);
-        console.log(`[Queue] Emitted completion event for task ${taskId} (${status})`);
-      }
-    }
+    this.lifecycleService.updateStatus(taskId, status, response);
   }
 
-  /**
-   * Cancels a task if it is not already in a terminal state.
-   */
   cancelTask(taskId: string): { success: boolean; error?: string } {
-    const task = this.getTask(taskId);
-
-    if (!task) {
-      return { success: false, error: 'Task not found' };
-    }
-
-    const terminalStates: TaskStatus[] = ['COMPLETED', 'FAILED', 'BLOCKED', 'CANCELLED'];
-    if (terminalStates.includes(task.status)) {
-      return { success: false, error: `Task is already ${task.status}` };
-    }
-
-    this.updateStatus(taskId, 'CANCELLED');
-    this.persistence.clearPendingAck(taskId);
-
-    console.log(`[Queue] Task ${taskId} cancelled by admin`);
-    return { success: true };
+    return this.lifecycleService.cancelTask(taskId);
   }
 
-  /**
-   * Forces a retry of a task by resetting its status to 'QUEUED'.
-   */
   forceRetry(taskId: string): { success: boolean; error?: string } {
-    const task = this.getTask(taskId);
-
-    if (!task) {
-      return { success: false, error: 'Task not found' };
-    }
-
-    const retryableStatuses: TaskStatus[] = ['ASSIGNED', 'IN_PROGRESS', 'PENDING_ACK', 'CANCELLED', 'FAILED'];
-    if (!retryableStatuses.includes(task.status)) {
-      return { success: false, error: `Task status ${task.status} is not retryable` };
-    }
-
-    // Reset assignment and response
-    task.assignedTo = undefined;
-    task.response = undefined;
-    task.completedAt = undefined;
-    task.status = 'QUEUED';
-
-    // Record History Event
-    if (!task.history) task.history = [];
-    task.history.push({
-      timestamp: Date.now(),
-      status: 'QUEUED',
-      agentId: undefined,
-      message: 'Force-retried by admin'
-    });
-
-    this.persistUpdate(task);
-    this.persistence.clearPendingAck(taskId);
-
-    console.log(`[Queue] Task ${taskId} force-retried by admin`);
-    return { success: true };
+    return this.lifecycleService.forceRetry(taskId);
   }
 
-  // ===== Messages (Delegated) =====
+  // ===== Messages =====
 
   addMessage(
     taskId: string,
@@ -271,11 +212,7 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
     return this.messageService.getMessages(taskId);
   }
 
-  // ===== Agent Matching & Polling (Delegated) =====
-
-  findAndReserveAgent(task: Task): string | null {
-    return this.matchingService.reserveAgentForTask(task);
-  }
+  // ===== Agent Matching & Polling =====
 
   async waitForTask(
     agentId: string,
@@ -286,7 +223,34 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
   }
 
   ackTask(taskId: string, agentId: string): { success: boolean; error?: string } {
-    return this.lifecycleService.ackTask(taskId, agentId);
+    const task = this.repo.getById(taskId);
+    if (!task) {
+      return { success: false, error: 'Task not found' };
+    }
+
+    if (task.status !== 'PENDING_ACK') {
+      return { success: false, error: `Task status is ${task.status}, expected PENDING_ACK` };
+    }
+
+    // Check pending ACK in database
+    const pendingAcks = this.persistence.getPendingAcks();
+    const pendingInfo = pendingAcks.get(taskId);
+
+    if (!pendingInfo) {
+      return { success: false, error: 'No pending ACK found for task' };
+    }
+
+    if (pendingInfo.agentId !== agentId) {
+      return { success: false, error: `Task was sent to ${pendingInfo.agentId}, not ${agentId}` };
+    }
+
+    // Use lifecycle service to update status AND assignment
+    this.lifecycleService.updateStatus(taskId, 'ASSIGNED', undefined, agentId);
+    
+    this.persistence.clearPendingAck(taskId);
+    console.log(`[Queue] Task ${taskId} ACKed by ${agentId}, now ASSIGNED`);
+
+    return { success: true };
   }
 
   async waitForTaskCompletion(taskId: string, timeoutMs: number = 300000): Promise<Task | null> {
@@ -303,122 +267,70 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
     this.scheduler.stop();
   }
 
-  // ===== Accessors =====
+  // ===== Accessors (Delegated to TaskQueryService) =====
 
   getTask(taskId: string): Task | undefined {
-    return this.repo.getById(taskId) ?? undefined;
+    return this.queryService.getTask(taskId);
   }
 
   getTaskFromDB(taskId: string): Task | undefined {
-    return this.repo.getById(taskId) || undefined;
+    return this.queryService.getTaskFromDB(taskId);
   }
 
   getAll(): Task[] {
-    return this.repo.getActive();
+    return this.queryService.getAll();
   }
 
   getStats(): { total: number; completed: number } {
-    try {
-      const stats = this.repo.getStats();
-      return {
-        total: stats.total,
-        completed: stats.byStatus['COMPLETED'] || 0
-      };
-    } catch (e) {
-      console.error("Failed to get queue stats", e);
-      return { total: 0, completed: 0 };
-    }
+    return this.queryService.getStats();
   }
 
   getByStatuses(statuses: TaskStatus[]): Task[] {
-    return this.repo.getByStatuses(statuses);
+    return this.queryService.getByStatuses(statuses);
   }
 
-  getTaskHistory(options: {
-    status?: string;
-    agentId?: string;
-    limit?: number;
-    offset?: number;
-    search?: string;
-  } = {}): Task[] {
-    const { status, agentId, limit = 50, offset = 0, search } = options;
-    return this.repo.getHistory({ status: status as TaskStatus | 'ACTIVE' | undefined, limit, offset, agentId, search });
+  getTaskHistory(options: any = {}): Task[] {
+    return this.queryService.getTaskHistory(options);
   }
 
-  /** Get all agents currently waiting with their capabilities (from DB) - implements ISchedulerQueue */
   getWaitingAgents(): Map<string, StandardCapability[]> {
-    return this.persistence.getWaitingAgents();
+    return this.queryService.getWaitingAgents();
   }
 
-  /** Get pending ACKs (from DB) - implements ISchedulerQueue */
   getPendingAcks(): Map<string, { taskId: string; agentId: string; sentAt: number }> {
-    return this.persistence.getPendingAcks();
+    return this.queryService.getPendingAcks();
   }
 
-  /** Get tasks by status - implements ISchedulerQueue */
   getByStatus(status: TaskStatus): Task[] {
-    return this.repo.getByStatus(status);
+    return this.queryService.getByStatus(status);
   }
 
-  /** Check if a specific agent is currently waiting (from DB) */
   isAgentWaiting(agentId: string): boolean {
-    return this.persistence.isAgentWaiting(agentId);
+    return this.queryService.isAgentWaiting(agentId);
   }
 
-  /** Get all agents that are currently assigned tasks */
   getBusyAgentIds(): string[] {
-    const busyStatus: TaskStatus[] = ['ASSIGNED', 'IN_PROGRESS', 'PENDING_ACK'];
-    const busyAgents = new Set<string>();
-
-    for (const task of this.repo.getActive()) {
-      if (busyStatus.includes(task.status) && task.to.agentId) {
-        busyAgents.add(task.to.agentId);
-      }
-    }
-    return Array.from(busyAgents);
+    return this.queryService.getBusyAgentIds();
   }
 
-  /** Get tasks assigned to an agent (Active only) */
   getAssignedTasksForAgent(agentId: string): Task[] {
-    const all = this.repo.getByAssignedTo(agentId);
-    return all.filter(t => !['COMPLETED', 'FAILED', 'CANCELLED', 'BLOCKED'].includes(t.status));
+    return this.queryService.getAssignedTasksForAgent(agentId);
   }
 
-  /** Get agent's last seen timestamp from database */
   getAgentLastSeen(agentId: string): number | undefined {
-    try {
-      const row = this.db.prepare('SELECT lastSeen FROM agents WHERE id = ?').get(agentId) as any;
-      return row?.lastSeen;
-    } catch {
-      return undefined;
-    }
+    return this.queryService.getAgentLastSeen(agentId);
   }
 
   clear(): void {
-    try {
-      this.repo.clearAll();
-      // Also clear waiting agents
-      this.persistence.resetWaitingAgents();
-      console.log('[Queue] Cleared all tasks');
-    } catch (e: any) {
-      console.error(`[Queue] Failed to clear tasks: ${e.message}`);
-    }
+    this.queryService.clear();
   }
 
   // ===== Eviction Logic (delegated to EvictionService) =====
 
-  /**
-   * Queues an eviction for an agent.
-   * @see EvictionService.queueEviction
-   */
   queueEviction(agentId: string, reason: string, action: 'RESTART' | 'SHUTDOWN'): void {
     this.evictionService.queueEviction(agentId, reason, action);
   }
 
-  /**
-   * Checks for and consumes a pending eviction signal.
-   * @see EvictionService.popEviction
-   */
   popEviction(agentId: string): EvictionSignal | null {
     return this.evictionService.popEviction(agentId);
   }
@@ -445,51 +357,7 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
     return this.systemPromptService.popSystemPrompt(agentId);
   }
 
-  /**
-   * Fetch recent activity logs.
-   */
   getLogs(limit: number = 100): any[] {
-    const logs = this.db.prepare('SELECT * FROM logs ORDER BY timestamp DESC LIMIT ?').all(limit) as any[];
-    return logs.reverse().map(l => ({
-      ...l,
-      metadata: l.metadata ? JSON.parse(l.metadata) : undefined
-    }));
-  }
-
-  // ===== Internal Helpers =====
-
-  private persistUpdate(task: Task): void {
-    try {
-      this.repo.update(task);
-    } catch (e: any) {
-      console.error(`[Queue] Failed to update task ${task.id}: ${e.message}`);
-    }
-  }
-
-  mapRowToTask(row: any): Task {
-    return {
-      id: row.id,
-      status: row.status as TaskStatus,
-      command: 'execute_prompt',
-      prompt: row.prompt,
-      priority: row.priority || 'normal',
-      from: {
-        type: 'agent',
-        id: row.fromAgentId,
-        name: row.fromAgentName
-      },
-      to: {
-        agentId: row.toAgentId,
-        requiredCapabilities: row.toRequiredCapabilities ? JSON.parse(row.toRequiredCapabilities) : undefined,
-        workspaceId: row.toWorkspaceId
-      },
-      context: JSON.parse(row.context || '{}'),
-      response: row.response ? JSON.parse(row.response) : undefined,
-      createdAt: row.createdAt,
-      completedAt: row.completedAt,
-      assignedTo: row.assignedTo,
-      dependencies: row.dependencies ? JSON.parse(row.dependencies) : undefined,
-      history: row.history ? JSON.parse(row.history) : []
-    };
+    return this.queryService.getLogs(limit);
   }
 }
