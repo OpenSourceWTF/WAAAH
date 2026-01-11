@@ -6,7 +6,7 @@ import type { QueuePersistence } from '../persistence/queue-persistence.js';
 type ActionResult = { success: boolean; error?: string };
 
 const TERMINAL_STATES: TaskStatus[] = ['COMPLETED', 'FAILED', 'BLOCKED', 'CANCELLED'];
-const RETRYABLE_STATES: TaskStatus[] = ['ASSIGNED', 'IN_PROGRESS', 'PENDING_ACK', 'CANCELLED', 'FAILED'];
+const RETRYABLE_STATES: TaskStatus[] = ['ASSIGNED', 'IN_PROGRESS', 'PENDING_ACK', 'CANCELLED', 'FAILED', 'BLOCKED'];
 
 const addHistoryEntry = (task: Task, status: TaskStatus, message: string, agentId?: string) => {
   task.history ??= [];

@@ -210,12 +210,14 @@ export function createTaskRoutes({ queue, workspaceRoot }: TaskRoutesConfig): Ro
     if (!task) {
       task = queue.getTaskFromDB(taskId);
     }
+    console.log(`[API] Unblock request: taskId=${taskId}, fromMemory=${!!queue.getTask(taskId)}, fromDB=${!!task}, status=${task?.status}`);
     if (!task) {
       res.status(404).json({ error: 'Task not found' });
       return;
     }
 
     if (task.status !== 'BLOCKED') {
+      console.log(`[API] Task ${taskId} is not BLOCKED, current status: ${task.status}`);
       res.status(400).json({ error: `Task is not BLOCKED (current status: ${task.status})` });
       return;
     }
