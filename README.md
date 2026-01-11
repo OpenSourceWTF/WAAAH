@@ -214,7 +214,6 @@ Connect your AI agent to a WAAAH server:
 - [Full MCP Integration Guide](docs/MCP_INTEGRATION.md) - Claude Desktop, Cursor, OpenAI SDK
 
 ---
-
 ## 🤖 Agent Workflows
 
 Agents connect to WAAAH via MCP tools. Two primary patterns:
@@ -234,12 +233,17 @@ graph LR
 ```
 
 **MCP Tool Sequence:**
-1. `register_agent({ role, capabilities })` — identify yourself
+1. `register_agent({ role, capabilities, workspaceContext })` — identify yourself
 2. `wait_for_prompt(timeout)` — block until task assigned (loops forever)
 3. `ack_task(taskId)` — accept the task
 4. `update_progress({ phase, message })` — report progress
 5. `send_response({ status: "IN_REVIEW" })` — request approval
 6. `send_response({ status: "COMPLETED" })` — mark done after approval
+
+**workspaceContext** (used for task affinity matching):
+```json
+{ "type": "local", "repoId": "OpenSourceWTF/WAAAH", "branch": "main", "path": "/home/user/projects/WAAAH" }
+```
 
 **Start with:** `/waaah-orc` workflow
 
@@ -248,7 +252,7 @@ graph LR
 Background agent that monitors code health and creates tasks for issues:
 
 **MCP Tool Sequence:**
-1. `register_agent({ role: "doctor" })` — identify as QA
+1. `register_agent({ role: "code-doctor", capabilities: ["code-doctor"] })` — identify as QA
 2. Poll Git for changes since last run
 3. Analyze: coverage, complexity, stubs, dead code
 4. `assign_task({ prompt: "Fix coverage in X" })` — create remediation tasks

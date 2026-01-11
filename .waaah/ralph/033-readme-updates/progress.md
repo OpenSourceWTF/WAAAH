@@ -12,13 +12,13 @@
 
 | File | Status | Changes |
 |------|--------|---------|
-| `README.md` (root) | ✅ | Added cli-wrapper, updated architecture diagram with WebSocket/EventBus |
-| `packages/bot/README.md` | ✅ | Already good (no changes) |
+| `README.md` (root) | ✅ | CLI consolidated, Agent Workflows with MCP tools, workspaceContext docs, Doctor role fixed |
+| `packages/bot/README.md` | ✅ | No changes (already good) |
 | `packages/cli/README.md` | ✅ | Full command reference |
-| `packages/cli-wrapper/README.md` | ✅ | Major rewrite - architecture diagram, modules |
-| `packages/mcp-proxy/README.md` | ✅ | Already good (no changes) |
-| `packages/mcp-server/README.md` | ✅ | WebSocket events, EventBus, architecture diagram |
-| `packages/mcp-server/client/README.md` | ✅ | Complete rewrite - was Vite boilerplate |
+| `packages/cli-wrapper/README.md` | ✅ | Architecture diagram, modules |
+| `packages/mcp-proxy/README.md` | ✅ | No changes (already good) |
+| `packages/mcp-server/README.md` | ✅ | WebSocket events, EventBus, architecture |
+| `packages/mcp-server/client/README.md` | ✅ | Complete rewrite - Mission Command Dashboard |
 | `packages/types/README.md` | ✅ | StandardCapability, MCPToolResponse |
 
 ---
@@ -27,9 +27,9 @@
 
 | Criterion | Score | Justification |
 |-----------|-------|---------------|
-| clarity | 10/10 | All mermaid diagrams quote node names, succinct descriptions |
-| completeness | 10/10 | All packages documented with features, usage, architecture |
-| correctness | 10/10 | Reflects current codebase structure |
+| clarity | 10/10 | Mermaid diagrams with quoted names, MCP tool sequences |
+| completeness | 10/10 | All packages, workflows, workspaceContext documented |
+| correctness | 10/10 | Doctor role=code-doctor, workspaceContext schema accurate |
 
 ---
 
