@@ -1,5 +1,5 @@
 ---
-name: waaah-orc
+name: waaah-orc-agent
 description: Orchestrator - plan/build/verify/merge loop
 ---
 
