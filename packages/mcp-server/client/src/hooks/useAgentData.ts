@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { getSocket, connectSocket, ServerToClientEvents } from '../lib/socket';
 import { apiFetch } from '../lib/api';
 
 /**
@@ -22,80 +23,70 @@ export interface Agent {
  */
 export type AgentStatusColor = 'green' | 'yellow' | 'red' | 'gray';
 
-interface UseAgentDataOptions {
-  pollInterval?: number;
-}
-
 /**
- * Custom hook for agent data fetching with deduplication to prevent animation interruptions.
- * Uses refs to compare new data with previous, only triggering re-renders on actual changes.
+ * Custom hook for agent data fetching using WebSocket for real-time updates.
+ * Falls back to initial fetch if WebSocket unavailable.
  * 
- * @param options - Configuration options
  * @returns Agent data and computed state
  */
-export function useAgentData(options: UseAgentDataOptions = {}) {
-  const { pollInterval = 2000 } = options;
+export function useAgentData() {
   const [agents, setAgents] = useState<Agent[]>([]);
 
-  // Ref for previous data comparison
-  const prevAgentsRef = useRef<string>('');
-
   /**
-   * Compare and update state only if data actually changed.
+   * Initial data fetch on mount
    */
-  const updateIfChanged = useCallback(<T,>(
-    newData: T,
-    prevRef: React.MutableRefObject<string>,
-    setter: React.Dispatch<React.SetStateAction<T>>
-  ) => {
-    const newJson = JSON.stringify(newData);
-    if (newJson !== prevRef.current) {
-      prevRef.current = newJson;
-      setter(newData);
+  const fetchAgentData = useCallback(async () => {
+    try {
+      const res = await apiFetch('/admin/agents/status');
+      if (res.ok) {
+        setAgents(await res.json());
+      }
+    } catch (e) {
+      console.error('Agent fetch error:', e);
     }
   }, []);
 
-  /**
-   * Fetch agent status data from the server
-   */
-  const fetchAgentData = useCallback(async () => {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3000);
-
-    try {
-      const res = await apiFetch('/admin/agents/status', { signal: controller.signal });
-      clearTimeout(timeoutId);
-      if (res.ok) {
-        const data = await res.json();
-        updateIfChanged(data, prevAgentsRef, setAgents);
-      }
-    } catch (e) {
-      clearTimeout(timeoutId);
-      console.error('Agent fetch error:', e);
-    }
-  }, [updateIfChanged]);
-
-  // Polling effect
+  // WebSocket subscription effect
   useEffect(() => {
+    const socket = getSocket();
+    connectSocket();
+
+    // Initial fetch for data before socket events start
     fetchAgentData();
-    const interval = setInterval(fetchAgentData, pollInterval);
-    return () => clearInterval(interval);
-  }, [fetchAgentData, pollInterval]);
+
+    // Handle full sync on connect/reconnect
+    const handleSync: ServerToClientEvents['sync:full'] = (data) => {
+      if (data.agents) {
+        setAgents(data.agents);
+      }
+    };
+
+    // Handle individual agent status updates
+    const handleAgentStatus: ServerToClientEvents['agent:status'] = (data) => {
+      setAgents(prev => prev.map(agent =>
+        agent.id === data.id
+          ? { ...agent, status: data.status as Agent['status'], lastSeen: data.lastSeen }
+          : agent
+      ));
+    };
+
+    socket.on('sync:full', handleSync);
+    socket.on('agent:status', handleAgentStatus);
+
+    return () => {
+      socket.off('sync:full', handleSync);
+      socket.off('agent:status', handleAgentStatus);
+    };
+  }, [fetchAgentData]);
 
   /**
    * Get the status color for an agent (for indicator bar)
-   * - green: active/online (last seen < 60s)
-   * - yellow: processing (working on task)
-   * - red: stale (last seen > 60s)
-   * - gray: offline/evicted
    */
   const getAgentStatusColor = useCallback((agent: Agent): AgentStatusColor => {
     if (agent.status === 'OFFLINE') return 'gray';
     if (agent.status === 'PROCESSING') return 'yellow';
-    // WAITING = active/online
     const lastSeenMs = agent.lastSeen ? Date.now() - agent.lastSeen : Infinity;
-    if (lastSeenMs > 60000) return 'red'; // Stale > 60s
-    return 'green'; // Active
+    return lastSeenMs > 60000 ? 'red' : 'green';
   }, []);
 
   /**
@@ -104,10 +95,9 @@ export function useAgentData(options: UseAgentDataOptions = {}) {
   const getAgentInitials = useCallback((agent: Agent): string => {
     const name = agent.displayName || agent.id;
     const words = name.split(/[\s-_]+/);
-    if (words.length > 1) {
-      return (words[0][0] + words[1][0]).toUpperCase();
-    }
-    return name.substring(0, 2).toUpperCase();
+    return words.length > 1
+      ? (words[0][0] + words[1][0]).toUpperCase()
+      : name.substring(0, 2).toUpperCase();
   }, []);
 
   /**
