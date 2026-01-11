@@ -190,15 +190,95 @@ We use SQLite (`mcp.db`) as the single source for all state.
     *   Main branch should remain clean.
 4.  **No Server Access to FS**: The MCP Server knows *about* the file system (via metadata) but cannot touch it directly.
 
+
+## 5. Real-Time Events (Socket.io)
+
+The Dashboard receives **push updates** via Socket.io instead of polling.
+
+### Event Taxonomy
+
+| Event | Payload | Trigger |
+|-------|---------|---------|
+| `sync:full` | `{ tasks, agents }` | On connect/reconnect |
+| `task:{id}:created` | Full task | New task |
+| `task:{id}:updated` | `{ id, ...patch }` | State change |
+| `agent:{id}:status` | `{ id, status, lastSeen }` | Heartbeat/eviction |
+
+### Sequence Numbers
+
+Events include monotonic `seq` numbers. Clients detect gaps and request `sync:full` to recover missed events.
+
 ---
 
-## 5. Reverse Engineering Notes
+## 6. Agent CLI Wrapper
 
-*   **Scheduler**: Originally "Hybrid" (Push/Pull), now strictly a helper for the Pull-based `wait_for_prompt` mechanism.
-*   **Worktree Tooling**: Git worktree operations (`git worktree add`, `git worktree remove`) are performed by agents using raw git commands via the `run_command` tool. This keeps the MCP server stateless and avoids adding file system access complexity.
+The `waaah agent` CLI spawns external coding agents (gemini, claude) with:
+- **PTY execution** for reliable terminal control
+- **Auto MCP config** injection
+- **Crash recovery** with session persistence
+- **Loop detection** with automatic restart
+
+```bash
+waaah agent --start=gemini --as=orc
+```
+
+Agents register with `source: 'CLI' | 'IDE'` to distinguish terminal vs IDE spawns.
 
 ---
 
-**Self-Rating**: 9.5/10
-*Strengths*: Clear logical flow, detailed lifecycle coverage, spec-driven development, agent affinity on feedback.
-*Weakness*: Could deeper document specific JSON schemas, but sufficient for architectural overview.
+## 7. Scheduler Scoring
+
+Agent-task matching uses **capability scoring**:
+
+```
+score = matched_capabilities / total_agent_capabilities
+```
+
+**Specialist wins:** An agent with 2/2 matches beats one with 2/4 (higher ratio = better fit).
+
+### Heartbeat
+
+| Trigger | Timeout |
+|---------|---------|
+| `register`, `wait_for_prompt`, `update_progress`, any MCP tool | 5 minutes |
+
+Heartbeat updates are debounced (max 1 DB write per 10s) to handle high-frequency tool calls.
+
+---
+
+## 8. MCP Response Format
+
+All MCP tools return a standardized response:
+
+```typescript
+interface MCPToolResponse {
+  success: boolean;
+  message: string;
+  prompt?: string;  // Injected instruction (markdown)
+}
+```
+
+### Injected Prompts
+
+| Tool | Condition | Prompt |
+|------|-----------|--------|
+| `wait_for_prompt` | Timeout | "Call wait_for_prompt again to continue" |
+| `send_response` | COMPLETED | Cleanup: verify merge, remove worktree |
+
+---
+
+## 9. Worktree Reliability
+
+To prevent branch name hallucinations, worktree setup is **injected into the task prompt**:
+
+```markdown
+## SETUP (Mandatory)
+Run exactly: git worktree add .worktrees/feature-{taskId} -b feature-{taskId}
+```
+
+### Diff Persistence
+
+Since the server may be remote from the agent's workspace:
+1. **Agent** runs `git diff origin/main...HEAD` and includes raw diff in `send_response`
+2. **Server** stores diff in DB and serves via `/tasks/:id/diff`
+
