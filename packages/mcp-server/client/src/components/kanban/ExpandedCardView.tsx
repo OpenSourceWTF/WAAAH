@@ -171,7 +171,7 @@ export const ExpandedCardView: React.FC<ExpandedCardViewProps> = ({
               <Clock className="h-4 w-4" /> TIMELINE
             </TabsTrigger>
 
-            <div className="relative flex items-center border-b-2 border-transparent has-[[data-state=active]]:border-primary has-[[data-state=active]]:bg-primary/10">
+            <div className="relative flex items-stretch border-b-2 border-transparent has-[[data-state=active]]:border-primary has-[[data-state=active]]:bg-primary/10">
               <TabsTrigger value="review" className="rounded-none border-b-0 border-transparent bg-transparent px-4 py-2 text-sm flex items-center gap-2 data-[state=active]:bg-transparent">
                 <CheckCircle className="h-4 w-4" /> REVIEW {fileStats.length > 0 && <span className="text-xs opacity-70">({fileStats.length})</span>}
               </TabsTrigger>
@@ -179,7 +179,7 @@ export const ExpandedCardView: React.FC<ExpandedCardViewProps> = ({
                 <>
                   <button
                     onClick={(e) => { e.stopPropagation(); setNavigatorOpen(!navigatorOpen); }}
-                    className="h-9 w-9 border-l border-r border-primary/20 flex items-center justify-center hover:bg-primary/20 text-primary/70 hover:text-primary transition-colors focus:outline-none"
+                    className="w-9 border-l border-r border-primary/20 flex items-center justify-center hover:bg-primary/20 text-primary/70 hover:text-primary transition-colors focus:outline-none"
                   >
                     <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${navigatorOpen ? 'rotate-180' : ''}`} />
                   </button>
