@@ -162,6 +162,45 @@ describe('Socket.io Agent Status Push', () => {
     socket.disconnect();
   });
 
+  it('receives sync:full on reconnection', async () => {
+    const socket = Client(`http://localhost:${serverPort}`, {
+      auth: { apiKey: TEST_API_KEY },
+      autoConnect: false
+    });
+
+    // First connection
+    let syncCount = 0;
+    socket.on('sync:full', () => { syncCount++; });
+
+    await new Promise<void>((resolve, reject) => {
+      socket.on('connect', () => resolve());
+      socket.on('connect_error', (err) => reject(err));
+      socket.connect();
+    });
+
+    // Wait for first sync:full
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(syncCount).toBe(1);
+
+    // Disconnect
+    socket.disconnect();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    // Reconnect - should get sync:full again
+    const reconnectPromise = new Promise<any>((resolve, reject) => {
+      socket.once('sync:full', (data) => resolve(data));
+      socket.once('connect_error', (err) => reject(err));
+      socket.connect();
+    });
+
+    const syncData = await reconnectPromise;
+    expect(syncCount).toBe(2);
+    expect(syncData).toHaveProperty('tasks');
+    expect(syncData).toHaveProperty('agents');
+
+    socket.disconnect();
+  });
+
   it('receives agent:status when server emits', async () => {
     const socket = Client(`http://localhost:${serverPort}`, {
       auth: { apiKey: TEST_API_KEY },
