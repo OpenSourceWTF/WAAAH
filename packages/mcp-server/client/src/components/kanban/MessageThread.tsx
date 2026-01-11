@@ -112,6 +112,29 @@ export const MessageThread: React.FC<MessageThreadProps> = ({
           </div>
         </div>
 
+        {/* Response/Output Injection (if available) */}
+        {task.response && (
+          <div className="flex gap-2 justify-start">
+            <div className="max-w-[90%] p-2 rounded text-xs bg-green-700 text-white">
+              <div className="flex items-center gap-2 mb-1">
+                <Badge className="bg-green-900 text-white text-[10px] px-1 py-0">RESPONSE</Badge>
+                <span className="text-[10px] opacity-70">
+                  {task.completedAt ? new Date(task.completedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'pending'}
+                </span>
+              </div>
+              <pre className="whitespace-pre-wrap break-words font-mono text-[11px]">
+                {(() => {
+                  if (typeof task.response === 'string') return task.response;
+                  const resp = task.response as Record<string, unknown>;
+                  if (resp?.message && typeof resp.message === 'string') return resp.message;
+                  if (resp?.output && typeof resp.output === 'string') return resp.output;
+                  return JSON.stringify(task.response, null, 2);
+                })()}
+              </pre>
+            </div>
+          </div>
+        )}
+
         {/* Build interleaved timeline: messages + status events */}
         {(() => {
           type TimelineItem =

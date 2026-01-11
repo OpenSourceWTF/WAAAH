@@ -1,8 +1,18 @@
 import React from 'react';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Clock, Pin, Cpu, Power, ChevronDown, ChevronUp } from 'lucide-react';
-import { SourceBadge, type Agent } from './AgentIndicator';
+
+export interface Agent {
+  id: string;
+  displayName?: string;
+  role: string;
+  status: string;
+  currentTasks?: string[];
+  lastSeen?: number;
+  createdAt?: number;
+  capabilities?: string[];
+  source?: 'cli' | 'ide';
+}
 
 interface AgentCardProps {
   agent: Agent;

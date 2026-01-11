@@ -9,14 +9,13 @@ const dashboardContent = fs.readFileSync(dashboardPath, 'utf-8');
 describe('Dashboard UI Refinements (Static Analysis)', () => {
 
   it('should use custom hooks for data fetching', () => {
-    // Check for useDashboard hook (refactored)
-    expect(dashboardContent).toContain('useDashboard');
+    // Check for useTaskData hook (refactored)
+    expect(dashboardContent).toContain('useTaskData');
   });
 
   it('should have theme controls', () => {
-    // Theme props passed from useDashboard
-    expect(dashboardContent).toContain('theme');
-    expect(dashboardContent).toContain('setTheme');
+    // Theme toggle functionality
+    expect(dashboardContent).toContain('useTheme');
   });
 
   it('should render KanbanBoard', () => {

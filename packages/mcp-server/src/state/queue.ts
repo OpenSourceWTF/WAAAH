@@ -289,14 +289,11 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
   /** Get all agents that are currently assigned tasks */
   getBusyAgentIds(): string[] {
     const busyStatus: TaskStatus[] = ['ASSIGNED', 'IN_PROGRESS', 'PENDING_ACK'];
-    const busyAgents = new Set<string>();
-
-    for (const task of this.repo.getActive()) {
-      if (busyStatus.includes(task.status) && task.to.agentId) {
-        busyAgents.add(task.to.agentId);
-      }
-    }
-    return Array.from(busyAgents);
+    return [...new Set(
+      this.repo.getActive()
+        .filter(t => busyStatus.includes(t.status) && t.to.agentId)
+        .map(t => t.to.agentId as string)
+    )];
   }
 
   /** Get tasks assigned to an agent (Active only) */
@@ -387,30 +384,4 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
     }
   }
 
-  mapRowToTask(row: any): Task {
-    return {
-      id: row.id,
-      status: row.status as TaskStatus,
-      command: 'execute_prompt',
-      prompt: row.prompt,
-      priority: row.priority || 'normal',
-      from: {
-        type: 'agent',
-        id: row.fromAgentId,
-        name: row.fromAgentName
-      },
-      to: {
-        agentId: row.toAgentId,
-        requiredCapabilities: row.toRequiredCapabilities ? JSON.parse(row.toRequiredCapabilities) : undefined,
-        workspaceId: row.toWorkspaceId
-      },
-      context: JSON.parse(row.context || '{}'),
-      response: row.response ? JSON.parse(row.response) : undefined,
-      createdAt: row.createdAt,
-      completedAt: row.completedAt,
-      assignedTo: row.assignedTo,
-      dependencies: row.dependencies ? JSON.parse(row.dependencies) : undefined,
-      history: row.history ? JSON.parse(row.history) : []
-    };
-  }
 }

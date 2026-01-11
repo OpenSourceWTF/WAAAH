@@ -2,10 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { X, Clock, User, FileText, Settings, MessageSquare, CheckCircle, RefreshCw, XCircle } from "lucide-react";
+import { X, Clock, User, FileText, Settings, CheckCircle, RefreshCw, XCircle } from "lucide-react";
 import { DiffViewer } from "@/components/DiffViewer";
 import type { Task } from './types';
-import { getStatusBadgeClass, formatDate, getTaskDuration, formatTaskTitle, formatResponse, getProgressUpdates } from './utils';
+import { getStatusBadgeClass, formatDate, getTaskDuration, formatTaskTitle, getProgressUpdates } from './utils';
 import { ImagePreviewModal } from './ImagePreviewModal';
 import { MessageThread } from './MessageThread';
 
@@ -128,7 +128,7 @@ export const ExpandedCardView: React.FC<ExpandedCardViewProps> = ({
                 : ((latestProgress.metadata as Record<string, unknown>)?.phase as string || 'In Progress')}
             </span>
             <span className="font-mono text-primary">
-              {['COMPLETED', 'FAILED', 'CANCELLED'].includes(task.status) ? '100' : ((latestProgress.metadata as Record<string, unknown>)?.percentage || 0)}%
+              {['COMPLETED', 'FAILED', 'CANCELLED'].includes(task.status) ? '100' : (Number((latestProgress.metadata as Record<string, unknown>)?.percentage) || 0)}%
             </span>
           </div>
           <div className="h-1 bg-primary/20 rounded-full overflow-hidden">
@@ -152,11 +152,7 @@ export const ExpandedCardView: React.FC<ExpandedCardViewProps> = ({
             <TabsTrigger value="prompt" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-primary/10 px-4 py-2 text-sm flex items-center gap-2">
               <FileText className="h-4 w-4" /> Prompt
             </TabsTrigger>
-            {task.response && (
-              <TabsTrigger value="output" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-primary/10 px-4 py-2 text-sm flex items-center gap-2">
-                <MessageSquare className="h-4 w-4" /> Output
-              </TabsTrigger>
-            )}
+
             <TabsTrigger value="timeline" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-primary/10 px-4 py-2 text-sm flex items-center gap-2">
               <Clock className="h-4 w-4" /> Timeline
             </TabsTrigger>
@@ -183,13 +179,7 @@ export const ExpandedCardView: React.FC<ExpandedCardViewProps> = ({
               </div>
             </TabsContent>
 
-            {/* OUTPUT TAB */}
-            <TabsContent value="output" className="m-0 p-4 h-full flex flex-col">
-              <div className="flex-1 flex flex-col min-h-0">
-                <h3 className="text-sm font-bold text-primary/70 mb-1 shrink-0">RESPONSE</h3>
-                <pre className="whitespace-pre-wrap text-sm bg-black/30 p-4 border border-primary/20 flex-1 overflow-y-auto">{formatResponse(task.response)}</pre>
-              </div>
-            </TabsContent>
+
 
             {/* TIMELINE TAB - Interleaved chronological view */}
             <TabsContent value="timeline" className="m-0 p-4 h-full">

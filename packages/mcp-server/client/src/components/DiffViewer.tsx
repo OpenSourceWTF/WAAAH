@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { MessageSquare, ChevronDown, ChevronRight } from "lucide-react";
 import { parseDiff, getFileStats } from '@/utils/diffParser';
