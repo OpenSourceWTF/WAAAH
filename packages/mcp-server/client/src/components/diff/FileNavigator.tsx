@@ -24,7 +24,7 @@ export function FileNavigator({
   };
 
   return (
-    <div className="absolute right-4 top-0 z-50">
+    <div className="sticky top-2 ml-auto w-fit z-50">
       {!isOpen ? (
         <Button
           variant="default"
