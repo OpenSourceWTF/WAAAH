@@ -1,73 +1,61 @@
-# React + TypeScript + Vite
+# Mission Command Dashboard
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Real-time web UI for monitoring and managing the WAAAH agent ecosystem.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **Kanban Board**: Drag-free task visualization by status (Queued → Assigned → In Progress → In Review → Completed)
+- **Agent Sidebar**: Color-coded status indicators for each connected agent
+- **Task Details**: Expandable cards with prompt, context, and agent response
+- **Real-time Updates**: WebSocket-powered live state sync
+- **Theme Engine**: WAAAH (green), Light, and Dark themes
 
-## React Compiler
+## Architecture
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```mermaid
+graph LR
+    Dashboard["Dashboard"] --> Hooks["Hooks"]
+    Hooks --> Socket["useWebSocket"]
+    Hooks --> TaskData["useTaskData"]
+    Hooks --> AgentData["useAgentData"]
+    Socket --> Server["MCP Server (Socket.io)"]
+    
+    Dashboard --> Components["Components"]
+    Components --> Kanban["KanbanBoard"]
+    Components --> Sidebar["AgentSidebar"]
+    Components --> Theme["ThemeProvider"]
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Development
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+# From packages/mcp-server/client
+pnpm dev    # Start Vite dev server (proxied via MCP server)
+pnpm build  # Build for production
+pnpm lint   # Run ESLint
 ```
+
+## Key Components
+
+| Component | Description |
+|-----------|-------------|
+| `Dashboard` | Main layout with board and sidebar |
+| `KanbanBoard` | Task columns with expandable cards |
+| `AgentSidebar` | Collapsed indicator bar (Discord-style) |
+| `ThemeProvider` | CSS variable injection for theming |
+
+## API Integration
+
+The client uses the parent MCP server's API:
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/admin/tasks` | GET | Fetch all tasks |
+| `/admin/agents` | GET | Fetch all agents |
+| `/admin/enqueue` | POST | Create new task |
+| WebSocket `sync:full` | — | Initial state sync |
+| WebSocket `task:*` | — | Real-time task updates |
+
+## Environment
+
+The client runs embedded within the MCP server at `/admin`. In dev mode, Vite proxies API calls to the server.
