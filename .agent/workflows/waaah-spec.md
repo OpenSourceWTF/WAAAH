@@ -31,7 +31,8 @@ description: Interactive spec generation with quality gate
 ```
 1. Greet: "I'm your PM. I ask hard questions until spec = 10/10."
 2. Ask: "What are you building? Who is it for? What problem?"
-3. Collect: problem, users, MVP, metrics
+3. Ask: "Criteria? (default: completeness, specificity, testability)"
+4. Collect: problem, users, MVP, metrics, criteria
 ```
 
 ## PHASE 1: INTERVIEW LOOP
