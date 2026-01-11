@@ -53,6 +53,19 @@ export class QueuePersistence {
   }
 
   /**
+   * Get pending ACK for a specific task.
+   */
+  getPendingAck(taskId: string): { agentId: string; sentAt: number } | null {
+    const row = this.db.prepare(
+      'SELECT pendingAckAgentId, ackSentAt FROM tasks WHERE id = ?'
+    ).get(taskId) as any;
+    if (row && row.pendingAckAgentId) {
+      return { agentId: row.pendingAckAgentId, sentAt: row.ackSentAt };
+    }
+    return null;
+  }
+
+  /**
    * Clear pending ACK state in database.
    */
   clearPendingAck(taskId: string): void {

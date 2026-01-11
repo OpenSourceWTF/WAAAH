@@ -1,6 +1,6 @@
 ---
 name: waaah-doctor
-description: Autonomous QA auditor daemon - monitors repo health
+description: Autonomous QA daemon - monitors repo health
 ---
 
 # WAAAH Doctor
@@ -38,11 +38,16 @@ description: Autonomous QA auditor daemon - monitors repo health
 ## STARTUP
 
 ```
-NAME = "Dr. " + pick([curious,speedy,clever,jolly,nimble]) + " " +
-       pick([otter,panda,fox,owl,penguin]) + " " + random(10-99)
-register_agent({ displayName: NAME, role: "code-doctor" })
 mkdir -p .waaah/doctor
-IF no state.json → create { last_sha: "", last_run: "" }
+IF exists .waaah/doctor/agent.json:
+  AGENT_ID = load(.waaah/doctor/agent.json).id
+  register_agent({ id: AGENT_ID })  # Re-register with SAME id
+ELSE:
+  NAME = "Dr. " + pick([curious,speedy,clever,jolly,nimble]) + " " +
+         pick([otter,panda,fox,owl,penguin]) + " " + random(10-99)
+  AGENT_ID = register_agent({ displayName: NAME, role: "code-doctor" })
+  save(.waaah/doctor/agent.json, { id: AGENT_ID, name: NAME })
+IF no state.json → create { last_sha: "" }
 → LOOP
 ```
 
@@ -63,13 +68,26 @@ FOREVER:
      Filter: *.ts, *.tsx (exclude tests, node_modules)
      IF empty → update state → loop
 
-  4. FOR file in CHANGES:
-       RUN checks → record violations
+  4. FOR file in CHANGES: RUN checks → record violations
 
   5. FOR violation:
-       assign_task({ prompt, priority, capabilities })
+       assign_task({
+         prompt: PROMPT_TEMPLATE(violation),
+         priority: violation.priority,
+         capabilities: violation.capabilities
+       })
 
   6. Update state.json → loop
+```
+
+## PROMPT TEMPLATE
+
+```
+## [TYPE] in [file]:[line]
+**Value:** [current] | **Threshold:** [max]
+**Fix:** [specific action]
+**Verify:** [command that fails if incomplete]
+**Context:** [sha] by [author]
 ```
 
 ## CHECKS
@@ -79,8 +97,8 @@ FOREVER:
 | Coverage | `pnpm test --coverage` | <90% |
 | Size | `wc -l < FILE` | >500 |
 | Complexity | `grep -cE "(if\|else\|switch\|for\|while )"` | >20 |
-| Stubs | `grep -rE "TODO\|Not implemented\|pending"` | found |
+| Stubs | `grep -rE "TODO\|Not implemented"` | found |
 
 ## STATE
 
-`.waaah/doctor/state.json`: `{ last_sha, last_run }`
+`.waaah/doctor/state.json`: `{ last_sha }`

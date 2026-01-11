@@ -1,25 +1,46 @@
 import { Task, TaskStatus } from '@opensourcewtf/waaah-types';
 import type { ITaskRepository } from '../task-repository.js';
-import type { TypedEventEmitter } from '../queue-events.js';
+import type { AgentMatchingService } from './agent-matching-service.js';
 import type { QueuePersistence } from '../persistence/queue-persistence.js';
 
 export class TaskLifecycleService {
   constructor(
     private readonly repo: ITaskRepository,
-    private readonly events: TypedEventEmitter,
+    private readonly matchingService: AgentMatchingService,
     private readonly persistence: QueuePersistence
   ) {}
 
-  /**
-   * Updates task status and optionally sets response.
-   */
-  updateStatus(taskId: string, status: TaskStatus, response?: any, assignedTo?: string): void {
+  enqueue(task: Task): string | null {
+    // Check dependencies before enqueueing
+    if (task.dependencies && task.dependencies.length > 0) {
+      const allMet = task.dependencies.every(depId => {
+        const dep = this.repo.getById(depId);
+        return dep && dep.status === 'COMPLETED';
+      });
+
+      if (!allMet) {
+        task.status = 'BLOCKED';
+        console.log(`[Lifecycle] Task ${task.id} BLOCKED by dependencies: ${task.dependencies.join(', ')}`);
+      }
+    }
+
+    try {
+      this.repo.insert(task);
+      console.log(`[Lifecycle] Enqueued task: ${task.id} (${task.status})`);
+
+      // ATOMIC ASSIGNMENT: Find and reserve agent synchronously
+      const reservedAgentId = this.matchingService.reserveAgentForTask(task);
+      return reservedAgentId;
+    } catch (e: any) {
+      console.error(`[Lifecycle] Failed to persist task ${task.id}: ${e.message}`);
+      throw e;
+    }
+  }
+
+  updateStatus(taskId: string, status: TaskStatus, response?: any): Task | null {
     const task = this.repo.getById(taskId);
     if (task) {
       task.status = status;
-      if (assignedTo) {
-        task.assignedTo = assignedTo;
-      }
       if (response) {
         task.response = response;
         task.completedAt = Date.now();
@@ -34,19 +55,54 @@ export class TaskLifecycleService {
         message: response ? 'Status updated with response' : `Status changed to ${status}`
       });
 
-      this.persistUpdate(task);
-
-      // Emit completion event for listeners
-      if (['COMPLETED', 'FAILED', 'BLOCKED'].includes(status)) {
-        this.events.emit('completion', task);
-        console.log(`[TaskLifecycle] Emitted completion event for task ${taskId} (${status})`);
-      }
+      this.repo.update(task);
+      return task;
     }
+    return null;
   }
 
-  /**
-   * Cancels a task if it is not already in a terminal state.
-   */
+  ackTask(taskId: string, agentId: string): { success: boolean; error?: string } {
+    const task = this.repo.getById(taskId);
+    if (!task) {
+      return { success: false, error: 'Task not found' };
+    }
+
+    if (task.status !== 'PENDING_ACK') {
+      return { success: false, error: `Task status is ${task.status}, expected PENDING_ACK` };
+    }
+
+    // Check pending ACK in database
+    const pendingAcks = this.persistence.getPendingAcks();
+    const pendingInfo = pendingAcks.get(taskId);
+
+    if (!pendingInfo) {
+      return { success: false, error: 'No pending ACK found for task' };
+    }
+
+    if (pendingInfo.agentId !== agentId) {
+      return { success: false, error: `Task was sent to ${pendingInfo.agentId}, not ${agentId}` };
+    }
+
+    // Update task
+    task.status = 'ASSIGNED';
+    task.assignedTo = agentId;
+    
+    // Record History
+    if (!task.history) task.history = [];
+    task.history.push({
+      timestamp: Date.now(),
+      status: 'ASSIGNED',
+      agentId: agentId,
+      message: `Task ACKed by ${agentId}`
+    });
+
+    this.repo.update(task);
+    this.persistence.clearPendingAck(taskId);
+
+    console.log(`[Lifecycle] Task ${taskId} ACKed by ${agentId}, now ASSIGNED`);
+    return { success: true };
+  }
+
   cancelTask(taskId: string): { success: boolean; error?: string } {
     const task = this.repo.getById(taskId);
 
@@ -62,13 +118,10 @@ export class TaskLifecycleService {
     this.updateStatus(taskId, 'CANCELLED');
     this.persistence.clearPendingAck(taskId);
 
-    console.log(`[TaskLifecycle] Task ${taskId} cancelled by admin`);
+    console.log(`[Lifecycle] Task ${taskId} cancelled by admin`);
     return { success: true };
   }
 
-  /**
-   * Forces a retry of a task by resetting its status to 'QUEUED'.
-   */
   forceRetry(taskId: string): { success: boolean; error?: string } {
     const task = this.repo.getById(taskId);
 
@@ -96,18 +149,10 @@ export class TaskLifecycleService {
       message: 'Force-retried by admin'
     });
 
-    this.persistUpdate(task);
+    this.repo.update(task);
     this.persistence.clearPendingAck(taskId);
 
-    console.log(`[TaskLifecycle] Task ${taskId} force-retried by admin`);
+    console.log(`[Lifecycle] Task ${taskId} force-retried by admin`);
     return { success: true };
-  }
-
-  private persistUpdate(task: Task): void {
-    try {
-      this.repo.update(task);
-    } catch (e: any) {
-      console.error(`[TaskLifecycle] Failed to update task ${task.id}: ${e.message}`);
-    }
   }
 }

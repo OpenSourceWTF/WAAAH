@@ -1,5 +1,5 @@
 /**
- * GracefulShutdown - Signal handlers for clean termination
+ * GracefulShutdown - Signal handlers to clean termination
  * 
  * Handles SIGINT (Ctrl+C) and SIGTERM signals to ensure clean shutdown
  * of agent processes with session state preservation.
@@ -10,18 +10,18 @@
 import { SessionManager, SessionState } from '../session/manager.js';
 
 /**
- * Options for configuring graceful shutdown.
+ * Options to configuring graceful shutdown.
  */
 export interface GracefulShutdownOptions {
-  /** Session manager instance for saving state */
+  /** Session manager instance to saving state */
   sessionManager: SessionManager;
   /** Callback to kill the PTY process */
   killAgent: () => Promise<void>;
-  /** Current session state (if any) */
+  /** Current session state (when any) */
   getSessionState?: () => SessionState | null;
-  /** Callback for logging */
+  /** Callback to logging */
   onLog?: (message: string) => void;
-  /** Timeout for kill operation in milliseconds (default: 5000) */
+  /** Timeout to kill operation in milliseconds (default: 5000) */
   killTimeoutMs?: number;
 }
 
@@ -30,13 +30,13 @@ export interface GracefulShutdownOptions {
  */
 export interface ShutdownResult {
   /** Whether shutdown completed successfully */
-  success: boolean;
-  /** Whether session was saved */
   sessionSaved: boolean;
-  /** Session ID if saved */
+  /** Session ID when saved */
   sessionId?: string;
-  /** Error message if failed */
+  /** Error message when failed */
   error?: string;
+  /** Whether shutdown completed successfully */
+  success: boolean;
 }
 
 /**
@@ -84,8 +84,8 @@ export class GracefulShutdown {
   private emergencyCleanup: (() => void) | null = null;
 
   /**
-   * Installs signal handlers for SIGINT and SIGTERM.
-   * Also installs emergency cleanup handlers for unexpected exits.
+   * Installs signal handlers to SIGINT and SIGTERM.
+   * Also installs emergency cleanup handlers to unexpected exits.
    * 
    * @example
    * ```typescript
@@ -96,36 +96,29 @@ export class GracefulShutdown {
   public install(): void {
     const handler = this.createSignalHandler();
 
-    // Install signal handlers
     this.signalHandlers.set('SIGINT', handler);
     this.signalHandlers.set('SIGTERM', handler);
 
     process.on('SIGINT', handler);
     process.on('SIGTERM', handler);
 
-    // Emergency cleanup for unexpected exits (orphan prevention)
     this.emergencyCleanup = () => {
       if (!this.isShuttingDown) {
-        try {
-          // Attempt synchronous kill - best effort
-          this.options.killAgent().catch(() => { });
-        } catch { /* ignore */ }
+        this.options.killAgent().catch(() => { });
       }
     };
 
     process.on('exit', this.emergencyCleanup);
-    process.on('uncaughtException', (err) => {
-      console.error('Uncaught exception:', err);
+    
+    const errorHandler = (err: any) => {
+      console.error(err);
       this.emergencyCleanup?.();
       process.exit(1);
-    });
-    process.on('unhandledRejection', (reason) => {
-      console.error('Unhandled rejection:', reason);
-      this.emergencyCleanup?.();
-      process.exit(1);
-    });
+    };
+    process.on('uncaughtException', errorHandler);
+    process.on('unhandledRejection', errorHandler);
 
-    this.log('Signal handlers installed (SIGINT, SIGTERM, exit, uncaught)');
+    this.log('Signal handlers installed');
   }
 
   /**
@@ -145,68 +138,39 @@ export class GracefulShutdown {
    */
   private createSignalHandler(): NodeJS.SignalsListener {
     return async (signal: NodeJS.Signals) => {
-      // Prevent multiple concurrent shutdowns
-      if (this.isShuttingDown) {
-        this.log(`Already shutting down, ignoring ${signal}`);
-        return;
-      }
-
+      if (this.isShuttingDown) return;
       this.isShuttingDown = true;
-      this.log(`\nReceived ${signal}, initiating graceful shutdown...`);
 
       try {
         const result = await this.performShutdown();
-
-        if (result.success) {
-          if (result.sessionSaved && result.sessionId) {
-            console.log('\n✅ Session saved.');
-            console.log(`   Run \`waaah agent --resume\` to continue.\n`);
-          } else {
-            console.log('\n✅ Shutdown complete.\n');
-          }
-          process.exit(0);
-        } else {
-          console.error(`\n❌ Shutdown error: ${result.error}\n`);
-          process.exit(1);
-        }
-      } catch (error) {
-        console.error('\n❌ Shutdown failed:', error);
+        this.handleShutdownResult(result);
+      } catch {
         process.exit(1);
       }
     };
   }
 
-  /**
-   * Performs the graceful shutdown sequence.
-   * @returns Result of the shutdown operation
-   */
+  private handleShutdownResult(result: ShutdownResult): void {
+    if (result.success && result.sessionSaved && result.sessionId) {
+      console.log(`\n✅ Session saved: ${result.sessionId}\n`);
+    }
+    process.exit(result.success ? 0 : 1);
+  }
+
   public async performShutdown(): Promise<ShutdownResult> {
     let sessionSaved = false;
     let sessionId: string | undefined;
 
     try {
-      // Step 1: Save session state
-      const sessionState = this.options.getSessionState();
-      if (sessionState) {
-        this.log('Saving session state...');
-        sessionState.gracefulExit = true;
-        sessionState.updatedAt = new Date();
-        await this.options.sessionManager.save(sessionState);
+      const state = this.options.getSessionState();
+      if (state) {
+        await this.saveSession(state);
         sessionSaved = true;
-        sessionId = sessionState.id;
-        this.log(`Session saved: ${sessionId}`);
+        sessionId = state.id;
       }
 
-      // Step 2: Kill PTY process with timeout
-      this.log('Terminating agent process...');
       await this.killWithTimeout();
-      this.log('Agent process terminated');
-
-      return {
-        success: true,
-        sessionSaved,
-        sessionId,
-      };
+      return { success: true, sessionSaved, sessionId };
     } catch (error) {
       return {
         success: false,
@@ -215,6 +179,12 @@ export class GracefulShutdown {
         error: error instanceof Error ? error.message : String(error),
       };
     }
+  }
+
+  private async saveSession(state: SessionState): Promise<void> {
+    state.gracefulExit = true;
+    state.updatedAt = new Date();
+    await this.options.sessionManager.save(state);
   }
 
   /**

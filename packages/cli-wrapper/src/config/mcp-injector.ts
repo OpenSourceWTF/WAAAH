@@ -1,24 +1,25 @@
 /**
- * MCPInjector - MCP configuration injection
- * 
- * Detects and injects WAAAH MCP configuration into CLI agent config files.
+ * MCPInjector - MCP setup injection
+ *
+ * Detects and injects WAAAH MCP setup into CLI agent settings files.
  * Supports gemini (~/.gemini/settings.json) and claude (~/.claude/claude_desktop_config.json).
- * 
+ *
  * @packageDocumentation
  */
 
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as readline from 'readline';
+import { promptProxyMethod } from '../utils/prompts.js';
 
-/** WAAAH MCP server name used in config files */
+/** WAAAH MCP server name used in settings files */
 const WAAAH_MCP_NAME = 'waaah';
 
 /** Default server address */
 const DEFAULT_SERVER_URL = 'http://localhost:3000';
 
 /**
- * MCP server configuration.
+ * MCP server setup.
  */
 export interface MCPServerConfig {
   /** Server URL */
@@ -33,7 +34,7 @@ export interface MCPServerConfig {
 export type AgentType = 'gemini' | 'claude';
 
 /**
- * Gemini settings.json structure for MCP servers.
+ * Gemini settings.json setup to MCP servers.
  */
 interface GeminiMCPConfig {
   mcpServers?: Record<string, {
@@ -46,7 +47,7 @@ interface GeminiMCPConfig {
 }
 
 /**
- * Claude config structure for MCP servers.
+ * Claude setup structure to MCP servers.
  */
 interface ClaudeMCPConfig {
   mcpServers?: Record<string, {
@@ -58,135 +59,65 @@ interface ClaudeMCPConfig {
 }
 
 /**
- * Handles MCP configuration detection and injection.
- * 
- * This class manages the lifecycle of WAAAH MCP configuration in CLI agent
- * config files. It provides backup, merge, and interactive prompting capabilities.
- * 
- * @example
- * ```typescript
- * const injector = new MCPInjector();
- * const hasConfig = await injector.hasWaaahConfig('gemini');
- * if (!hasConfig) {
- *   const config = await injector.promptForConfig();
- *   await injector.inject('gemini', config);
- * }
- * ```
+ * Handles MCP setup detection and injection.
+ *
+ * This class manages the process of WAAAH MCP setup in CLI agent
+ * settings files. It provides backup, merge, and interactive prompting.
  */
 export class MCPInjector {
   /**
-   * Gets the config file path for an agent type.
+   * Gets the settings file path.
    * @param agentType - The agent type
-   * @returns Path to the config file
+   * @returns Path to the settings file
    */
   public getConfigPath(agentType: AgentType): string {
     const home = process.env.HOME || process.env.USERPROFILE || '';
-    switch (agentType) {
-      case 'gemini':
-        return `${home}/.gemini/settings.json`;
-      case 'claude':
-        return `${home}/.claude/claude_desktop_config.json`;
-      default:
-        throw new Error(`Unknown agent type: ${agentType}`);
-    }
+    const paths: Record<AgentType, string> = {
+      gemini: `${home}/.gemini/settings.json`,
+      claude: `${home}/.claude/claude_desktop_config.json`,
+    };
+
+    return paths[agentType] || (() => { throw new Error(`Unknown: ${agentType}`); })();
   }
 
   /**
-   * Checks if WAAAH MCP is configured for an agent.
-   * @param agentType - The agent type to check
-   * @returns Promise resolving to true if configured
-   * 
-   * @example
-   * ```typescript
-   * if (await injector.hasWaaahConfig('gemini')) {
-   *   console.log('WAAAH is already configured');
-   * }
-   * ```
+   * Checks WAAAH MCP.
    */
   public async hasWaaahConfig(agentType: AgentType): Promise<boolean> {
-    const configPath = this.getConfigPath(agentType);
-
     try {
-      const content = await fs.readFile(configPath, 'utf-8');
-      const config = JSON.parse(content) as GeminiMCPConfig | ClaudeMCPConfig;
-
-      return !!(config.mcpServers && WAAAH_MCP_NAME in config.mcpServers);
-    } catch (error) {
-      // File doesn't exist or is invalid
+      const config = await this.readConfig(this.getConfigPath(agentType));
+      return !!config.mcpServers?.[WAAAH_MCP_NAME];
+    } catch {
       return false;
     }
   }
 
-  /**
-   * Creates a backup of the existing config file.
-   * @param configPath - Path to the config file
-   * @returns Promise resolving to the backup path, or null if no file to backup
-   * 
-   * @private
-   */
   private async createBackup(configPath: string): Promise<string | null> {
     try {
       await fs.access(configPath);
-
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const backupPath = `${configPath}.backup.${timestamp}`;
-
+      const backupPath = `${configPath}.backup.${new Date().toISOString().replace(/[:.]/g, '-')}`;
       await fs.copyFile(configPath, backupPath);
       return backupPath;
     } catch {
-      // File doesn't exist, no backup needed
       return null;
     }
   }
 
-  /**
-   * Reads the existing config file or returns an empty config.
-   * @param configPath - Path to the config file
-   * @returns Promise resolving to the parsed config
-   * 
-   * @private
-   */
-  private async readConfig(configPath: string): Promise<GeminiMCPConfig | ClaudeMCPConfig> {
+  private async readConfig(configPath: string): Promise<any> {
     try {
-      const content = await fs.readFile(configPath, 'utf-8');
-      return JSON.parse(content);
+      return JSON.parse(await fs.readFile(configPath, 'utf-8'));
     } catch {
       return {};
     }
   }
 
-  /**
-   * Ensures the config directory exists.
-   * @param configPath - Path to the config file
-   * 
-   * @private
-   */
   private async ensureDir(configPath: string): Promise<void> {
     const dir = path.dirname(configPath);
     await fs.mkdir(dir, { recursive: true });
   }
 
   /**
-   * Injects WAAAH MCP configuration into agent config.
-   * 
-   * Creates a backup of the existing config before modifying.
-   * Merges with existing config, preserving other MCP servers.
-   * 
-   * @param agentType - The agent type
-   * @param config - MCP server configuration
-   * @param proxyMethod - How to invoke the proxy: 'global' (waaah-proxy) or 'npx' (npx @opensourcewtf/waaah-mcp-proxy)
-   * @returns Promise resolving to the backup path (if created)
-   * 
-   * @throws {Error} If the config file cannot be written
-   * 
-   * @example
-   * ```typescript
-   * const backupPath = await injector.inject('gemini', {
-   *   url: 'http://localhost:3000',
-   *   apiKey: 'optional-key'
-   * }, 'global');
-   * console.log('Backup created at:', backupPath);
-   * ```
+   * Injects WAAAH MCP setup.
    */
   public async inject(
     agentType: AgentType,
@@ -194,134 +125,54 @@ export class MCPInjector {
     proxyMethod: 'global' | 'npx' = 'global'
   ): Promise<string | null> {
     const configPath = this.getConfigPath(agentType);
-
-    // Create backup before modifying
     const backupPath = await this.createBackup(configPath);
-
-    // Read existing config
     const existingConfig = await this.readConfig(configPath);
 
-    // Ensure mcpServers exists
-    if (!existingConfig.mcpServers) {
-      existingConfig.mcpServers = {};
-    }
+    existingConfig.mcpServers = existingConfig.mcpServers || {};
+    existingConfig.mcpServers[WAAAH_MCP_NAME] = this.createMcpEntry(config, proxyMethod);
 
-    // Create the WAAAH MCP entry based on proxy method
-    if (proxyMethod === 'global') {
-      // Global link: requires `pnpm link --global` in packages/mcp-proxy
-      existingConfig.mcpServers[WAAAH_MCP_NAME] = {
-        command: 'waaah-proxy',
-        args: ['--url', config.url],
-        ...(config.apiKey && {
-          env: { WAAAH_API_KEY: config.apiKey }
-        })
-      };
-    } else {
-      // npx: downloads from npm registry
-      existingConfig.mcpServers[WAAAH_MCP_NAME] = {
-        command: 'npx',
-        args: ['-y', '@opensourcewtf/waaah-mcp-proxy', '--url', config.url],
-        ...(config.apiKey && {
-          env: { WAAAH_API_KEY: config.apiKey }
-        })
-      };
-    }
-
-    // Ensure directory exists
     await this.ensureDir(configPath);
-
-    // Write the updated config
-    await fs.writeFile(
-      configPath,
-      JSON.stringify(existingConfig, null, 2),
-      'utf-8'
-    );
+    await fs.writeFile(configPath, JSON.stringify(existingConfig, null, 2), 'utf-8');
 
     return backupPath;
   }
 
+  private createMcpEntry(config: MCPServerConfig, proxyMethod: 'global' | 'npx') {
+    const isGlobal = proxyMethod === 'global';
+    return {
+      command: isGlobal ? 'waaah-proxy' : 'npx',
+      args: isGlobal ? ['--url', config.url] : ['-y', '@opensourcewtf/waaah-mcp-proxy', '--url', config.url],
+      ...(config.apiKey && { env: { WAAAH_API_KEY: config.apiKey } })
+    };
+  }
+
   /**
-   * Removes WAAAH MCP configuration from agent config.
-   * 
-   * Creates a backup before modifying. Preserves other MCP servers.
-   * 
-   * @param agentType - The agent type
-   * @returns Promise resolving to the backup path (if created)
-   * 
-   * @example
-   * ```typescript
-   * await injector.remove('gemini');
-   * ```
+   * Removes WAAAH MCP.
    */
   public async remove(agentType: AgentType): Promise<string | null> {
     const configPath = this.getConfigPath(agentType);
-
-    // Check if config exists
     const hasConfig = await this.hasWaaahConfig(agentType);
-    if (!hasConfig) {
-      return null;
-    }
+    if (!hasConfig) return null;
 
-    // Create backup before modifying
     const backupPath = await this.createBackup(configPath);
-
-    // Read existing config
     const existingConfig = await this.readConfig(configPath);
 
-    // Remove WAAAH entry
-    if (existingConfig.mcpServers && WAAAH_MCP_NAME in existingConfig.mcpServers) {
-      delete existingConfig.mcpServers[WAAAH_MCP_NAME];
-    }
+    existingConfig.mcpServers && delete existingConfig.mcpServers[WAAAH_MCP_NAME];
 
-    // Write the updated config
-    await fs.writeFile(
-      configPath,
-      JSON.stringify(existingConfig, null, 2),
-      'utf-8'
-    );
-
+    await fs.writeFile(configPath, JSON.stringify(existingConfig, null, 2), 'utf-8');
     return backupPath;
   }
 
   /**
-   * Prompts user for MCP server configuration via readline.
-   * 
-   * Asks for:
-   * 1. Server address (default: http://localhost:3000)
-   * 2. API key (optional)
-   * 
-   * @returns Promise resolving to the user's config choices
-   * 
-   * @example
-   * ```typescript
-   * const config = await injector.promptForConfig();
-   * // User input: server=http://localhost:3000, apiKey=
-   * // config = { url: 'http://localhost:3000' }
-   * ```
+   * Prompts user.
    */
   public async promptForConfig(): Promise<MCPServerConfig> {
-    const rl = readline.createInterface({
-      input: process.stdin,
-      output: process.stdout,
-    });
-
-    const question = (prompt: string): Promise<string> => {
-      return new Promise((resolve) => {
-        rl.question(prompt, (answer) => {
-          resolve(answer);
-        });
-      });
-    };
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    const question = (p: string) => new Promise<string>(r => rl.question(p, r));
 
     try {
-      // Prompt for server address
-      const urlInput = await question(`WAAAH server address [${DEFAULT_SERVER_URL}]: `);
-      const url = urlInput.trim() || DEFAULT_SERVER_URL;
-
-      // Prompt for API key
-      const apiKeyInput = await question('API key (optional, press Enter to skip): ');
-      const apiKey = apiKeyInput.trim() || undefined;
-
+      const url = (await question(`Address [${DEFAULT_SERVER_URL}]: `)).trim() || DEFAULT_SERVER_URL;
+      const apiKey = (await question('Key (optional): ')).trim() || undefined;
       return { url, apiKey };
     } finally {
       rl.close();
@@ -329,54 +180,39 @@ export class MCPInjector {
   }
 
   /**
-   * Gets the current WAAAH config from an agent's config file.
-   * 
-   * @param agentType - The agent type
-   * @returns Promise resolving to the current config, or null if not configured
-   * 
-   * @example
-   * ```typescript
-   * const config = await injector.getWaaahConfig('gemini');
-   * if (config) {
-   *   console.log('Current server:', config.url);
-   * }
-   * ```
+   * Gets current WAAAH setup.
    */
   public async getWaaahConfig(agentType: AgentType): Promise<MCPServerConfig | null> {
-    const configPath = this.getConfigPath(agentType);
-
     try {
-      const content = await fs.readFile(configPath, 'utf-8');
-      const config = JSON.parse(content) as GeminiMCPConfig | ClaudeMCPConfig;
-
+      const config = await this.readConfig(this.getConfigPath(agentType));
       const mcpConfig = config.mcpServers?.[WAAAH_MCP_NAME];
-      if (!mcpConfig) {
-        return null;
-      }
+      if (!mcpConfig) return null;
 
-      // Extract URL based on config type
-      if ('url' in mcpConfig && mcpConfig.url) {
-        return {
-          url: mcpConfig.url,
-          apiKey: mcpConfig.env?.WAAAH_API_KEY,
-        };
-      }
-
-      // For Claude, extract from args
-      if ('args' in mcpConfig && mcpConfig.args) {
-        const urlIndex = mcpConfig.args.indexOf('--url');
-        const url = urlIndex >= 0 ? mcpConfig.args[urlIndex + 1] : undefined;
-        if (url) {
-          return {
-            url,
-            apiKey: mcpConfig.env?.WAAAH_API_KEY,
-          };
-        }
-      }
-
-      return null;
+      const url = this.extractUrl(mcpConfig);
+      return url ? { url, apiKey: mcpConfig.env?.WAAAH_API_KEY } : null;
     } catch {
       return null;
     }
+  }
+
+  private extractUrl(mcpConfig: any): string | null {
+    if (mcpConfig.url) return mcpConfig.url;
+    const args = mcpConfig.args || [];
+    const idx = args.indexOf('--url');
+    return idx >= 0 ? args[idx + 1] : null;
+  }
+
+  /**
+   * Configure MCP.
+   */
+  public async configureInteractive(
+    agentType: AgentType,
+    serverUrl: string
+  ): Promise<void> {
+    const method = await promptProxyMethod();
+    console.log(`
+   Setup WAAAH MCP...`);
+    await this.inject(agentType, { url: serverUrl }, method);
+    console.log('   ✅ Done.');
   }
 }

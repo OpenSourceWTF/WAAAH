@@ -7,6 +7,10 @@
  * - Uses TaskRepository as SINGLE SOURCE OF TRUTH for task data
  * - Uses TypedEventEmitter for type-safe events
  * - Delegates scheduling to HybridScheduler
+ * - Delegates message handling to MessageService
+ * - Delegates polling to PollingService
+ * - Delegates lifecycle to TaskLifecycleService
+ * - Delegates queries to TaskQueryService
  * - ALL STATE IS DATABASE-BACKED (no in-memory maps)
  * 
  * @module state/queue
@@ -28,6 +32,7 @@ import { QueuePersistence } from './persistence/queue-persistence.js';
 import { SystemPromptService } from './services/system-prompt-service.js';
 import { AgentMatchingService } from './services/agent-matching-service.js';
 import { MessageService } from './services/message-service.js';
+import { PollingService } from './services/polling-service.js';
 import { TaskLifecycleService } from './services/task-lifecycle-service.js';
 import { TaskQueryService } from './services/task-query-service.js';
 
@@ -57,10 +62,13 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
   /** Service for agent matching logic */
   private readonly matchingService: AgentMatchingService;
 
-  /** Service for message operations */
+  /** Service for message handling */
   private readonly messageService: MessageService;
 
-  /** Service for task lifecycle transitions */
+  /** Service for polling operations */
+  private readonly pollingService: PollingService;
+
+  /** Service for task lifecycle management */
   private readonly lifecycleService: TaskLifecycleService;
 
   /** Service for task queries */
@@ -87,66 +95,44 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
     this.systemPromptService = new SystemPromptService(this.db);
     this.matchingService = new AgentMatchingService(this.repo, this.persistence);
     this.messageService = new MessageService(this.repo);
-    this.lifecycleService = new TaskLifecycleService(this.repo, this, this.persistence);
+
+    // Initialize eviction service
+    this.evictionService = new EvictionService(this.db, this);
+
+    // Initialize polling service
+    this.pollingService = new PollingService(
+      this.repo,
+      this.persistence,
+      this.matchingService,
+      this.evictionService,
+      this
+    );
+
+    // Initialize lifecycle service
+    this.lifecycleService = new TaskLifecycleService(
+      this.repo,
+      this.matchingService,
+      this.persistence
+    );
+
+    // Initialize query service
     this.queryService = new TaskQueryService(this.repo, this.persistence);
 
     // Initialize scheduler with this queue (implements ISchedulerQueue directly)
     this.scheduler = new HybridScheduler(this);
 
-    // Initialize eviction service
-    this.evictionService = new EvictionService(this.db, this);
-
     // Reset any PENDING_ACK tasks and waiting agents from previous run
-    this.resetStaleState();
+    this.pollingService.resetStaleState();
   }
 
-  /** Reset PENDING_ACK tasks and waiting agents on startup */
-  private resetStaleState(): void {
-    try {
-      // Reset PENDING_ACK tasks to QUEUED
-      const stale = this.repo.getByStatus('PENDING_ACK');
-      for (const task of stale) {
-        console.log(`[Queue] Resetting PENDING_ACK task ${task.id} to QUEUED on startup`);
-        this.lifecycleService.updateStatus(task.id, 'QUEUED');
-        this.persistence.clearPendingAck(task.id);
-      }
-
-      // Clear all waiting agents
-      this.persistence.resetWaitingAgents();
-
-      console.log(`[Queue] Loaded ${this.repo.getActive().length} active tasks from DB`);
-    } catch {
-      // Database may not be initialized yet (tests)
-      console.log('[Queue] Database not ready, skipping stale state reset');
-    }
-  }
-
-  // ===== Task Lifecycle =====
+  // ===== Task Lifecycle (Delegated) =====
 
   /**
    * Enqueues a new task into the system.
    */
   enqueue(task: Task): void {
-    // Check dependencies before enqueueing
-    if (task.dependencies && task.dependencies.length > 0) {
-      const allMet = task.dependencies.every(depId => {
-        const dep = this.getTask(depId) || this.getTaskFromDB(depId);
-        return dep && dep.status === 'COMPLETED';
-      });
-
-      if (!allMet) {
-        task.status = 'BLOCKED';
-        console.log(`[Queue] Task ${task.id} BLOCKED by dependencies: ${task.dependencies.join(', ')}`);
-      }
-    }
-
     try {
-      this.repo.insert(task);
-      console.log(`[Queue] Enqueued task: ${task.id} (${task.status})`);
-
-      // ATOMIC ASSIGNMENT: Find and reserve agent synchronously
-      const reservedAgentId = this.matchingService.reserveAgentForTask(task);
-
+      const reservedAgentId = this.lifecycleService.enqueue(task);
       if (reservedAgentId) {
         console.log(`[Queue] ✓ Task ${task.id} reserved for agent ${reservedAgentId}`);
         // Notify the agent via event
@@ -159,19 +145,32 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
     }
   }
 
+  /**
+   * Updates task status and optionally sets response.
+   */
   updateStatus(taskId: string, status: TaskStatus, response?: any): void {
-    this.lifecycleService.updateStatus(taskId, status, response);
+    const task = this.lifecycleService.updateStatus(taskId, status, response);
+    if (task && ['COMPLETED', 'FAILED', 'BLOCKED'].includes(status)) {
+      this.emit('completion', task);
+      console.log(`[Queue] Emitted completion event for task ${taskId} (${status})`);
+    }
   }
 
+  /**
+   * Cancels a task if it is not already in a terminal state.
+   */
   cancelTask(taskId: string): { success: boolean; error?: string } {
     return this.lifecycleService.cancelTask(taskId);
   }
 
+  /**
+   * Forces a retry of a task by resetting its status to 'QUEUED'.
+   */
   forceRetry(taskId: string): { success: boolean; error?: string } {
     return this.lifecycleService.forceRetry(taskId);
   }
 
-  // ===== Messages =====
+  // ===== Messages (Delegated) =====
 
   addMessage(
     taskId: string,
@@ -201,134 +200,26 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
     return this.messageService.getMessages(taskId);
   }
 
-  // ===== Agent Matching =====
+  // ===== Agent Matching & Polling (Delegated) =====
+
+  findAndReserveAgent(task: Task): string | null {
+    return this.matchingService.reserveAgentForTask(task);
+  }
 
   async waitForTask(
     agentId: string,
     capabilities: StandardCapability[],
     timeoutMs: number = 290000
   ): Promise<Task | { controlSignal: 'EVICT'; reason: string; action: 'RESTART' | 'SHUTDOWN' } | null> {
-    // 0. Check for pending eviction FIRST
-    const eviction = this.popEviction(agentId);
-    if (eviction) {
-      return { controlSignal: 'EVICT', ...eviction };
-    }
-
-    // Track this agent as waiting in DB
-    this.persistence.setAgentWaiting(agentId, capabilities);
-
-    // 1. Check if there are pending tasks for this agent
-    const pendingTask = this.matchingService.findPendingTaskForAgent(agentId, capabilities);
-    if (pendingTask) {
-      this.persistence.clearAgentWaiting(agentId);
-      this.lifecycleService.updateStatus(pendingTask.id, 'PENDING_ACK');
-      this.persistence.setPendingAck(pendingTask.id, agentId);
-      return pendingTask;
-    }
-
-    return new Promise((resolve) => {
-      let resolved = false;
-      let timeoutTimer: NodeJS.Timeout;
-
-      const finish = (result: Task | { controlSignal: 'EVICT'; reason: string; action: 'RESTART' | 'SHUTDOWN' } | null) => {
-        if (resolved) return;
-        resolved = true;
-
-        this.off('task', onTask);
-        this.off('eviction', onEviction);
-        if (timeoutTimer) clearTimeout(timeoutTimer);
-
-        // Clear waiting state in DB
-        this.persistence.clearAgentWaiting(agentId);
-
-        resolve(result);
-      };
-
-      const onTask = (task: Task, intendedAgentId?: string) => {
-        if (intendedAgentId === agentId) {
-          finish(task);
-        }
-      };
-
-      const onEviction = (targetId: string) => {
-        if (targetId === agentId) {
-          const ev = this.popEviction(agentId);
-          if (ev) finish({ controlSignal: 'EVICT', ...ev });
-        }
-      };
-
-      this.on('task', onTask);
-      this.on('eviction', onEviction);
-
-      timeoutTimer = setTimeout(() => {
-        finish(null);
-      }, timeoutMs);
-    });
+    return this.pollingService.waitForTask(agentId, capabilities, timeoutMs);
   }
 
   ackTask(taskId: string, agentId: string): { success: boolean; error?: string } {
-    const task = this.repo.getById(taskId);
-    if (!task) {
-      return { success: false, error: 'Task not found' };
-    }
-
-    if (task.status !== 'PENDING_ACK') {
-      return { success: false, error: `Task status is ${task.status}, expected PENDING_ACK` };
-    }
-
-    // Check pending ACK in database
-    const pendingAcks = this.persistence.getPendingAcks();
-    const pendingInfo = pendingAcks.get(taskId);
-
-    if (!pendingInfo) {
-      return { success: false, error: 'No pending ACK found for task' };
-    }
-
-    if (pendingInfo.agentId !== agentId) {
-      return { success: false, error: `Task was sent to ${pendingInfo.agentId}, not ${agentId}` };
-    }
-
-    // Use lifecycle service to update status AND assignment
-    this.lifecycleService.updateStatus(taskId, 'ASSIGNED', undefined, agentId);
-    
-    this.persistence.clearPendingAck(taskId);
-    console.log(`[Queue] Task ${taskId} ACKed by ${agentId}, now ASSIGNED`);
-
-    return { success: true };
+    return this.lifecycleService.ackTask(taskId, agentId);
   }
 
   async waitForTaskCompletion(taskId: string, timeoutMs: number = 300000): Promise<Task | null> {
-    return new Promise((resolve) => {
-      let resolved = false;
-
-      const existingTask = this.getTask(taskId) || this.getTaskFromDB(taskId);
-      if (existingTask && ['COMPLETED', 'FAILED', 'BLOCKED'].includes(existingTask.status)) {
-        console.log(`[Queue] Task ${taskId} already complete (${existingTask.status})`);
-        resolve(existingTask);
-        return;
-      }
-
-      const onCompletion = (task: Task) => {
-        if (task.id === taskId && !resolved) {
-          resolved = true;
-          this.off('completion', onCompletion);
-          console.log(`[Queue] Task ${taskId} completed with status ${task.status}`);
-          resolve(task);
-        }
-      };
-
-      this.on('completion', onCompletion);
-
-      setTimeout(() => {
-        if (!resolved) {
-          resolved = true;
-          this.off('completion', onCompletion);
-          console.log(`[Queue] Wait for task ${taskId} timed out after ${timeoutMs}ms`);
-          const task = this.getTask(taskId) || this.getTaskFromDB(taskId);
-          resolve(task || null);
-        }
-      }, timeoutMs);
-    });
+    return this.pollingService.waitForTaskCompletion(taskId, timeoutMs);
   }
 
   // ===== Scheduler =====
@@ -433,5 +324,38 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
 
   getLogs(limit: number = 100): any[] {
     return this.queryService.getLogs(limit);
+  }
+
+  mapRowToTask(row: any): Task {
+    // Should this be delegated? 
+    // It seems to be a helper specific to DB rows. 
+    // Maybe move to TaskRepository?
+    // But for now, keeping it here to avoid breaking callers if they rely on it being on Queue instance 
+    // (though it's public, so they might).
+    // Actually, it's public.
+    return {
+      id: row.id,
+      status: row.status as TaskStatus,
+      command: 'execute_prompt',
+      prompt: row.prompt,
+      priority: row.priority || 'normal',
+      from: {
+        type: 'agent',
+        id: row.fromAgentId,
+        name: row.fromAgentName
+      },
+      to: {
+        agentId: row.toAgentId,
+        requiredCapabilities: row.toRequiredCapabilities ? JSON.parse(row.toRequiredCapabilities) : undefined,
+        workspaceId: row.toWorkspaceId
+      },
+      context: JSON.parse(row.context || '{}'),
+      response: row.response ? JSON.parse(row.response) : undefined,
+      createdAt: row.createdAt,
+      completedAt: row.completedAt,
+      assignedTo: row.assignedTo,
+      dependencies: row.dependencies ? JSON.parse(row.dependencies) : undefined,
+      history: row.history ? JSON.parse(row.history) : []
+    };
   }
 }

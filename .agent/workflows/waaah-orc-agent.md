@@ -1,6 +1,6 @@
 ---
 name: waaah-orc
-description: Orchestrator agent lifecycle - plan/build/verify/merge
+description: Orchestrator - plan/build/verify/merge loop
 ---
 
 # WAAAH Orchestrator
@@ -41,9 +41,15 @@ description: Orchestrator agent lifecycle - plan/build/verify/merge
 ## STARTUP
 
 ```
-NAME = pick([curious,speedy,clever,jolly,nimble]) + " " + 
-       pick([otter,panda,fox,owl,penguin]) + " " + random(10-99)
-register_agent({ displayName: NAME, role: "orchestrator" })
+mkdir -p .waaah/orc
+IF exists .waaah/orc/agent.json:
+  AGENT_ID = load(.waaah/orc/agent.json).id
+  register_agent({ id: AGENT_ID })  # Re-register with SAME id
+ELSE:
+  NAME = pick([curious,speedy,clever,jolly,nimble]) + " " + 
+         pick([otter,panda,fox,owl,penguin]) + " " + random(10-99)
+  AGENT_ID = register_agent({ displayName: NAME, role: "orchestrator" })
+  save(.waaah/orc/agent.json, { id: AGENT_ID, name: NAME })
 → LOOP
 ```
 
@@ -54,30 +60,20 @@ FOREVER:
   result = wait_for_prompt(290s)
   IF timeout → continue
   IF evict → exit
-  IF task:
-    ack_task()
-    ctx = get_task_context()
-    ROUTE(ctx.status)
+  IF task: ack_task(); ctx = get_task_context(); ROUTE(ctx.status)
 ```
 
 ## PHASE 1: PLAN
 
 ```
 IF ctx.spec → use it
-ELSE → generate:
-  # Task: [title]
-  ## Criteria
-  - [ ] [Testable]
-  ## Steps
-  1. [Step]
-
+ELSE → generate: Task + Criteria (testable) + Steps
 update_progress(phase="PLANNING", 20%)
 → PHASE 2
 ```
 
 ## PHASE 2: BUILD
 
-### Setup
 ```bash
 git worktree add .worktrees/feature-$TASK_ID -b feature-$TASK_ID
 cd .worktrees/feature-$TASK_ID && pnpm install
@@ -85,10 +81,7 @@ cd .worktrees/feature-$TASK_ID && pnpm install
 
 ### TDD Loop
 ```
-FOR criterion:
-  1. Write failing test
-  2. Implement → pass
-  3. update_progress()
+FOR criterion: 1. Write failing test  2. Implement → pass  3. update_progress()
 ```
 
 ### Block Conditions
@@ -98,19 +91,20 @@ FOR criterion:
 | Security | `decision` |
 | 10+ failures | `dependency` |
 
-### Quality Gates (ALL 10/10)
+### Quality Gates
 ```
 pnpm test --coverage  # ≥90%
-pnpm typecheck
-pnpm lint
+pnpm typecheck && pnpm lint
 ```
 
 ### Submit
+```
+## Summary: [1-2 sentences]
+## Changes: [file]: [what]
+## Testing: [x] Tests pass  [x] Manual: [what checked]
+```
 ```bash
 git add -A && git commit -m "feat(scope): desc" && git push
-DIFF=$(git diff main...HEAD)
-```
-```
 send_response({ status: "IN_REVIEW", artifacts: { branch, diff } })
 → LOOP
 ```
@@ -128,11 +122,10 @@ git branch -D $BRANCH && git push origin --delete $BRANCH
 
 ## SMOKE GATE
 
-**Before COMPLETED:**
 ```
 1. IF ctx.verify → RUN verify; fail → fix
 2. GRUMPY: "Can stranger run [cmd] and see [output]?" No → not done
 3. STUB: grep "TODO|Not implemented" [files]; found → not done
 4. Pass all → send_response(COMPLETED)
-```
 → LOOP
+```
