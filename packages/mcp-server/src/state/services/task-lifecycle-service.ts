@@ -113,4 +113,35 @@ export class TaskLifecycleService {
     console.log(`[Lifecycle] Task ${taskId} force-retried by admin`);
     return { success: true };
   }
+
+  ackTask(taskId: string, agentId: string): { success: boolean; error?: string } {
+    const task = this.repo.getById(taskId);
+
+    if (!task) {
+      return { success: false, error: 'Task not found' };
+    }
+
+    if (task.status !== 'PENDING_ACK') {
+      return { success: false, error: 'Task is not in PENDING_ACK state' };
+    }
+
+    const pendingAck = this.persistence.getPendingAck(taskId);
+    if (!pendingAck || pendingAck.agentId !== agentId) {
+      return { success: false, error: `ACK failed: Expected agent ${pendingAck?.agentId} but got ${agentId}` };
+    }
+
+    // Success: Transition to ASSIGNED
+    task.assignedTo = agentId;
+    task.to.agentId = agentId; // Update target agent explicitly
+    this.repo.update(task); // Persist assignment first
+    
+    // Clear pending ACK flags
+    this.persistence.clearPendingAck(taskId);
+    
+    // Update status using updateStatus to handle history/logging
+    this.updateStatus(taskId, 'ASSIGNED');
+
+    console.log(`[Lifecycle] Task ${taskId} ACKed by ${agentId}, now ASSIGNED`);
+    return { success: true };
+  }
 }
