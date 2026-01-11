@@ -24,7 +24,7 @@ export function FileNavigator({
   };
 
   return (
-    <div className="absolute right-2 top-2 z-50">
+    <div className="sticky top-0 right-0 z-50 float-right mr-2 mt-2">
       {!isOpen ? (
         <Button
           variant="default"
