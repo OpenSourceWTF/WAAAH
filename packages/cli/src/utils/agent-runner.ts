@@ -43,18 +43,25 @@ export class AgentRunner {
         : `Follow the /${this.workflow} workflow exactly.`;
       args = ['-i', prompt, '--yolo', '--output-format', 'text'];
     } else if (this.cli === 'claude') {
-      // Claude: uses --resume or prompt
+      // Claude: uses --resume for resume, or positional prompt for new session
+      // NOTE: -p flag is "print mode" (non-interactive) - DO NOT use for interactive agents
       const configPath = getConfigPath('claude');
 
-      const promptArgs = this.resume
-        ? ['--resume']
-        : ['-p', `Follow the /${this.workflow} workflow exactly.`];
-
-      args = [
-        ...promptArgs,
-        '--dangerously-skip-permissions',
-        '--mcp-config', configPath
-      ];
+      if (this.resume) {
+        args = [
+          '--resume',
+          '--dangerously-skip-permissions',
+          '--mcp-config', configPath
+        ];
+      } else {
+        // Pass prompt as positional argument for interactive mode
+        const prompt = `Follow the /${this.workflow} workflow exactly.`;
+        args = [
+          '--dangerously-skip-permissions',
+          '--mcp-config', configPath,
+          prompt  // Positional prompt - starts interactive session with this prompt
+        ];
+      }
     }
 
     console.log(`\n🚀 Spawning ${this.cli}...`);
