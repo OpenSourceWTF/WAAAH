@@ -8,42 +8,40 @@
 
 ---
 
-## Iteration 0: PLAN (v2)
+## Iteration 0: PLAN
 
 ### Root Cause
-Agent workflows persist displayName between sessions, causing collisions when restarted.
+Agent workflows persisted displayName between sessions, causing collisions when restarted.
 
 ### Fix
 **Remove name persistence entirely.** Each startup = fresh server-assigned name.
 
-### Changes
+---
 
-#### [MODIFY] waaah-orc-agent.md (lines 43-53)
+## Iteration 1: EXECUTE
 
-Before:
-```
-IF exists .waaah/orc/agent.json:
-  AGENT_ID = load(.waaah/orc/agent.json).id
-  register_agent({ id: AGENT_ID })
-ELSE:
-  NAME = pick([...])
-  AGENT_ID = register_agent({ displayName: NAME, ... })
-  save(.waaah/orc/agent.json, { id: AGENT_ID, name: NAME })
-```
+### Changes Made
 
-After:
-```
-NAME = pick([curious,speedy,clever,jolly,nimble]) + " " +
-       pick([otter,panda,fox,owl,penguin]) + " " + random(10-99)
-result = register_agent({ displayName: NAME, role: "orchestrator" })
-AGENT_ID = result.agentId
-# No persistence — fresh name each startup
-```
+#### [waaah-orc-agent.md](file:///home/dtai/projects/WAAAH/.agent/workflows/waaah-orc-agent.md)
+- Removed `IF exists .waaah/orc/agent.json` persistence check
+- Each startup generates fresh name and calls `register_agent()`
+- Uses `result.agentId` from server response
 
-#### [MODIFY] waaah-doctor-agent.md
+#### [waaah-doctor-agent.md](file:///home/dtai/projects/WAAAH/.agent/workflows/waaah-doctor-agent.md)
+- Same pattern — removed persistence logic
 
-Same pattern — remove persistence logic.
+### Scores
+
+| Criterion | Score | Notes |
+|-----------|-------|-------|
+| clarity | 10 | Simple fix, clear rationale |
+| completeness | 10 | Both workflow files updated |
+| correctness | 10 | No persistence = no collision |
 
 ---
 
-*(Proceeding to EXECUTE)*
+## ✅ COMPLETE
+
+**Summary:** Removed displayName persistence from agent workflows. Each agent startup now generates a fresh name, eliminating naming collisions.
+
+**Commit:** `5b3f74e` - fix(agents): remove displayName persistence to prevent collisions
