@@ -107,5 +107,44 @@ export function createAgentRoutes({ registry, queue }: AgentRoutesConfig): Route
     res.json(workspaces);
   });
 
+  /**
+   * GET /workspaces/:workspaceId/capabilities
+   * Get aggregated capabilities for agents in a specific workspace
+   */
+  router.get('/workspaces/:workspaceId/capabilities', (req, res) => {
+    const { workspaceId } = req.params;
+    const decodedPath = decodeURIComponent(workspaceId);
+
+    const agents = registry.getAll();
+
+    // Find agents in this workspace
+    const workspaceAgents = agents.filter(agent =>
+      (agent as any).workspaceRoot === decodedPath ||
+      (agent as any).metadata?.workspaceRoot === decodedPath
+    );
+
+    if (workspaceAgents.length === 0) {
+      res.status(404).json({ error: 'No agents found in workspace' });
+      return;
+    }
+
+    // Aggregate capabilities from all agents in workspace
+    const capabilitySet = new Set<string>();
+    for (const agent of workspaceAgents) {
+      const caps = agent.capabilities || [];
+      for (const cap of caps) {
+        capabilitySet.add(cap);
+      }
+    }
+
+    const capabilities = Array.from(capabilitySet);
+
+    res.json({
+      capabilities,
+      hasSpecWriting: capabilities.includes('spec-writing') || capabilities.includes('doc-writing'),
+      hasCodeWriting: capabilities.includes('code-writing')
+    });
+  });
+
   return router;
 }
