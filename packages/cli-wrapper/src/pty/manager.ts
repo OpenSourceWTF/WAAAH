@@ -97,16 +97,19 @@ export class PTYManager {
       this.childPid = this.ptyProcess.pid;
 
       this.ptyProcess.onData((data) => {
+        this.lastDataTimestamp = Date.now();
         const output = this.sanitizeOutput ? sanitizeTuiOutput(data) : data;
         this.dataCallbacks.forEach(cb => { try { cb(output); } catch { } });
       });
 
       this.ptyProcess.onExit(({ exitCode, signal }) => {
+        this.stopHeartbeat();
         this.running = false;
         this.childPid = null;
         this.exitCallbacks.forEach(cb => { try { cb(exitCode, signal); } catch { } });
       });
 
+      this.startHeartbeat();
       return true;
     } catch (err) {
       console.warn('[PTYManager] node-pty spawn failed, falling back:', err);
@@ -147,6 +150,7 @@ export class PTYManager {
     this.childPid = this.childProcess.pid ?? null;
 
     const handleData = (data: Buffer) => {
+      this.lastDataTimestamp = Date.now();
       const str = data.toString();
       const output = this.sanitizeOutput ? sanitizeTuiOutput(str) : str;
       this.dataCallbacks.forEach(cb => { try { cb(output); } catch { } });
@@ -156,19 +160,40 @@ export class PTYManager {
     this.childProcess.stderr?.on('data', handleData);
 
     this.childProcess.on('exit', (code, signal) => {
+      this.stopHeartbeat();
       this.running = false;
       this.childPid = null;
       this.exitCallbacks.forEach(cb => { try { cb(code ?? 1, signal ? 0 : undefined); } catch { } });
     });
 
     this.childProcess.on('error', (err) => {
+      this.stopHeartbeat();
       this.running = false;
       this.childPid = null;
       console.error('[PTYManager] Spawn error:', err.message);
       this.exitCallbacks.forEach(cb => { try { cb(1); } catch { } });
     });
+
+    this.startHeartbeat();
   }
 
+  private startHeartbeat(): void {
+    this.lastDataTimestamp = Date.now();
+    this.heartbeatInterval = setInterval(() => {
+      const inactiveMs = Date.now() - this.lastDataTimestamp;
+      if (inactiveMs > 300000) { // 5 minutes of silence
+        console.warn('[PTYManager] Heartbeat timeout: No data for 5 minutes');
+        // We don't kill automatically, but we could emit an event or log it
+      }
+    }, 60000);
+  }
+
+  private stopHeartbeat(): void {
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = null;
+    }
+  }
 
   public write(data: string): void {
     if (this.useNativePty && this.ptyProcess) {
@@ -193,6 +218,7 @@ export class PTYManager {
   }
 
   public kill(signal: NodeJS.Signals = 'SIGTERM'): void {
+    this.stopHeartbeat();
     // Kill entire process group to prevent orphans
     if (this.childPid) {
       try {

@@ -286,6 +286,10 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
 
   // ===== Agent Matching & Polling (Delegated) =====
 
+  findAndReserveAgent(task: Task): string | null {
+    return this.matchingService.reserveAgentForTask(task);
+  }
+
   async waitForTask(
     agentId: string,
     capabilities: StandardCapability[],

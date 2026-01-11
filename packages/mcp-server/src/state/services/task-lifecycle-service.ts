@@ -113,4 +113,49 @@ export class TaskLifecycleService {
     console.log(`[Lifecycle] Task ${taskId} force-retried by admin`);
     return { success: true };
   }
+
+  ackTask(taskId: string, agentId: string, pendingAckAgentId: string): { success: boolean; error?: string } {
+    if (pendingAckAgentId !== agentId) {
+      return { success: false, error: `Task was sent to ${pendingAckAgentId}, not ${agentId}` };
+    }
+
+    const task = this.repo.getById(taskId);
+    if (!task) return { success: false, error: 'Task not found' };
+
+    task.assignedTo = agentId;
+    task.status = 'ASSIGNED';
+
+    if (!task.history) task.history = [];
+    task.history.push({
+      timestamp: Date.now(),
+      status: 'ASSIGNED',
+      agentId: agentId,
+      message: `Task assigned to ${agentId}`
+    });
+
+    this.repo.update(task);
+    this.persistence.clearPendingAck(taskId);
+    console.log(`[Lifecycle] Task ${taskId} ACKed by ${agentId}, now ASSIGNED`);
+
+    return { success: true };
+  }
+
+  resetStaleState(): void {
+    try {
+      // Reset PENDING_ACK tasks to QUEUED
+      const stale = this.repo.getByStatus('PENDING_ACK');
+      for (const task of stale) {
+        console.log(`[Lifecycle] Resetting PENDING_ACK task ${task.id} to QUEUED on startup`);
+        this.repo.updateStatus(task.id, 'QUEUED');
+        this.persistence.clearPendingAck(task.id);
+      }
+
+      // Clear all waiting agents
+      this.persistence.resetWaitingAgents();
+
+      console.log(`[Lifecycle] Loaded ${this.repo.getActive().length} active tasks from DB`);
+    } catch {
+      console.log('[Lifecycle] Database not ready, skipping stale state reset');
+    }
+  }
 }
