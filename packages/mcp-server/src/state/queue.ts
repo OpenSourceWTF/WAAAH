@@ -33,6 +33,7 @@ import { AgentMatchingService } from './services/agent-matching-service.js';
 import { MessageService } from './services/message-service.js';
 import { PollingService } from './services/polling-service.js';
 import { TaskLifecycleService } from './services/task-lifecycle-service.js';
+import { emitTaskCreated, emitTaskUpdated } from './eventbus.js';
 
 /**
  * Primary queue management component.
@@ -128,6 +129,8 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
         : `No waiting agents: ${task.id}. Task remains QUEUED.`;
       console.log(`[Queue] ${status}`);
       reservedAgentId && this.emit('task', task, reservedAgentId);
+      // Emit WebSocket event for real-time updates
+      emitTaskCreated(task);
     } catch (e: any) {
       console.error(`[Queue] Failed to persist task ${task.id}: ${e.message}`);
     }
@@ -140,6 +143,10 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
     const task = this.stateService.updateStatus(taskId, status, response);
     const isTerminal = task && ['COMPLETED', 'FAILED', 'BLOCKED'].includes(status);
     isTerminal && (this.emit('completion', task), console.log(`[Queue] Emitted completion: ${taskId} (${status})`));
+    // Emit WebSocket event for real-time updates
+    if (task) {
+      emitTaskUpdated(taskId, { status, response });
+    }
   }
 
   /**

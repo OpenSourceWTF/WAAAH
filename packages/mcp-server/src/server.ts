@@ -18,6 +18,7 @@ import { createToolRouter } from './routes/toolRouter.js';
 import { startCleanupInterval } from './lifecycle/cleanup.js';
 import { getOrCreateApiKey } from './utils/auth.js';
 import { applySocketAuth } from './mcp/socket-auth.js';
+import { initEventBus, emitSyncFull } from './state/eventbus.js';
 
 dotenv.config();
 
@@ -37,6 +38,9 @@ const io = new SocketIOServer(httpServer, {
 // Apply Socket.io authentication
 applySocketAuth(io);
 
+// Initialize EventBus for real-time updates
+initEventBus(io);
+
 // Create production context with all dependencies
 const ctx = createProductionContext();
 initEventLog(ctx.db);
@@ -44,6 +48,20 @@ initEventLog(ctx.db);
 // Use services from context
 const { registry, queue } = ctx;
 queue.startScheduler();
+
+// Handle socket connections - send sync:full on connect
+io.on('connection', (socket) => {
+  console.log(`[Socket] Client connected: ${socket.id}`);
+
+  // Send initial state
+  const tasks = queue.getAll();
+  const agents = registry.getAll();
+  emitSyncFull(socket.id, { tasks, agents });
+
+  socket.on('disconnect', () => {
+    console.log(`[Socket] Client disconnected: ${socket.id}`);
+  });
+});
 
 const tools = new ToolHandler(registry, queue);
 
