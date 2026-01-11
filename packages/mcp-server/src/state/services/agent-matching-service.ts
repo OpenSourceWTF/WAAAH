@@ -5,7 +5,7 @@ import {
 } from '@opensourcewtf/waaah-types';
 import { QueuePersistence } from '../persistence/queue-persistence.js';
 import { ITaskRepository } from '../persistence/task-repository.js';
-import { isTaskForAgent } from '../agent-matcher.js';
+import { isTaskForAgent, findBestAgent, WaitingAgent } from '../agent-matcher.js';
 import { areDependenciesMet } from './task-lifecycle-service.js';
 
 export class AgentMatchingService {
@@ -54,48 +54,45 @@ export class AgentMatchingService {
 
   /**
    * Finds and reserves a matching waiting agent for a task.
-   * Uses database-backed waiting agents state.
+   * Uses scored matching (workspace affinity + capability match + agent hint).
    * Returns the agentId if reserved, null otherwise.
    */
   reserveAgentForTask(task: Task): string | null {
-    const waitingAgents = this.persistence.getWaitingAgents();
-    if (waitingAgents.size === 0) return null;
+    const waitingAgentsMap = this.persistence.getWaitingAgents();
+    if (waitingAgentsMap.size === 0) return null;
 
-    // Shuffle agents for fairness
-    const waitingList = Array.from(waitingAgents.entries());
-    const shuffled = waitingList
-      .map(value => ({ value, sort: Math.random() }))
-      .sort((a, b) => a.sort - b.sort)
-      .map(({ value }) => value);
+    // Convert to WaitingAgent[] format for findBestAgent
+    const waitingAgents: WaitingAgent[] = Array.from(waitingAgentsMap.entries()).map(([agentId, capabilities]) => ({
+      agentId,
+      capabilities: capabilities || [],
+      waitingSince: Date.now() // TODO: Track actual wait start time in persistence
+    }));
 
-    for (const [agentId, capabilities] of shuffled) {
-      const capsArray = capabilities || [];
-      // console.log(`[AgentMatching] Checking ${agentId} with capabilities=[${capsArray.join(',')}] against task.to.requiredCapabilities=[${task.to.requiredCapabilities?.join(',') || 'any'}]`);
-
-      if (isTaskForAgent(task, agentId, capabilities)) {
-        // Atomic reservation
-        // We perform the updates directly here to ensure atomicity logic is encapsulated
-
-        // 1. Update status
-        task.status = 'PENDING_ACK';
-        if (!task.history) task.history = [];
-        task.history.push({
-          timestamp: Date.now(),
-          status: 'PENDING_ACK',
-          agentId: undefined,
-          message: `Reserved for agent ${agentId}`
-        });
-        this.repo.update(task);
-
-        // 2. Set pending ACK
-        this.persistence.setPendingAck(task.id, agentId);
-
-        // 3. Clear waiting state
-        this.persistence.clearAgentWaiting(agentId);
-
-        return agentId;
-      }
+    // Use scored matching instead of random shuffle
+    const bestAgent = findBestAgent(task, waitingAgents);
+    if (!bestAgent) {
+      console.log(`[AgentMatching] No eligible agent for task ${task.id}`);
+      return null;
     }
-    return null;
+
+    // Atomic reservation
+    // 1. Update status
+    task.status = 'PENDING_ACK';
+    if (!task.history) task.history = [];
+    task.history.push({
+      timestamp: Date.now(),
+      status: 'PENDING_ACK',
+      agentId: undefined,
+      message: `Reserved for agent ${bestAgent.agentId} (scored match)`
+    });
+    this.repo.update(task);
+
+    // 2. Set pending ACK
+    this.persistence.setPendingAck(task.id, bestAgent.agentId);
+
+    // 3. Clear waiting state
+    this.persistence.clearAgentWaiting(bestAgent.agentId);
+
+    return bestAgent.agentId;
   }
 }
