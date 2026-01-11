@@ -1,12 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Badge } from "@/components/ui/badge";
-import { MessageSquare, ChevronDown, ChevronRight } from "lucide-react";
 import { parseDiff, getFileStats } from '@/utils/diffParser';
 import type { DiffFile, ReviewComment } from '@/utils/diffParser';
 import { FileNavigator } from './diff/FileNavigator';
-import { DiffLine } from './diff/DiffLine';
-import { CommentThread } from './diff/CommentThread';
-import { CommentInput } from './diff/CommentInput';
+import { DiffFileBlock } from './diff/DiffFileBlock';
 import { apiFetch } from '@/lib/api';
 
 interface DiffViewerProps {
@@ -29,9 +26,7 @@ export function DiffViewer({ taskId, onAddComment }: DiffViewerProps) {
   const fetchComments = useCallback(async () => {
     try {
       const res = await apiFetch(`/admin/tasks/${taskId}/review-comments`);
-      if (res.ok) {
-        setComments(await res.json());
-      }
+      if (res.ok) setComments(await res.json());
     } catch (e) {
       console.error('Failed to fetch comments', e);
     }
@@ -41,7 +36,6 @@ export function DiffViewer({ taskId, onAddComment }: DiffViewerProps) {
     try {
       setLoading(true);
       const res = await apiFetch(`/admin/tasks/${taskId}/diff`);
-
       if (res.ok) {
         const data = await res.json();
         const parsed = parseDiff(data.diff || '');
@@ -64,36 +58,34 @@ export function DiffViewer({ taskId, onAddComment }: DiffViewerProps) {
     }
   }, [fetchDiff, fetchComments]);
 
-  const handleAddComment = async () => {
+  const handleAddComment = useCallback(async () => {
     if (!commentingLine || !newComment.trim()) return;
     onAddComment(commentingLine.file, commentingLine.line, newComment.trim());
     setNewComment('');
     setCommentingLine(null);
     setTimeout(fetchComments, 500);
-  };
+  }, [commentingLine, newComment, onAddComment, fetchComments]);
 
-  const toggleFile = (path: string) => {
+  const toggleFile = useCallback((path: string) => {
     setExpandedFiles(prev => {
       const next = new Set(prev);
-      if (next.has(path)) next.delete(path);
-      else next.add(path);
+      next.has(path) ? next.delete(path) : next.add(path);
       return next;
     });
-  };
+  }, []);
 
-  const jumpToFile = (path: string) => {
+  const jumpToFile = useCallback((path: string) => {
     setExpandedFiles(prev => new Set([...prev, path]));
     setTimeout(() => {
       const el = fileRefs.current.get(path);
       if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 50);
-  };
+  }, []);
 
-  const getCommentsForLine = (filePath: string, lineNumber: number | null) => {
-    return comments.filter(c => c.filePath === filePath && c.lineNumber === lineNumber && !c.threadId);
-  };
-
-  const getReplies = (commentId: string) => comments.filter(c => c.threadId === commentId);
+  const cancelComment = useCallback(() => {
+    setCommentingLine(null);
+    setNewComment('');
+  }, []);
 
   const unresolvedCount = comments.filter(c => !c.resolved && !c.threadId).length;
   const fileStats = useMemo(() => getFileStats(files), [files]);
@@ -129,52 +121,20 @@ export function DiffViewer({ taskId, onAddComment }: DiffViewerProps) {
 
       {/* Files */}
       {files.map(file => (
-        <div key={file.path} className="border border-primary/30 bg-black/20" ref={el => { if (el) fileRefs.current.set(file.path, el); }}>
-          {/* File header */}
-          <div className="flex items-center gap-2 p-2 bg-primary/10 border-b border-primary/20 cursor-pointer hover:bg-primary/20" onClick={() => toggleFile(file.path)}>
-            {expandedFiles.has(file.path) ? <ChevronDown className="h-4 w-4 text-primary" /> : <ChevronRight className="h-4 w-4 text-primary" />}
-            <span className="font-mono text-sm text-primary">{file.path}</span>
-            {getCommentsForLine(file.path, null).length > 0 && (
-              <Badge variant="outline" className="text-xs"><MessageSquare className="h-3 w-3 mr-1" />{getCommentsForLine(file.path, null).length}</Badge>
-            )}
-          </div>
-
-          {/* Lines */}
-          {expandedFiles.has(file.path) && (
-            <div className="text-xs overflow-x-auto normal-case" style={{ fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", monospace' }}>
-              {file.lines.map((line, idx) => {
-                const lineNum = line.lineNumber?.new || line.lineNumber?.old;
-                const lineComments = lineNum ? getCommentsForLine(file.path, lineNum) : [];
-                const isCommenting = commentingLine?.file === file.path && commentingLine?.line === lineNum;
-
-                return (
-                  <React.Fragment key={idx}>
-                    <DiffLine
-                      line={line}
-                      lineNum={lineNum}
-                      lineComments={lineComments}
-                      filePath={file.path}
-                      onStartComment={(f, l) => setCommentingLine({ file: f, line: l })}
-                    />
-
-                    {lineComments.map(comment => (
-                      <CommentThread key={comment.id} comment={comment} replies={getReplies(comment.id)} />
-                    ))}
-
-                    {isCommenting && (
-                      <CommentInput
-                        value={newComment}
-                        onChange={setNewComment}
-                        onSubmit={handleAddComment}
-                        onCancel={() => { setCommentingLine(null); setNewComment(''); }}
-                      />
-                    )}
-                  </React.Fragment>
-                );
-              })}
-            </div>
-          )}
-        </div>
+        <DiffFileBlock
+          key={file.path}
+          file={file}
+          isExpanded={expandedFiles.has(file.path)}
+          comments={comments}
+          commentingLine={commentingLine}
+          newComment={newComment}
+          onToggle={() => toggleFile(file.path)}
+          onSetRef={(el) => { if (el) fileRefs.current.set(file.path, el); }}
+          onStartComment={(f, l) => setCommentingLine({ file: f, line: l })}
+          onChangeComment={setNewComment}
+          onSubmitComment={handleAddComment}
+          onCancelComment={cancelComment}
+        />
       ))}
     </div>
   );

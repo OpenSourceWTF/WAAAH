@@ -5,18 +5,15 @@ import { Skull, Sun, Moon, Search } from "lucide-react";
 import { KanbanBoard } from './KanbanBoard';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useTaskData, useAgentData } from './hooks';
+import { useTaskActions } from './hooks/useTaskActions';
+import { useAgentActions, getStatusBadgeClass } from './hooks/useAgentActions';
 import { AgentSidebar } from './components/dashboard/AgentSidebar';
-import { apiFetch } from './lib/api';
-
-
 
 export function Dashboard() {
   const { theme, setTheme, t } = useTheme();
-
-  // Search state for server-side filtering
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Use custom hooks for data fetching with deduplication (prevents animation interruption)
+  // Data hooks
   const {
     activeTasks,
     recentCompleted,
@@ -24,7 +21,6 @@ export function Dashboard() {
     stats,
     connected,
     refetch: refetchTasks,
-    // Infinite scroll controls
     loadMoreCompleted,
     loadMoreCancelled,
     hasMoreCompleted,
@@ -32,137 +28,29 @@ export function Dashboard() {
     loadingMore
   } = useTaskData({ pollInterval: 2000, search: searchQuery });
 
-  const {
-    agents,
-    getRelativeTime,
-    refetch: refetchAgents
-  } = useAgentData({ pollInterval: 2000 });
+  const { agents, getRelativeTime, refetch: refetchAgents } = useAgentData({ pollInterval: 2000 });
 
-  // Combined refetch for backward compatibility with fetchData calls
+  // Combined refetch
   const fetchData = useCallback(() => {
     refetchTasks();
     refetchAgents();
   }, [refetchTasks, refetchAgents]);
 
-  // Task Actions - wrapped with useCallback for stable references
-  const handleCancelTask = useCallback(async (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
-    try {
-      await apiFetch(`/admin/tasks/${id}/cancel`, { method: 'POST' });
-      fetchData(); // Refresh immediately
-    } catch (error) {
-      console.error("Failed to cancel task", error);
-    }
-  }, []);
+  // Action hooks - extracted to reduce complexity
+  const {
+    handleCancelTask,
+    handleRetryTask,
+    handleApproveTask,
+    handleRejectTask,
+    handleSendComment,
+    handleAddReviewComment
+  } = useTaskActions(fetchData);
 
-  const handleRetryTask = useCallback(async (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
-    try {
-      await apiFetch(`/admin/tasks/${id}/retry`, { method: 'POST' });
-      fetchData(); // Refresh immediately
-    } catch (error) {
-      console.error("Failed to retry task", error);
-    }
-  }, []);
-
-  const handleEvictAgent = useCallback(async (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
-    if (!window.confirm(`Are you sure you want to SHUTDOWN agent ${id}?`)) return;
-
-    try {
-      await apiFetch('/admin/evict', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ agentId: id, reason: 'Admin Shutdown via Dashboard', action: 'SHUTDOWN' })
-      });
-      fetchData();
-    } catch (error) {
-      console.error("Failed to evict agent", error);
-    }
-  }, []);
-
-  const handleApproveTask = useCallback(async (e: React.MouseEvent, taskId: string) => {
-    e.stopPropagation();
-    try {
-      const res = await apiFetch(`/admin/tasks/${taskId}/approve`, { method: 'POST' });
-      if (!res.ok) throw new Error('Failed to approve');
-      console.log(`Task ${taskId} approved`);
-      fetchData(); // Refresh immediately
-    } catch (error) {
-      console.error("Failed to approve task", error);
-    }
-  }, []);
-
-  const handleRejectTask = useCallback(async (taskId: string, feedback: string) => {
-    try {
-      const res = await apiFetch(`/admin/tasks/${taskId}/reject`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ feedback })
-      });
-      if (!res.ok) throw new Error('Failed to reject');
-      console.log(`Task ${taskId} rejected with feedback: ${feedback}`);
-      fetchData(); // Refresh immediately
-    } catch (error) {
-      console.error("Failed to reject task", error);
-    }
-  }, []);
-
-  const handleSendComment = useCallback(async (taskId: string, content: string, replyTo?: string, images?: { dataUrl: string; mimeType: string; name: string }[]) => {
-    try {
-      const res = await apiFetch(`/admin/tasks/${taskId}/comments`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content, replyTo, images })
-      });
-      if (!res.ok) throw new Error('Failed to send comment');
-      console.log(`Comment sent to task ${taskId}${replyTo ? ` (reply to ${replyTo})` : ''}${images?.length ? ` with ${images.length} images` : ''}`);
-      fetchData(); // Refresh to show new comment
-    } catch (error) {
-      console.error("Failed to send comment", error);
-    }
-  }, [fetchData]);
-
-  const handleAddReviewComment = useCallback(async (taskId: string, filePath: string, lineNumber: number | null, content: string) => {
-    try {
-      const res = await apiFetch(`/admin/tasks/${taskId}/review-comments`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filePath, lineNumber, content })
-      });
-      if (!res.ok) throw new Error('Failed to add review comment');
-      console.log(`Review comment added to ${filePath}:${lineNumber || 'file'}`);
-      fetchData(); // Refresh to show new comment
-    } catch (error) {
-      console.error("Failed to add review comment", error);
-    }
-  }, []);
-
-  // Helper for status badge style -- CUSTOM COLORS (memoized)
-  const getStatusBadgeClass = useCallback((status: string) => {
-    const base = "text-xs font-bold px-2 py-1 border border-black";
-    switch (status) {
-      case 'COMPLETED': return `${base} bg-green-600 text-white border-green-800`;
-      case 'FAILED':
-      case 'CANCELLED': return `${base} bg-red-600 text-white border-red-800`;
-      case 'ASSIGNED':
-      case 'IN_PROGRESS':
-      case 'PROCESSING': return `${base} bg-blue-600 text-white border-blue-800`;
-      case 'QUEUED':
-      case 'PENDING_ACK':
-      case 'WAITING': return `${base} bg-yellow-500 text-black border-yellow-700`;
-      case 'BLOCKED':
-      case 'PENDING':
-      case 'PENDING_RES':
-      case 'REVIEW':
-      case 'IN_REVIEW': return `${base} bg-white text-black border-gray-400`;
-      default: return `${base} bg-gray-600 text-white`;
-    }
-  }, []);
+  const { handleEvictAgent } = useAgentActions(fetchData);
 
   return (
     <div className="flex flex-col h-screen bg-background text-primary uppercase font-mono tracking-wider">
-      {/* 1. Header (Sticky Top) */}
+      {/* Header */}
       <header className="flex-none flex items-center justify-between px-8 py-6 border-b-2 border-primary bg-background z-10 sticky top-0 shadow-[0_0_15px_hsl(var(--glow)/0.3)]">
         <div className="flex items-center gap-4">
           <div className="bg-primary text-primary-foreground p-2 font-bold text-2xl animate-pulse">
@@ -170,12 +58,11 @@ export function Dashboard() {
           </div>
           <div>
             <h1 className="text-3xl font-black tracking-widest text-shadow-neon text-foreground">{t('APP_TITLE')}</h1>
-
             <p className="text-xs text-primary/70">{t('APP_SUBTITLE')}</p>
           </div>
         </div>
 
-        {/* Stats moved to Header */}
+        {/* Stats */}
         <div className="flex items-center gap-8 mx-4">
           <div>
             <span className="text-primary/70 text-xs font-bold mr-2 uppercase">{t('AGENTS_TITLE')}:</span>
@@ -191,7 +78,7 @@ export function Dashboard() {
           </div>
         </div>
 
-        {/* Search Input - flex-1 to fill available space */}
+        {/* Search */}
         <div className="flex-1 flex items-center justify-center max-w-md">
           <div className="relative w-full">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-primary/50" />
@@ -223,17 +110,12 @@ export function Dashboard() {
             <span className={`inline-block h-2 w-2 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500'} ${connected ? 'animate-pulse' : ''}`}></span>
             {connected ? 'CONNECTED' : 'DISCONNECTED'}
           </Badge>
-
         </div>
       </header>
 
-      {/* 2. Main Content Area (Flex Row) */}
+      {/* Main Content */}
       <div className="flex-1 flex overflow-hidden min-w-0">
-
-        {/* Left: Main Tabs Area (Scrollable within tabs) */}
         <div className="flex-1 overflow-hidden p-4 flex flex-col bg-background min-w-0">
-
-          {/* KanbanBoard - Primary View (tabs removed) */}
           <div className="flex-1 min-h-0 overflow-hidden pt-4">
             <KanbanBoard
               tasks={activeTasks}
@@ -254,7 +136,6 @@ export function Dashboard() {
           </div>
         </div>
 
-        {/* Right: Agent Sidebar */}
         <AgentSidebar
           agents={agents}
           getRelativeTime={getRelativeTime}
@@ -262,10 +143,7 @@ export function Dashboard() {
           onEvictAgent={handleEvictAgent}
           t={t}
         />
-
       </div>
-
-      {/* Task expansion is now handled by KanbanBoard component */}
     </div>
   );
 }
