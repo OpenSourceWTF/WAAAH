@@ -16,6 +16,7 @@
 
 import type { Task, TaskStatus, StandardCapability, AgentIdentity } from '@opensourcewtf/waaah-types';
 import type { TypedEventEmitter } from './queue-events.js';
+import { areDependenciesMet } from './services/task-lifecycle-service.js';
 
 // ===== Configuration =====
 
@@ -263,18 +264,8 @@ export function findPendingTaskForAgent(
 
   // Filter out tasks with unsatisfied dependencies
   const eligibleCandidates = candidates.filter(task => {
-    if (!task.dependencies || task.dependencies.length === 0) {
-      return true; // No dependencies - eligible
-    }
-    // Check all dependencies are COMPLETED
-    const allMet = task.dependencies.every(depId => {
-      const dep = getTask ? getTask(depId) : undefined;
-      return dep && dep.status === 'COMPLETED';
-    });
-    if (!allMet) {
-      console.log(`[Matcher] Skipping task ${task.id} - dependencies not satisfied`);
-    }
-    return allMet;
+    if (!getTask) return true; // No getTask fn, can't check deps
+    return areDependenciesMet(task, getTask);
   });
 
   // Sort by: 1) Agent affinity (previously assigned to this agent), 2) Priority, 3) Age

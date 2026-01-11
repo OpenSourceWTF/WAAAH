@@ -95,14 +95,19 @@ export abstract class BaseAgent {
     const maxRestarts = this.getMaxRestarts();
     let exitCode = await this.runOnce();
 
-    while (maxRestarts === Infinity || this.restartCount < maxRestarts) {
+    // Only restart if the agent crashed (non-zero exit) AND we have restarts remaining
+    while (exitCode !== 0 && (maxRestarts === Infinity || this.restartCount < maxRestarts)) {
       this.restartCount++;
-      console.log(`\n🔄 Restarting agent (attempt ${this.restartCount})...`);
-      await this.delay(1000);
+      console.log(`\n🔄 Agent crashed with code ${exitCode}. Restarting (attempt ${this.restartCount}/${maxRestarts === Infinity ? '∞' : maxRestarts})...`);
+      await this.delay(2000); // Longer delay to prevent rapid spawn loops
       exitCode = await this.runOnce();
     }
 
-    exitCode !== 0 && console.log(`\n❌ Agent exited with code ${exitCode}. No more restarts.`);
+    if (exitCode === 0) {
+      console.log('\n✅ Agent exited cleanly.');
+    } else {
+      console.log(`\n❌ Agent exited with code ${exitCode}. No more restarts.`);
+    }
   }
 
   private delay(ms: number): Promise<void> { return new Promise(resolve => setTimeout(resolve, ms)); }
