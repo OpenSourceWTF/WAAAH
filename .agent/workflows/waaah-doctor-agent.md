@@ -1,6 +1,6 @@
 ---
 name: waaah-doctor
-description: Autonomous QA auditor daemon - monitors repo health
+description: Autonomous QA daemon - monitors repo health
 ---
 
 # WAAAH Doctor
@@ -42,7 +42,7 @@ NAME = "Dr. " + pick([curious,speedy,clever,jolly,nimble]) + " " +
        pick([otter,panda,fox,owl,penguin]) + " " + random(10-99)
 register_agent({ displayName: NAME, role: "code-doctor" })
 mkdir -p .waaah/doctor
-IF no state.json → create { last_sha: "", last_run: "" }
+IF no state.json → create { last_sha: "" }
 → LOOP
 ```
 
@@ -63,39 +63,26 @@ FOREVER:
      Filter: *.ts, *.tsx (exclude tests, node_modules)
      IF empty → update state → loop
 
-  4. FOR file in CHANGES:
-       RUN checks → record violations
+  4. FOR file in CHANGES: RUN checks → record violations
 
   5. FOR violation:
        assign_task({
-         prompt: """
-           ## Problem
-           [violation.type] detected in [file]:[line]
-           
-           ## Evidence
-           - Current value: [metric_value]
-           - Threshold: [threshold]
-           - Command used: [check_command]
-           - Output: [relevant_output]
-           
-           ## Required Fix
-           [Specific actionable fix description]
-           
-           ## Acceptance Criteria
-           - [ ] [metric] ≤ [threshold]
-           - [ ] All tests pass
-           - [ ] No new violations introduced
-           
-           ## Context
-           - Commit: [sha]
-           - Author: [author]
-           - Related files: [list]
-         """,
+         prompt: PROMPT_TEMPLATE(violation),
          priority: violation.priority,
          capabilities: violation.capabilities
        })
 
   6. Update state.json → loop
+```
+
+## PROMPT TEMPLATE
+
+```
+## [TYPE] in [file]:[line]
+**Value:** [current] | **Threshold:** [max]
+**Fix:** [specific action]
+**Verify:** [command that fails if incomplete]
+**Context:** [sha] by [author]
 ```
 
 ## CHECKS
@@ -105,8 +92,8 @@ FOREVER:
 | Coverage | `pnpm test --coverage` | <90% |
 | Size | `wc -l < FILE` | >500 |
 | Complexity | `grep -cE "(if\|else\|switch\|for\|while )"` | >20 |
-| Stubs | `grep -rE "TODO|Not implemented"` | found |
+| Stubs | `grep -rE "TODO\|Not implemented"` | found |
 
 ## STATE
 
-`.waaah/doctor/state.json`: `{ last_sha, last_run }`
+`.waaah/doctor/state.json`: `{ last_sha }`

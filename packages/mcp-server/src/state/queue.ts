@@ -84,6 +84,9 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
     this.persistence = new QueuePersistence(this.db);
     this.systemPromptService = new SystemPromptService(this.db);
     this.matchingService = new AgentMatchingService(this.repo, this.persistence);
+    // Core Services
+    this.lifecycleService = new TaskLifecycleService(this.repo, this.matchingService, this.persistence);
+    console.log('[Queue] lifecycleService initialized:', !!this.lifecycleService);
     this.messageService = new MessageService(this.repo);
 
     // Initialize eviction service
@@ -107,23 +110,7 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
 
   /** Reset PENDING_ACK tasks and waiting agents on startup */
   private resetStaleState(): void {
-    try {
-      // Reset PENDING_ACK tasks to QUEUED
-      const stale = this.repo.getByStatus('PENDING_ACK');
-      for (const task of stale) {
-        console.log(`[Queue] Resetting PENDING_ACK task ${task.id} to QUEUED on startup`);
-        this.repo.updateStatus(task.id, 'QUEUED');
-        this.persistence.clearPendingAck(task.id);
-      }
-
-      // Clear all waiting agents
-      this.persistence.resetWaitingAgents();
-
-      console.log(`[Queue] Loaded ${this.repo.getActive().length} active tasks from DB`);
-    } catch {
-      // Database may not be initialized yet (tests)
-      console.log('[Queue] Database not ready, skipping stale state reset');
-    }
+    this.lifecycleService.resetStaleState();
   }
 
   // ===== Task Lifecycle =====
@@ -299,7 +286,7 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
   }
 
   ackTask(taskId: string, agentId: string): { success: boolean; error?: string } {
-    return this.pollingService.ackTask(taskId, agentId);
+    return this.lifecycleService.ackTask(taskId, agentId);
   }
 
   async waitForTaskCompletion(taskId: string, timeoutMs: number = 300000): Promise<Task | null> {

@@ -114,9 +114,15 @@ export class TaskLifecycleService {
     return { success: true };
   }
 
-  ackTask(taskId: string, agentId: string, pendingAckAgentId: string): { success: boolean; error?: string } {
-    if (pendingAckAgentId !== agentId) {
-      return { success: false, error: `Task was sent to ${pendingAckAgentId}, not ${agentId}` };
+  ackTask(taskId: string, agentId: string): { success: boolean; error?: string } {
+    const pendingAck = this.persistence.getPendingAck(taskId);
+
+    if (!pendingAck) {
+      return { success: false, error: 'No pending ACK found for task' };
+    }
+
+    if (pendingAck.agentId !== agentId) {
+      return { success: false, error: `Task was sent to ${pendingAck.agentId}, not ${agentId}` };
     }
 
     const task = this.repo.getById(taskId);

@@ -76,6 +76,14 @@ export class PTYManager {
     await this.spawnFallback(command, args, cwd, env);
   }
 
+  private notifyData(data: string): void {
+    this.dataCallbacks.forEach(cb => { try { cb(data); } catch { } });
+  }
+
+  private notifyExit(code: number, signal?: number): void {
+    this.exitCallbacks.forEach(cb => { try { cb(code, signal); } catch { } });
+  }
+
   private async spawnNative(
     command: string,
     args: string[],
@@ -99,14 +107,14 @@ export class PTYManager {
       this.ptyProcess.onData((data) => {
         this.lastDataTimestamp = Date.now();
         const output = this.sanitizeOutput ? sanitizeTuiOutput(data) : data;
-        this.dataCallbacks.forEach(cb => { try { cb(output); } catch { } });
+        this.notifyData(output);
       });
 
       this.ptyProcess.onExit(({ exitCode, signal }) => {
         this.stopHeartbeat();
         this.running = false;
         this.childPid = null;
-        this.exitCallbacks.forEach(cb => { try { cb(exitCode, signal); } catch { } });
+        this.notifyExit(exitCode, signal);
       });
 
       this.startHeartbeat();
@@ -117,6 +125,50 @@ export class PTYManager {
     }
   }
 
+  private getFallbackCommand(command: string, args: string[]): { cmd: string, args: string[] } {
+    const escapeArg = (arg: string) => `'${arg.replace(/'/g, "'\\''")}'`;
+    const fullCommand = [command, ...args].map(escapeArg).join(' ');
+
+    if (process.platform === 'linux') {
+      return { cmd: 'script', args: ['-q', '-e', '-c', fullCommand, '/dev/null'] };
+    }
+    
+    if (process.platform === 'darwin') {
+      return { cmd: 'script', args: ['-q', '/dev/null', ...[command, ...args]] };
+    }
+
+    return { cmd: command, args: args };
+  }
+
+  private setupChildProcessListeners(): void {
+    if (!this.childProcess) return;
+
+    const handleData = (data: Buffer) => {
+      this.lastDataTimestamp = Date.now();
+      const str = data.toString();
+      const output = this.sanitizeOutput ? sanitizeTuiOutput(str) : str;
+      this.notifyData(output);
+    };
+
+    this.childProcess.stdout?.on('data', handleData);
+    this.childProcess.stderr?.on('data', handleData);
+
+    this.childProcess.on('exit', (code, signal) => {
+      this.stopHeartbeat();
+      this.running = false;
+      this.childPid = null;
+      this.notifyExit(code ?? 1, signal ? 0 : undefined);
+    });
+
+    this.childProcess.on('error', (err) => {
+      this.stopHeartbeat();
+      this.running = false;
+      this.childPid = null;
+      console.error('[PTYManager] Spawn error:', err.message);
+      this.notifyExit(1);
+    });
+  }
+
   private async spawnFallback(
     command: string,
     args: string[],
@@ -124,21 +176,9 @@ export class PTYManager {
     env: Record<string, string | undefined>
   ): Promise<void> {
     this.useNativePty = false;
-    let spawnCommand = command;
-    let spawnArgs = args;
+    const { cmd, args: spawnArgs } = this.getFallbackCommand(command, args);
 
-    const escapeArg = (arg: string) => `'${arg.replace(/'/g, "'\\''")}'`;
-    const fullCommand = [command, ...args].map(escapeArg).join(' ');
-
-    if (process.platform === 'linux') {
-      spawnCommand = 'script';
-      spawnArgs = ['-q', '-e', '-c', fullCommand, '/dev/null'];
-    } else if (process.platform === 'darwin') {
-      spawnCommand = 'script';
-      spawnArgs = ['-q', '/dev/null', ...[command, ...args]];
-    }
-
-    this.childProcess = spawn(spawnCommand, spawnArgs, {
+    this.childProcess = spawn(cmd, spawnArgs, {
       cwd,
       env: { ...env, NODE_NO_WARNINGS: '1' } as NodeJS.ProcessEnv,
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -149,31 +189,7 @@ export class PTYManager {
     this.running = true;
     this.childPid = this.childProcess.pid ?? null;
 
-    const handleData = (data: Buffer) => {
-      this.lastDataTimestamp = Date.now();
-      const str = data.toString();
-      const output = this.sanitizeOutput ? sanitizeTuiOutput(str) : str;
-      this.dataCallbacks.forEach(cb => { try { cb(output); } catch { } });
-    };
-
-    this.childProcess.stdout?.on('data', handleData);
-    this.childProcess.stderr?.on('data', handleData);
-
-    this.childProcess.on('exit', (code, signal) => {
-      this.stopHeartbeat();
-      this.running = false;
-      this.childPid = null;
-      this.exitCallbacks.forEach(cb => { try { cb(code ?? 1, signal ? 0 : undefined); } catch { } });
-    });
-
-    this.childProcess.on('error', (err) => {
-      this.stopHeartbeat();
-      this.running = false;
-      this.childPid = null;
-      console.error('[PTYManager] Spawn error:', err.message);
-      this.exitCallbacks.forEach(cb => { try { cb(1); } catch { } });
-    });
-
+    this.setupChildProcessListeners();
     this.startHeartbeat();
   }
 
