@@ -116,7 +116,7 @@ export function useTaskData(options: UseTaskDataOptions = {}) {
   /** WebSocket event handling */
   useEffect(() => {
     const socket = getSocket();
-    connectSocket();
+    // NOTE: connectSocket() is called AFTER handlers are registered (below)
 
     // Handle connection status
     const handleConnect = () => {
@@ -225,6 +225,9 @@ export function useTaskData(options: UseTaskDataOptions = {}) {
     // Set initial connected state
     if (socket.connected) {
       setConnected(true);
+    } else {
+      // Connect AFTER handlers are registered to avoid race condition
+      connectSocket();
     }
 
     // Fetch bot/stats data (not part of WebSocket sync)

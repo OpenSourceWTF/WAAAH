@@ -50,7 +50,7 @@ export function useAgentData() {
   // WebSocket subscription effect
   useEffect(() => {
     const socket = getSocket();
-    connectSocket();
+    // NOTE: connectSocket() called AFTER handlers registered to avoid race condition
 
     // Initial fetch for data before socket events start
     fetchAgentData();
@@ -73,6 +73,11 @@ export function useAgentData() {
 
     socket.on('sync:full', handleSync);
     socket.on('agent:status', handleAgentStatus);
+
+    // Connect AFTER handlers are registered
+    if (!socket.connected) {
+      connectSocket();
+    }
 
     return () => {
       socket.off('sync:full', handleSync);
