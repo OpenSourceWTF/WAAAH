@@ -97,3 +97,25 @@ Rewrite workflow with:
 
 ### Focus for Iteration 2
 `succinctness` — Can we compress while maintaining clarity?
+
+---
+
+## Iteration 2
+
+### Changes Made
+1. Compressed from 113 → 57 lines (~50% reduction)
+2. Removed redundant state table (workflow steps are self-documenting)
+3. Removed Rubric section (1-10 scoring is intuitive)
+4. Merged explanatory code blocks into concise prose
+5. Simplified Core Behavior bullets
+
+### Scores
+
+| Criterion | Score | Notes |
+|-----------|-------|-------|
+| reliability | 8 | Gates still explicit, structure cleaner |
+| succinctness | 8 | 50% reduction, still readable |
+| llm_optimized | 8 | Less noise, clearer signal |
+
+### Next
+All scores ≥ 8. Continue to Iteration 3?
