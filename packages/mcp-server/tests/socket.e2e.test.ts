@@ -102,3 +102,121 @@ describe('Socket.io Authentication', () => {
     socket.disconnect();
   });
 });
+
+describe('Socket.io Agent Status Push', () => {
+  let httpServer: HttpServer;
+  let io: SocketIOServer;
+  let serverPort: number;
+
+  beforeAll(async () => {
+    const app = express();
+    httpServer = createServer(app);
+    io = new SocketIOServer(httpServer, {
+      cors: { origin: '*' }
+    });
+
+    // Apply auth middleware
+    io.use((socket, next) => {
+      const providedKey = socket.handshake.auth?.apiKey;
+      if (providedKey !== TEST_API_KEY) {
+        return next(new Error('Authentication failed'));
+      }
+      next();
+    });
+
+    // Handle connection - send sync:full on connect
+    io.on('connection', (socket) => {
+      socket.emit('sync:full', { tasks: [], agents: [] });
+    });
+
+    await new Promise<void>((resolve) => {
+      httpServer.listen(0, () => {
+        const addr = httpServer.address();
+        serverPort = typeof addr === 'object' ? addr!.port : 0;
+        resolve();
+      });
+    });
+  });
+
+  afterAll(async () => {
+    io.close();
+    httpServer.close();
+  });
+
+  it('receives sync:full on connect', async () => {
+    const socket = Client(`http://localhost:${serverPort}`, {
+      auth: { apiKey: TEST_API_KEY },
+      autoConnect: false
+    });
+
+    const syncData = await new Promise<any>((resolve, reject) => {
+      socket.on('sync:full', (data) => resolve(data));
+      socket.on('connect_error', (err) => reject(err));
+      socket.connect();
+    });
+
+    expect(syncData).toHaveProperty('tasks');
+    expect(syncData).toHaveProperty('agents');
+    expect(Array.isArray(syncData.tasks)).toBe(true);
+    expect(Array.isArray(syncData.agents)).toBe(true);
+    socket.disconnect();
+  });
+
+  it('receives agent:status when server emits', async () => {
+    const socket = Client(`http://localhost:${serverPort}`, {
+      auth: { apiKey: TEST_API_KEY },
+      autoConnect: false
+    });
+
+    // Connect and wait for sync first
+    await new Promise<void>((resolve, reject) => {
+      socket.on('sync:full', () => resolve());
+      socket.on('connect_error', (err) => reject(err));
+      socket.connect();
+    });
+
+    // Setup listener for agent:status
+    const statusPromise = new Promise<any>((resolve) => {
+      socket.on('agent:status', (data) => resolve(data));
+    });
+
+    // Server emits agent:status
+    const testAgent = { id: 'test-agent-1', status: 'PROCESSING', lastSeen: Date.now() };
+    io.emit('agent:status', testAgent);
+
+    const receivedStatus = await statusPromise;
+    expect(receivedStatus.id).toBe('test-agent-1');
+    expect(receivedStatus.status).toBe('PROCESSING');
+    expect(receivedStatus.lastSeen).toBeDefined();
+
+    socket.disconnect();
+  });
+
+  it('receives agent:{id}:status for specific agent', async () => {
+    const socket = Client(`http://localhost:${serverPort}`, {
+      auth: { apiKey: TEST_API_KEY },
+      autoConnect: false
+    });
+
+    await new Promise<void>((resolve, reject) => {
+      socket.on('sync:full', () => resolve());
+      socket.on('connect_error', (err) => reject(err));
+      socket.connect();
+    });
+
+    // Listen for specific agent event
+    const agentId = 'agent-xyz-123';
+    const statusPromise = new Promise<any>((resolve) => {
+      socket.on(`agent:${agentId}:status`, (data) => resolve(data));
+    });
+
+    // Server emits status for specific agent
+    io.emit(`agent:${agentId}:status`, { id: agentId, status: 'WAITING', lastSeen: Date.now() });
+
+    const receivedStatus = await statusPromise;
+    expect(receivedStatus.id).toBe(agentId);
+    expect(receivedStatus.status).toBe('WAITING');
+
+    socket.disconnect();
+  });
+});
