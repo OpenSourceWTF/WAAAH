@@ -1,15 +1,15 @@
 /**
- * PTYManager - PTY lifecycle management with fallback
+ * PTYManager - PTY process management with fallback
  * 
  * Uses node-pty when available, falls back to child_process.spawn.
- * Supports heartbeat detection for stuck prompts.
+ * Supports heartbeat detection to find stuck prompts.
  * 
  * @packageDocumentation
  */
 
 import { spawn, ChildProcess } from 'child_process';
 
-// Try to load node-pty, fallback to null if unavailable
+// Try to load node-pty, use child_process otherwise
 let pty: typeof import('node-pty') | null = null;
 try {
   pty = await import('node-pty');
@@ -76,11 +76,11 @@ export class PTYManager {
     await this.spawnFallback(command, args, cwd, env);
   }
 
-  private notifyData(data: string): void {
+  private dispatchData(data: string): void {
     this.dataCallbacks.forEach(cb => { try { cb(data); } catch { } });
   }
 
-  private notifyExit(code: number, signal?: number): void {
+  private dispatchExit(code: number, signal?: number): void {
     this.exitCallbacks.forEach(cb => { try { cb(code, signal); } catch { } });
   }
 
@@ -107,14 +107,14 @@ export class PTYManager {
       this.ptyProcess.onData((data) => {
         this.lastDataTimestamp = Date.now();
         const output = this.sanitizeOutput ? sanitizeTuiOutput(data) : data;
-        this.notifyData(output);
+        this.dispatchData(output);
       });
 
       this.ptyProcess.onExit(({ exitCode, signal }) => {
         this.stopHeartbeat();
         this.running = false;
         this.childPid = null;
-        this.notifyExit(exitCode, signal);
+        this.dispatchExit(exitCode, signal);
       });
 
       this.startHeartbeat();
@@ -147,7 +147,7 @@ export class PTYManager {
       this.lastDataTimestamp = Date.now();
       const str = data.toString();
       const output = this.sanitizeOutput ? sanitizeTuiOutput(str) : str;
-      this.notifyData(output);
+      this.dispatchData(output);
     };
 
     this.childProcess.stdout?.on('data', handleData);
@@ -157,7 +157,7 @@ export class PTYManager {
       this.stopHeartbeat();
       this.running = false;
       this.childPid = null;
-      this.notifyExit(code ?? 1, signal ? 0 : undefined);
+      this.dispatchExit(code ?? 1, signal ? 0 : undefined);
     });
 
     this.childProcess.on('error', (err) => {
@@ -165,7 +165,7 @@ export class PTYManager {
       this.running = false;
       this.childPid = null;
       console.error('[PTYManager] Spawn error:', err.message);
-      this.notifyExit(1);
+      this.dispatchExit(1);
     });
   }
 
@@ -198,7 +198,7 @@ export class PTYManager {
     this.heartbeatInterval = setInterval(() => {
       const inactiveMs = Date.now() - this.lastDataTimestamp;
       if (inactiveMs > 300000) { // 5 minutes of silence
-        console.warn('[PTYManager] Heartbeat timeout: No data for 5 minutes');
+        console.warn('[PTYManager] Heartbeat timeout: No data since 5 minutes');
         // We don't kill automatically, but we could emit an event or log it
       }
     }, 60000);
