@@ -52,6 +52,8 @@ export class PTYManager {
   private useNativePty = false;
   private sanitizeOutput = false;
   private childPid: number | null = null;
+  private lastDataTimestamp = Date.now();
+  private heartbeatInterval: NodeJS.Timeout | null = null;
 
   public async spawn(options: PTYSpawnOptions): Promise<void> {
     const {

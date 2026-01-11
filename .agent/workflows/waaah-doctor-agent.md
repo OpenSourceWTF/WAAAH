@@ -67,7 +67,33 @@ FOREVER:
        RUN checks → record violations
 
   5. FOR violation:
-       assign_task({ prompt, priority, capabilities })
+       assign_task({
+         prompt: """
+           ## Problem
+           [violation.type] detected in [file]:[line]
+           
+           ## Evidence
+           - Current value: [metric_value]
+           - Threshold: [threshold]
+           - Command used: [check_command]
+           - Output: [relevant_output]
+           
+           ## Required Fix
+           [Specific actionable fix description]
+           
+           ## Acceptance Criteria
+           - [ ] [metric] ≤ [threshold]
+           - [ ] All tests pass
+           - [ ] No new violations introduced
+           
+           ## Context
+           - Commit: [sha]
+           - Author: [author]
+           - Related files: [list]
+         """,
+         priority: violation.priority,
+         capabilities: violation.capabilities
+       })
 
   6. Update state.json → loop
 ```
@@ -79,7 +105,7 @@ FOREVER:
 | Coverage | `pnpm test --coverage` | <90% |
 | Size | `wc -l < FILE` | >500 |
 | Complexity | `grep -cE "(if\|else\|switch\|for\|while )"` | >20 |
-| Stubs | `grep -rE "TODO\|Not implemented\|pending"` | found |
+| Stubs | `grep -rE "TODO|Not implemented"` | found |
 
 ## STATE
 

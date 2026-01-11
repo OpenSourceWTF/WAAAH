@@ -105,6 +105,20 @@ pnpm typecheck
 pnpm lint
 ```
 
+### Write-up Standard
+When submitting for review, include:
+```
+## Summary
+1-2 sentences on what changed.
+
+## Changes
+- [file]: [what changed]
+
+## Testing
+- [x] Tests pass
+- [x] Manual verification: [what you checked]
+```
+
 ### Submit
 ```bash
 git add -A && git commit -m "feat(scope): desc" && git push

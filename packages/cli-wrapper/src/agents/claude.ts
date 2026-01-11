@@ -26,6 +26,19 @@ export class ClaudeAgent extends BaseAgent {
     super(config);
   }
 
+  protected setupPtyHandlers(): void {
+    super.setupPtyHandlers();
+
+    this.ptyManager?.onData((data) => {
+      // Look for session ID in Claude's output
+      // Pattern: Session ID: <id>
+      const match = data.match(/Session ID: ([a-zA-Z0-9_-]+)/i);
+      if (match?.[1]) {
+        this.sessionId = match[1];
+      }
+    });
+  }
+
   protected getCliCommand(): string {
     return 'claude';
   }

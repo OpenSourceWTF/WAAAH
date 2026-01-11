@@ -167,7 +167,7 @@ export abstract class BaseAgent {
     });
   }
 
-  private setupPtyHandlers(): void {
+  protected setupPtyHandlers(): void {
     if (!this.ptyManager) return;
 
     this.ptyManager.onData((data: string) => {
