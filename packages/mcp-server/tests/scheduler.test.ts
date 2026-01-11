@@ -204,7 +204,7 @@ describe('HybridScheduler', () => {
       const task = createTask('orphan-1', 'ASSIGNED');
 
       (mockQueue.getBusyAgentIds as any).mockReturnValue([offlineAgentId]);
-      (mockQueue.getAgentLastSeen as any).mockReturnValue(Date.now() - 120000); // 2 min ago (> 1 min timeout)
+      (mockQueue.getAgentLastSeen as any).mockReturnValue(Date.now() - 360000); // 6 min ago (> 5 min timeout)
       (mockQueue.getAssignedTasksForAgent as any).mockReturnValue([task]);
 
       scheduler.runCycle();

@@ -163,7 +163,7 @@ describe('TaskHandlers', () => {
         percentage: 50
       });
 
-      expect(result.content[0].text).toContain('Progress updated');
+      expect(result.content[0].text).toContain('recorded');
     });
 
     it('returns error for invalid input', async () => {

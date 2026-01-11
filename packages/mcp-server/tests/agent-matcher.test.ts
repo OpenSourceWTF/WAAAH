@@ -94,8 +94,7 @@ describe('scoreAgent', () => {
 
   it('gives higher workspace score for exact match', () => {
     const task = createTask({
-      to: { requiredCapabilities: ['code-writing'] },
-      context: { workspace: { type: 'github', repoId: 'org/repo' } }
+      to: { requiredCapabilities: ['code-writing'], workspaceId: 'org/repo' }
     });
     const matchingAgent = createAgent('match', ['code-writing'], { type: 'github', repoId: 'org/repo' });
     const mismatchAgent = createAgent('mismatch', ['code-writing'], { type: 'github', repoId: 'other/repo' });
