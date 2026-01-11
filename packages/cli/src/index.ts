@@ -14,6 +14,7 @@ import {
   formatAgentStatus,
   formatSingleAgentStatus
 } from './utils/index.js';
+import { startEventListener, setEventListenerRl } from './utils/event-listener.js';
 import { restartCommand } from './commands/restart.js';
 import { assignCommand } from './commands/assign.js';
 import { initCommand } from './commands/init.js';
@@ -36,43 +37,6 @@ program.addCommand(agentCommand);
 program.addCommand(syncSkillsCommand);
 
 let activeRl: readline.Interface | null = null;
-
-function logInjected(message: string) {
-  if (activeRl) {
-    process.stdout.write('\r\x1b[K');
-    console.log(message);
-    activeRl.prompt(true);
-  } else {
-    console.log(message);
-  }
-}
-
-async function startEventListener() {
-  while (true) {
-    try {
-      const data = await apiCall<any>('get', '/admin/events');
-      if (data.status === 'TIMEOUT') continue;
-
-      if (data.type === 'task_update') {
-        const t = data.task;
-        if (['COMPLETED', 'FAILED', 'BLOCKED'].includes(t.status)) {
-          const agentId = t.to.agentId || t.to.role || 'unknown';
-          const icon = t.status === 'COMPLETED' ? '✅' : t.status === 'FAILED' ? '❌' : '⚠️';
-
-          let msg = `\n${icon} [${agentId}] ${t.status}: ${t.response?.message || 'No message'}`;
-          if (t.response?.artifacts?.length) {
-            msg += `\n   Artifacts: ${t.response.artifacts.join(', ')}`;
-          }
-          logInjected(msg);
-        } else if (t.status === 'ASSIGNED') {
-          logInjected(`\n⏳ [${t.to.agentId || t.to.role}] Assigned task: ${t.id}`);
-        }
-      }
-    } catch {
-      await new Promise(r => setTimeout(r, 5000));
-    }
-  }
-}
 
 // Send task to agent
 program
@@ -199,6 +163,7 @@ async function interactiveMode() {
     prompt: 'waaah> '
   });
 
+  setEventListenerRl(activeRl);
   startEventListener();
   activeRl.prompt();
 
@@ -208,30 +173,31 @@ async function interactiveMode() {
 
     try {
       if (cmd === 'exit' || cmd === 'quit') {
-        console.log('Goodbye!');
         process.exit(0);
-      } else if (cmd === 'list' || cmd === 'agents') {
+      } else if (cmd === 'send') {
+        if (args.length < 3) {
+          console.log('Usage: send <agent> <prompt...>');
+        } else {
+          const target = args[1];
+          const prompt = args.slice(2).join(' ');
+          const response = await apiCall<{ taskId: string }>('post', '/admin/enqueue', {
+            prompt,
+            agentId: target
+          });
+          console.log(`✅ Task enqueued: ${response.taskId}`);
+        }
+      } else if (cmd === 'list') {
         const response = await apiCall<any>('post', '/mcp/tools/list_agents', {});
         const agents = parseMCPResponse<AgentInfo[]>(response);
         if (agents) {
           agents.forEach(agent => console.log(formatAgentListItem(agent)));
         }
-      } else if (cmd === 'send' && args.length >= 3) {
-        const target = args[1];
-        const prompt = args.slice(2).join(' ');
-        const response = await apiCall<{ taskId: string }>('post', '/admin/enqueue', {
-          prompt,
-          agentId: target,
-          priority: 'normal'
-        });
-        console.log(`✅ Task enqueued: ${response.taskId}`);
       } else if (cmd === 'status') {
-        if (args[1]) {
-          const response = await apiCall<any>('post', '/mcp/tools/get_agent_status', { agentId: args[1] });
+        const agentId = args[1];
+        if (agentId) {
+          const response = await apiCall<any>('post', '/mcp/tools/get_agent_status', { agentId });
           const status = parseMCPResponse<AgentInfo>(response);
-          if (status) {
-            console.log(formatSingleAgentStatus(status));
-          }
+          if (status) console.log(formatSingleAgentStatus(status));
         } else {
           const agents = await apiCall<AgentInfo[]>('get', '/admin/agents/status');
           if (agents.length === 0) {
