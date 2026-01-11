@@ -85,7 +85,7 @@ export function DiffViewer({ taskId, onAddComment }: DiffViewerProps) {
       </div>
     ) : (
       <div className="relative space-y-4">
-        <div className="flex items-center justify-between px-2">
+        <div className="flex items-center px-2">
           <div className="flex items-center gap-2">
             <Badge variant="outline" className="border-primary/50">{files.length} file{files.length !== 1 && 's'} changed</Badge>
             <Badge variant="outline" className="border-green-500/50 text-green-400">+{totalAdditions}</Badge>
