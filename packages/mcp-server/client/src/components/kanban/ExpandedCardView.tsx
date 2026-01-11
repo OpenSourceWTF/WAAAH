@@ -179,12 +179,12 @@ export const ExpandedCardView: React.FC<ExpandedCardViewProps> = ({
                 <>
                   <button
                     onClick={(e) => { e.stopPropagation(); setNavigatorOpen(!navigatorOpen); }}
-                    className="h-9 w-9 border-l border-primary/20 flex items-center justify-center hover:bg-primary/20 text-primary/70 hover:text-primary transition-colors focus:outline-none"
+                    className="h-9 w-9 border-l border-r border-primary/20 flex items-center justify-center hover:bg-primary/20 text-primary/70 hover:text-primary transition-colors focus:outline-none"
                   >
-                    <ChevronDown className="h-4 w-4" />
+                    <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${navigatorOpen ? 'rotate-180' : ''}`} />
                   </button>
                   {navigatorOpen && (
-                    <div className="absolute top-full left-0 mt-0 w-64 bg-popover/95 backdrop-blur z-50 shadow-xl border border-primary/20 rounded-b-md overflow-hidden flex flex-col max-h-[60vh]">
+                    <div className="absolute top-full left-0 mt-0 w-64 bg-popover/95 backdrop-blur z-50 shadow-xl border border-primary/20 rounded-b-md overflow-hidden flex flex-col max-h-[60vh] animate-in slide-in-from-top-2 fade-in zoom-in-95 duration-200">
                       <div className="overflow-y-auto p-1 bg-background">
                         {fileStats.map(stat => (
                           <button
