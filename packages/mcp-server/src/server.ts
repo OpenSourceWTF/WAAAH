@@ -53,10 +53,13 @@ queue.startScheduler();
 io.on('connection', (socket) => {
   console.log(`[Socket] Client connected: ${socket.id}`);
 
-  // Send initial state
-  const tasks = queue.getAll();
+  // Send initial state - include active + recent completed/cancelled for all swimlanes
+  const activeTasks = queue.getAll();
+  const completedTasks = queue.getTaskHistory({ status: 'COMPLETED', limit: 50 });
+  const cancelledTasks = queue.getTaskHistory({ status: 'CANCELLED', limit: 50 });
+  const allTasks = [...activeTasks, ...completedTasks, ...cancelledTasks];
   const agents = registry.getAll();
-  emitSyncFull(socket.id, { tasks, agents });
+  emitSyncFull(socket.id, { tasks: allTasks, agents });
 
   socket.on('disconnect', () => {
     console.log(`[Socket] Client disconnected: ${socket.id}`);

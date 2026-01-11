@@ -132,6 +132,7 @@ export function useTaskData(options: UseTaskDataOptions = {}) {
     // Handle full sync (initial data from server)
     const handleSyncFull = (data: { tasks: Task[]; agents: unknown[] }) => {
       console.log('[useTaskData] Received sync:full with', data.tasks.length, 'tasks');
+      console.log('[useTaskData] Raw tasks:', data.tasks);
 
       // Separate tasks by status
       const active: Task[] = [];
@@ -139,6 +140,7 @@ export function useTaskData(options: UseTaskDataOptions = {}) {
       const cancelled: Task[] = [];
 
       for (const task of data.tasks) {
+        console.log(`[useTaskData] Task ${task.id} status: ${task.status}`);
         if (task.status === 'COMPLETED') {
           completed.push(task);
         } else if (task.status === 'CANCELLED') {
@@ -148,6 +150,7 @@ export function useTaskData(options: UseTaskDataOptions = {}) {
         }
       }
 
+      console.log(`[useTaskData] Categorized: ${active.length} active, ${completed.length} completed, ${cancelled.length} cancelled`);
       setTasks(active);
       setRecentCompleted(completed.slice(0, pageSize));
       setRecentCancelled(cancelled.slice(0, pageSize));
@@ -245,7 +248,7 @@ export function useTaskData(options: UseTaskDataOptions = {}) {
   }, [fetchInitialData, pageSize]);
 
   const activeTasks = useMemo(() =>
-    tasks.filter(t => !['COMPLETED', 'FAILED', 'BLOCKED', 'CANCELLED'].includes(t.status)),
+    tasks.filter(t => !['COMPLETED', 'FAILED', 'CANCELLED'].includes(t.status)),
     [tasks]
   );
 
