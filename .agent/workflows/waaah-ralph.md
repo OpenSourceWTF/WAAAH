@@ -74,12 +74,3 @@ Focus on lowest score. Apply strategy:
 Log `✅ COMPLETE`. Code: `git commit -m "ralph: complete - [SLUG]"`
 
 **⏸️** `notify_user` final result → "1. New task  2. Add criteria  3. Exit"
-
-## Compression Patterns (from /waaah-optimize)
-
-| Verbose | Compressed |
-|---------|------------|
-| "You should consider..." | DO: |
-| "It's important to..." | (delete) |
-| Paragraph | Table/bullet |
-| Conditional prose | `IF X → Y` |

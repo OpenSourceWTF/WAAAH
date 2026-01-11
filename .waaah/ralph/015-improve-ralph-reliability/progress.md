@@ -140,3 +140,21 @@ All scores ≥ 8. Continue to Iteration 3?
 
 ### Focus for Iteration 4
 `succinctness` dropped to 7 — can we trim without losing value?
+
+---
+
+## Iteration 4
+
+### Changes Made
+1. Removed Compression Patterns section (redundant with /waaah-optimize)
+2. Workflow now 76 lines
+
+### Scores
+
+| Criterion | Score | Notes |
+|-----------|-------|-------|
+| reliability | 9 | Gates still explicit |
+| succinctness | 9 | Trimmed redundancy |
+| llm_optimized | 9 | Clean, structured |
+
+**All criteria ≥ 9. Ready to finalize.**
