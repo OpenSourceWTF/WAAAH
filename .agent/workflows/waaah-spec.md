@@ -12,6 +12,8 @@ description: Interactive spec generation with quality gate
 2. Log each iteration to `.waaah/specs/NNN-slug/spec.md`
 3. NEVER finalize below 10/10
 4. ALWAYS challenge vague answers
+5. Open Questions MUST be resolved before status = "Ready"
+6. Every spec MUST have Implementation + Verification tasks
 
 ## State Machine
 ```
@@ -49,6 +51,8 @@ Analyze gaps, score 1-10, generate 2-5 targeted questions.
 | Flow | "After [action], what next?" |
 | Conflict | "You said X but also Y - which wins?" |
 | Scope | "Is [feature] v1 or later?" |
+| API | "What's the request/response shape for [endpoint]?" |
+| Reconcile | "Did implementation reveal anything the spec missed?" |
 
 ⏸️ `notify_user` with score + gaps + questions → await
 
@@ -89,6 +93,7 @@ Generate two types of tasks:
 - Every major feature needs at least 1 V-task
 - V-tasks depend on their related T-tasks
 - V-tasks test integration, not unit behavior
+- Verify commands MUST be runnable (full path, `--grep` patterns)
 
 ⏸️ `notify_user` with both tables → "Confirm to assign?"
 
@@ -104,7 +109,9 @@ Report: `✅ Spec saved. [N] implementation + [M] verification tasks queued.`
 
 ```markdown
 # [Name] Specification
-**Version:** 1.0 | **Status:** Ready
+**Version:** 1.0 | **Status:** Draft/Ready/Implemented/Validated
+**Depends On:** [Spec-XXX] (if any)
+**Related Workflows:** `waaah-xxx` (if any)
 
 ## 1. Overview
 Problem: [X] | Users: [Y] | Solution: [Z]
@@ -130,4 +137,24 @@ Problem: [X] | Users: [Y] | Solution: [Z]
 | Metric | Target |
 |--------|--------|
 | [metric] | [value] |
+
+## 7. Implementation Tasks
+| ID | Title | Size | Deps | Verify |
+|----|-------|------|------|--------|
+| T1 | **[Component]: [Description]** | S/M/L | — | `[runnable command]` |
+
+## 8. Verification Tasks (E2E)
+| ID | Title | Size | Deps | Verify |
+|----|-------|------|------|--------|
+| V1 | **E2E: [Scenario]** | M | T1,T2 | `pnpm test -- [file].e2e.ts` |
+
+## 9. API Contracts (if applicable)
+| Endpoint | Method | Request | Response | Errors |
+|----------|--------|---------|----------|--------|
+
+## 10. Open Questions
+| Question | Status | Resolution |
+|----------|--------|------------|
+| [question] | OPEN/RESOLVED | [answer if resolved] |
 ```
+
