@@ -59,7 +59,9 @@ describe('ToolHandler', () => {
       });
 
       const data = JSON.parse(result.content[0].text);
-      expect(data.status).toBe('TIMEOUT');
+      expect(data.status).toBe('IDLE');
+      expect(data.success).toBe(true);
+      expect(data.message).toBe('No tasks available. Waiting.');
     });
 
     it('returns task when available', async () => {

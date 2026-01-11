@@ -43,7 +43,21 @@ export class WaitHandlers {
       this.registry.heartbeat(params.agentId);
 
       if (!result) {
-        return { content: [{ type: 'text', text: JSON.stringify({ status: 'TIMEOUT' }) }] };
+        // Build response with IDLE status
+        const response: { success: boolean; status: string; message: string; prompt?: string } = {
+          success: true,
+          status: 'IDLE',
+          message: 'No tasks available. Waiting.'
+        };
+
+        // Add reconnect prompt only for specific roles
+        const role = agent?.role?.toLowerCase() || '';
+        const reconnectRoles = ['pm', 'coding', 'testing', 'orchestrator'];
+        if (reconnectRoles.some(r => role.includes(r))) {
+          response.prompt = '## REQUIRED ACTION\nCall wait_for_prompt again to continue listening.';
+        }
+
+        return { content: [{ type: 'text', text: JSON.stringify(response) }] };
       }
 
       if ('controlSignal' in result) {
