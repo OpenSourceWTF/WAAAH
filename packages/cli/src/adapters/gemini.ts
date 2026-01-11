@@ -5,19 +5,10 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { execSync } from 'child_process';
 import type { CLIAdapter, MCPConfig } from './types.js';
+import { getApiKeyFromEnv } from './utils.js';
 
 const HOME = process.env.HOME || '';
 
-/** Read WAAAH_API_KEY from workspace .env file */
-function getApiKeyFromEnv(): string {
-  try {
-    const envPath = path.join(process.cwd(), '.env');
-    const content = fs.readFileSync(envPath, 'utf-8');
-    const match = content.match(/WAAAH_API_KEY=(.+)/);
-    if (match) return match[1].trim();
-  } catch { /* .env not found */ }
-  return 'dev-key-123'; // Fallback for dev
-}
 
 export const geminiAdapter: CLIAdapter = {
   name: 'gemini',
