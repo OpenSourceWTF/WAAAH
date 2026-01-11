@@ -24,6 +24,7 @@ STARTUP → WAIT ──→ ACK ──→ PLAN ──→ BUILD ──→ SUBMIT
 2. ALWAYS `send_response(IN_REVIEW)` after BUILD
 3. ALWAYS work in worktree
 4. NEVER stop loop
+5. **NEVER skip IN_REVIEW even for "no changes needed" tasks**
 
 ## Anti-Patterns (NEVER DO)
 
@@ -33,6 +34,14 @@ STARTUP → WAIT ──→ ACK ──→ PLAN ──→ BUILD ──→ SUBMIT
 | Skip IN_REVIEW | Always wait for approval |
 | SMOKE before merge | SMOKE only after merge succeeds |
 | COMPLETED without merge | COMPLETED only after push to main |
+| "Already done" → COMPLETED | "Already done" → IN_REVIEW with proof → approval → COMPLETED |
+| "No changes needed" → COMPLETED | Document findings → IN_REVIEW → approval → COMPLETED |
+
+**⚠️ NO-OP TASKS:** Even if work is already complete or no changes are needed:
+1. Document what you found/verified
+2. Commit any documentation or cleanup
+3. Submit to IN_REVIEW with your findings
+4. Wait for approval before COMPLETED
 
 ## STATUS → ACTION
 
@@ -55,6 +64,22 @@ STARTUP → WAIT ──→ ACK ──→ PLAN ──→ BUILD ──→ SUBMIT
 | `block_task` | When stuck |
 | `send_response(IN_REVIEW)` | After BUILD |
 | `send_response(COMPLETED)` | After MERGE + SMOKE |
+
+## MAILBOX (User Comments)
+
+**CRITICAL:** Check `update_progress` response for `unreadComments` array.
+
+```
+result = update_progress(...)
+IF result.unreadComments:
+  FOR comment IN result.unreadComments:
+    - Log: "📬 User: {comment.content}"
+    - IF [UNBLOCK] prefix → task was just unblocked, acknowledge context
+    - Address or incorporate feedback into current work
+    - Acknowledge in next progress update
+```
+
+**Never ignore user comments.** They may contain clarifications, corrections, or answers to blocked questions.
 
 ## STARTUP
 
