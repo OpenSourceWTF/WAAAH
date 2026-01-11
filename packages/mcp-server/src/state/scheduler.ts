@@ -146,15 +146,30 @@ export class HybridScheduler {
 
     if (queuedTasks.length === 0) return;
 
+    // Filter out tasks with unmet dependencies
+    const assignableTasks = queuedTasks.filter(task => {
+      if (!task.dependencies || task.dependencies.length === 0) return true;
+      const allMet = task.dependencies.every(depId => {
+        const dep = this.queue.getTask(depId) || this.queue.getTaskFromDB(depId);
+        return dep && dep.status === 'COMPLETED';
+      });
+      if (!allMet) {
+        console.log(`[Scheduler] Task ${task.id} has unmet dependencies - skipping until deps complete`);
+      }
+      return allMet;
+    });
+
+    if (assignableTasks.length === 0) return;
+
     const waitingAgents = this.queue.getWaitingAgents();
-    console.log(`[Scheduler] assignPendingTasks: ${queuedTasks.length} queued, ${waitingAgents.size} waiting`);
+    console.log(`[Scheduler] assignPendingTasks: ${assignableTasks.length} assignable (${queuedTasks.length} total queued), ${waitingAgents.size} waiting`);
 
     if (waitingAgents.size > 0) {
       const agents = Array.from(waitingAgents.entries()).map(([id, role]) => `${id}(${role})`).join(', ');
       console.log(`[Scheduler] Waiting agents: ${agents}`);
     }
 
-    for (const task of queuedTasks) {
+    for (const task of assignableTasks) {
       if (waitingAgents.size === 0) {
         console.log(`[Scheduler] No waiting agents remaining. Stopping.`);
         break;

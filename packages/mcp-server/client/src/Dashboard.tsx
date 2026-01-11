@@ -138,6 +138,21 @@ export function Dashboard() {
     }
   }, []);
 
+  const handleUnblockTask = useCallback(async (taskId: string, reason: string) => {
+    try {
+      const res = await apiFetch(`/admin/tasks/${taskId}/unblock`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason })
+      });
+      if (!res.ok) throw new Error('Failed to unblock task');
+      console.log(`Task ${taskId} unblocked with reason: ${reason}`);
+      fetchData(); // Refresh immediately
+    } catch (error) {
+      console.error("Failed to unblock task", error);
+    }
+  }, [fetchData]);
+
   // Status badge styles - lookup map
   const STATUS_BADGE_CLASSES: Record<string, string> = {
     COMPLETED: 'bg-green-600 text-white border-green-800',
@@ -243,6 +258,7 @@ export function Dashboard() {
               onRejectTask={handleRejectTask}
               onSendComment={handleSendComment}
               onAddReviewComment={handleAddReviewComment}
+              onUnblockTask={handleUnblockTask}
               onLoadMoreCompleted={loadMoreCompleted}
               onLoadMoreCancelled={loadMoreCancelled}
               hasMoreCompleted={hasMoreCompleted}

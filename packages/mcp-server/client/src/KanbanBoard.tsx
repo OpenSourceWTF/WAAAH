@@ -18,6 +18,7 @@ interface KanbanBoardProps {
   onRejectTask: (id: string, feedback: string) => void;
   onSendComment: (taskId: string, content: string, replyTo?: string, images?: { id: string; dataUrl: string; mimeType: string; name: string }[]) => void;
   onAddReviewComment: (taskId: string, filePath: string, lineNumber: number | null, content: string) => void;
+  onUnblockTask?: (taskId: string, reason: string) => void;
   onViewHistory?: () => void;
   onTaskClick?: (task: Task) => void;
   // Infinite scroll props
@@ -55,6 +56,7 @@ export const KanbanBoard = React.memo(function KanbanBoard({
   onRejectTask,
   onSendComment,
   onAddReviewComment,
+  onUnblockTask,
   onLoadMoreCompleted,
   onLoadMoreCancelled,
   hasMoreCompleted,
@@ -156,6 +158,7 @@ export const KanbanBoard = React.memo(function KanbanBoard({
           onRetryTask={onRetryTask}
           onCancelTask={onCancelTask}
           onAddReviewComment={onAddReviewComment}
+          onUnblockTask={onUnblockTask}
         />
       )}
 

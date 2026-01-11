@@ -15,6 +15,7 @@ interface ExpandedCardViewProps {
   onSendComment: (taskId: string, content: string, replyTo?: string, images?: Array<{ id: string; dataUrl: string; mimeType: string; name: string }>) => void;
   onApproveTask: (e: React.MouseEvent, id: string) => void;
   onRejectTask: (id: string, feedback: string) => void;
+  onUnblockTask?: (taskId: string, reason: string) => void;
   onRetryTask: (e: React.MouseEvent, id: string) => void;
   onCancelTask: (e: React.MouseEvent, id: string) => void;
   onAddReviewComment: (taskId: string, filePath: string, lineNumber: number | null, content: string) => void;
@@ -27,13 +28,15 @@ export const ExpandedCardView: React.FC<ExpandedCardViewProps> = ({
   onApproveTask,
   onRetryTask,
   onCancelTask,
-  onAddReviewComment
+  onAddReviewComment,
+  onUnblockTask
 }) => {
   const progressUpdates = getProgressUpdates(task) || [];
   const latestProgress = progressUpdates.length > 0 ? progressUpdates[progressUpdates.length - 1] : null;
   const canCancel = ['QUEUED', 'ASSIGNED', 'PENDING_ACK', 'PROCESSING', 'IN_PROGRESS'].includes(task.status);
   const canRetry = ['FAILED', 'CANCELLED', 'ASSIGNED', 'QUEUED', 'PENDING_ACK'].includes(task.status);
-  const canApprove = ['REVIEW', 'IN_REVIEW', 'PENDING_RES', 'BLOCKED'].includes(task.status);
+  const canApprove = ['REVIEW', 'IN_REVIEW', 'PENDING_RES'].includes(task.status);
+  const canUnblock = task.status === 'BLOCKED';
 
   // Image preview state
   const [previewImage, setPreviewImage] = useState<string | null>(null);
@@ -107,6 +110,18 @@ export const ExpandedCardView: React.FC<ExpandedCardViewProps> = ({
             <Button variant="default" size="sm" className="h-8 gap-1 text-xs bg-green-600 hover:bg-green-700 text-white"
               onClick={(e) => { onApproveTask(e, task.id); onClose(); }}>
               <CheckCircle className="h-3 w-3" /> Approve
+            </Button>
+          )}
+          {canUnblock && onUnblockTask && (
+            <Button variant="default" size="sm" className="h-8 gap-1 text-xs bg-orange-600 hover:bg-orange-700 text-white"
+              onClick={() => {
+                const reason = window.prompt('Enter reason for unblocking (required):');
+                if (reason && reason.trim()) {
+                  onUnblockTask(task.id, reason.trim());
+                  onClose();
+                }
+              }}>
+              <RefreshCw className="h-3 w-3" /> Unblock
             </Button>
           )}
           {canRetry && (

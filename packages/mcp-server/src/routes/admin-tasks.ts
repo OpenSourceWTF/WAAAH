@@ -193,5 +193,44 @@ export function createTaskRoutes({ queue, workspaceRoot }: TaskRoutesConfig): Ro
     }
   });
 
+  /**
+   * POST /tasks/:taskId/unblock
+   * Unblocks a BLOCKED task with a required reason
+   */
+  router.post('/tasks/:taskId/unblock', (req, res) => {
+    const { taskId } = req.params;
+    const { reason } = req.body;
+
+    if (!reason || typeof reason !== 'string' || reason.trim().length === 0) {
+      res.status(400).json({ error: 'Reason is required when unblocking a task' });
+      return;
+    }
+
+    const task = queue.getTask(taskId);
+    if (!task) {
+      res.status(404).json({ error: 'Task not found' });
+      return;
+    }
+
+    if (task.status !== 'BLOCKED') {
+      res.status(400).json({ error: `Task is not BLOCKED (current status: ${task.status})` });
+      return;
+    }
+
+    // Add unblock reason as a user comment
+    queue.addUserComment(taskId, `[UNBLOCK] ${reason.trim()}`);
+
+    // Requeue the task
+    const result = queue.forceRetry(taskId);
+
+    if (!result.success) {
+      res.status(400).json({ error: result.error });
+      return;
+    }
+
+    console.log(`[API] Task ${taskId} unblocked with reason: ${reason.trim()}`);
+    res.json({ success: true, taskId });
+  });
+
   return router;
 }
