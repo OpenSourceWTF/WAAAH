@@ -220,3 +220,143 @@ describe('Socket.io Agent Status Push', () => {
     socket.disconnect();
   });
 });
+
+describe('Socket.io Task Update Push', () => {
+  let httpServer: HttpServer;
+  let io: SocketIOServer;
+  let serverPort: number;
+
+  beforeAll(async () => {
+    const app = express();
+    httpServer = createServer(app);
+    io = new SocketIOServer(httpServer, {
+      cors: { origin: '*' }
+    });
+
+    // Apply auth middleware
+    io.use((socket, next) => {
+      const providedKey = socket.handshake.auth?.apiKey;
+      if (providedKey !== TEST_API_KEY) {
+        return next(new Error('Authentication failed'));
+      }
+      next();
+    });
+
+    // Handle connection - send sync:full on connect
+    io.on('connection', (socket) => {
+      socket.emit('sync:full', { tasks: [], agents: [] });
+    });
+
+    await new Promise<void>((resolve) => {
+      httpServer.listen(0, () => {
+        const addr = httpServer.address();
+        serverPort = typeof addr === 'object' ? addr!.port : 0;
+        resolve();
+      });
+    });
+  });
+
+  afterAll(async () => {
+    io.close();
+    httpServer.close();
+  });
+
+  it('receives task:{id}:created when task is created', async () => {
+    const socket = Client(`http://localhost:${serverPort}`, {
+      auth: { apiKey: TEST_API_KEY },
+      autoConnect: false
+    });
+
+    // Connect and wait for sync first
+    await new Promise<void>((resolve, reject) => {
+      socket.on('sync:full', () => resolve());
+      socket.on('connect_error', (err) => reject(err));
+      socket.connect();
+    });
+
+    // Setup listener for task:created event with specific ID
+    const taskId = 'task-new-123';
+    const createdPromise = new Promise<any>((resolve) => {
+      socket.on(`task:${taskId}:created`, (data) => resolve(data));
+    });
+
+    // Simulate server emitting task:created event
+    const newTask = {
+      id: taskId,
+      status: 'QUEUED',
+      prompt: 'Test task prompt',
+      createdAt: Date.now()
+    };
+    io.emit(`task:${taskId}:created`, newTask);
+
+    const receivedTask = await createdPromise;
+    expect(receivedTask.id).toBe(taskId);
+    expect(receivedTask.status).toBe('QUEUED');
+    expect(receivedTask.prompt).toBe('Test task prompt');
+
+    socket.disconnect();
+  });
+
+  it('receives task:{id}:updated with patch when task is updated', async () => {
+    const socket = Client(`http://localhost:${serverPort}`, {
+      auth: { apiKey: TEST_API_KEY },
+      autoConnect: false
+    });
+
+    // Connect and wait for sync first
+    await new Promise<void>((resolve, reject) => {
+      socket.on('sync:full', () => resolve());
+      socket.on('connect_error', (err) => reject(err));
+      socket.connect();
+    });
+
+    // Setup listener for task:updated event with specific ID
+    const taskId = 'task-update-456';
+    const updatedPromise = new Promise<any>((resolve) => {
+      socket.on(`task:${taskId}:updated`, (data) => resolve(data));
+    });
+
+    // Simulate server emitting task:updated event with patch
+    const patch = {
+      id: taskId,
+      status: 'IN_PROGRESS',
+      assignedTo: 'agent-1'
+    };
+    io.emit(`task:${taskId}:updated`, patch);
+
+    const receivedPatch = await updatedPromise;
+    expect(receivedPatch.id).toBe(taskId);
+    expect(receivedPatch.status).toBe('IN_PROGRESS');
+    expect(receivedPatch.assignedTo).toBe('agent-1');
+
+    socket.disconnect();
+  });
+
+  it('receives task:{id}:deleted when task is deleted', async () => {
+    const socket = Client(`http://localhost:${serverPort}`, {
+      auth: { apiKey: TEST_API_KEY },
+      autoConnect: false
+    });
+
+    // Connect and wait for sync first
+    await new Promise<void>((resolve, reject) => {
+      socket.on('sync:full', () => resolve());
+      socket.on('connect_error', (err) => reject(err));
+      socket.connect();
+    });
+
+    // Setup listener for task:deleted event
+    const taskId = 'task-delete-789';
+    const deletedPromise = new Promise<any>((resolve) => {
+      socket.on(`task:${taskId}:deleted`, (data) => resolve(data));
+    });
+
+    // Simulate server emitting task:deleted event
+    io.emit(`task:${taskId}:deleted`, { id: taskId });
+
+    const receivedData = await deletedPromise;
+    expect(receivedData.id).toBe(taskId);
+
+    socket.disconnect();
+  });
+});
