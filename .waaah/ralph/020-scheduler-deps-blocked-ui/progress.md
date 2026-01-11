@@ -130,8 +130,30 @@ Tests       153 passed (153)
 
 ---
 
+## Iteration 2: BUG FIXES
+
+### Issues Found
+1. **404 Not Found** - Server needed restart for new endpoint
+2. **400 Bad Request** - Task found but `forceRetry()` rejected BLOCKED status
+
+### Fixes Applied
+1. **Proper Modal UI** - Replaced `window.prompt` with styled modal in ExpandedCardView
+2. **DB Check** - Unblock endpoint now checks `getTaskFromDB` for BLOCKED tasks not in memory
+3. **RETRYABLE_STATES** - Added `BLOCKED` to allow `forceRetry()` to work
+
+### Test Results
+```
+Test Files  17 passed (17)
+Tests       153 passed (153)
+```
+
+---
+
 ## ✅ COMPLETE
 
 **Average: 10/10**
 
-Commit: `8b1c39a`
+Commits:
+- `8b1c39a` feat(scheduler): dependency filter + BLOCKED task UI
+- `29dee51` fix(unblock): proper modal + check DB for blocked tasks  
+- `d8a9af7` fix(unblock): add BLOCKED to RETRYABLE_STATES
