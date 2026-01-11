@@ -213,3 +213,70 @@ describe('isTaskForAgent (legacy)', () => {
     expect(isTaskForAgent(task, 'me', ['code-writing'])).toBe(true);
   });
 });
+
+describe('scoreAgent edge cases', () => {
+  it('handles task with no requirements', () => {
+    const task = createTask({ to: {} });
+    const agent = createAgent('a1', ['code-writing']);
+
+    const result = scoreAgent(task, agent);
+    expect(result.eligible).toBe(true);
+  });
+
+  it('handles agent with no capabilities', () => {
+    const task = createTask({ to: {} });
+    const agent = createAgent('a1', []);
+
+    const result = scoreAgent(task, agent);
+    expect(result.eligible).toBe(true);
+  });
+
+  it('handles task targeting specific agent with different capability scores', () => {
+    const task = createTask({
+      to: { agentId: 'target', requiredCapabilities: ['code-writing', 'test-writing'] }
+    });
+
+    const targetPartial = createAgent('target', ['code-writing']);
+    const targetFull = createAgent('target', ['code-writing', 'test-writing']);
+
+    const partialScore = scoreAgent(task, targetPartial);
+    const fullScore = scoreAgent(task, targetFull);
+
+    // Target agent with partial caps is ineligible because requirements not met
+    expect(partialScore.eligible).toBe(false);
+    expect(fullScore.eligible).toBe(true);
+  });
+});
+
+describe('findBestAgent with workspace context', () => {
+  it('prefers agent with matching workspace', () => {
+    const task = createTask({
+      to: { requiredCapabilities: ['code-writing'], workspaceId: 'org/main' }
+    });
+    const agents = [
+      createAgent('no-context', ['code-writing']),
+      createAgent('matching', ['code-writing'], { type: 'github', repoId: 'org/main' }),
+      createAgent('different', ['code-writing'], { type: 'github', repoId: 'other/repo' })
+    ];
+    // Equal wait times
+    agents.forEach(a => a.waitingSince = Date.now() - 1000);
+
+    const best = findBestAgent(task, agents);
+    expect(best?.agentId).toBe('matching');
+  });
+
+  it('handles mixed workspace contexts', () => {
+    const task = createTask({
+      to: { requiredCapabilities: ['code-writing'] }
+    });
+    const agents = [
+      createAgent('with-ctx', ['code-writing'], { type: 'github', repoId: 'org/repo' }),
+      createAgent('no-ctx', ['code-writing'])
+    ];
+    agents.forEach(a => a.waitingSince = Date.now() - 1000);
+
+    // Both eligible, no strong preference without task workspaceId
+    const best = findBestAgent(task, agents);
+    expect(best).not.toBeNull();
+  });
+});

@@ -9,15 +9,20 @@ description: Autonomous task refinement - no human intervention
 
 ## Core Rules
 1. **NO** `notify_user` pauses - fully autonomous
-2. Log every iteration to `.waaah/ralph/NNN-slug/progress.md`
-3. Max 100 iterations (double standard Ralph)
-4. **Code tasks**: `pnpm typecheck && pnpm test && pnpm lint` must pass
-5. **Non-code tasks**: Self-verify against stated criteria
-6. Exit conditions:
+2. **NO EARLY EXIT** - MUST loop until all criteria are 10/10 or max iterations or circuit breaker
+3. Log every iteration to `.waaah/ralph/NNN-slug/progress.md`
+4. Max 100 iterations (double standard Ralph)
+5. **Code tasks**: `pnpm typecheck && pnpm test && pnpm lint` must pass
+6. **Non-code tasks**: Self-verify against stated criteria
+7. Exit conditions (ONLY these three):
    - All scores = 10/10 → SUCCESS
    - Max iterations reached → report final state
    - Circuit breaker triggered → stop and document
-7. Output `<promise>CHURLISH</promise>` when done
+8. Output `<promise>CHURLISH</promise>` ONLY when done (all criteria are 10/10 OR max iter OR breaker)
+
+> [!CAUTION]
+> **NEVER** call `notify_user` until ALL criteria are 10/10 or an exit condition is met.
+> If any score < 10, you MUST continue to the next iteration.
 
 ## Task Types
 

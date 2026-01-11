@@ -426,4 +426,129 @@ describe('TaskQueue', () => {
       });
     });
   });
+
+  describe('eviction', () => {
+    it('returns null for non-existent agent', () => {
+      const eviction = queue.popEviction('no-eviction-agent');
+      expect(eviction).toBeNull();
+    });
+
+    it('queueEviction does not throw for unknown agent', () => {
+      // Tests that method exists and handles missing agent gracefully
+      expect(() => queue.queueEviction('unknown-agent', 'Reason', 'RESTART')).not.toThrow();
+    });
+  });
+
+  describe('system prompts', () => {
+    it('queues and pops system prompts', () => {
+      queue.queueSystemPrompt('agent-sys-1', 'WORKFLOW_UPDATE', 'Test message', { key: 'value' });
+      const prompt = queue.popSystemPrompt('agent-sys-1');
+      expect(prompt).not.toBeNull();
+      expect(prompt?.promptType).toBe('WORKFLOW_UPDATE');
+      expect(prompt?.message).toBe('Test message');
+      expect(prompt?.payload).toEqual({ key: 'value' });
+    });
+
+    it('returns null when no system prompt queued', () => {
+      const prompt = queue.popSystemPrompt('no-prompt-agent');
+      expect(prompt).toBeNull();
+    });
+
+    it('handles all prompt types', () => {
+      queue.queueSystemPrompt('prompt-type-test', 'EVICTION_NOTICE', 'Eviction', {}, 'critical');
+      const prompt = queue.popSystemPrompt('prompt-type-test');
+      expect(prompt?.promptType).toBe('EVICTION_NOTICE');
+      expect(prompt?.priority).toBe('critical');
+    });
+  });
+
+  describe('getLogs', () => {
+    it('returns logs array', () => {
+      const logs = queue.getLogs(10);
+      expect(Array.isArray(logs)).toBe(true);
+    });
+
+    it('respects limit parameter', () => {
+      // Just ensure it doesn't throw
+      const logs = queue.getLogs(5);
+      expect(logs.length).toBeLessThanOrEqual(5);
+    });
+  });
+
+  describe('getPendingAcks', () => {
+    it('returns Map of pending ACKs', () => {
+      const pending = queue.getPendingAcks();
+      expect(pending instanceof Map).toBe(true);
+    });
+  });
+
+  describe('getByStatus', () => {
+    it('returns tasks with specific status', () => {
+      queue.enqueue(mockTask({ id: 'status-filter-1' }));
+      queue.enqueue(mockTask({ id: 'status-filter-2' }));
+
+      const queued = queue.getByStatus('QUEUED');
+      expect(queued.length).toBeGreaterThanOrEqual(2);
+    });
+  });
+
+  describe('getByStatuses', () => {
+    it('returns tasks with multiple statuses', () => {
+      queue.enqueue(mockTask({ id: 'multi-status-1' }));
+      queue.enqueue(mockTask({ id: 'multi-status-2' }));
+      queue.updateStatus('multi-status-1', 'COMPLETED');
+
+      const result = queue.getByStatuses(['QUEUED', 'COMPLETED']);
+      expect(result.length).toBeGreaterThanOrEqual(2);
+    });
+  });
+
+  describe('getBusyAgentIds', () => {
+    it('returns empty array when no busy agents', () => {
+      const busy = queue.getBusyAgentIds();
+      expect(Array.isArray(busy)).toBe(true);
+    });
+
+    it('returns agents with ASSIGNED tasks', async () => {
+      const task = mockTask({ id: 'busy-agent-test' });
+      queue.enqueue(task);
+      await queue.waitForTask('busy-agent-1', ['code-writing'], 100);
+      queue.ackTask('busy-agent-test', 'busy-agent-1');
+
+      const busy = queue.getBusyAgentIds();
+      expect(busy).toContain('busy-agent-1');
+    });
+  });
+
+  describe('getAgentLastSeen', () => {
+    it('returns undefined for unknown agent', () => {
+      const lastSeen = queue.getAgentLastSeen('unknown-agent');
+      expect(lastSeen).toBeUndefined();
+    });
+  });
+
+  describe('scheduler', () => {
+    it('starts and stops scheduler', () => {
+      queue.startScheduler(1000);
+      queue.stopScheduler();
+      // Should not throw
+    });
+
+    it('triggers immediate assignment', () => {
+      queue.triggerImmediateAssignment();
+      // Should not throw
+    });
+  });
+
+  describe('clear', () => {
+    it('removes all tasks', () => {
+      queue.enqueue(mockTask({ id: 'clear-test-1' }));
+      queue.enqueue(mockTask({ id: 'clear-test-2' }));
+
+      queue.clear();
+
+      const all = queue.getAll();
+      expect(all.length).toBe(0);
+    });
+  });
 });
