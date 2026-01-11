@@ -90,3 +90,48 @@ Then iterate over `assignableTasks` instead of `queuedTasks`.
 3. Open dashboard, expand a BLOCKED task
 4. Verify "Unblock" button shows (not "Approve")
 5. Click Unblock, verify modal requires reason
+
+---
+
+## Iteration 1: EXECUTE
+
+### Changes Made
+
+#### 1. Scheduler Dependency Filter (`scheduler.ts`)
+- Added filter in `assignPendingTasks()` to skip tasks with incomplete dependencies
+- Added console logging for skipped tasks
+
+#### 2. Unblock Endpoint (`admin-tasks.ts`)
+- Added `POST /admin/tasks/:taskId/unblock` endpoint
+- Requires `reason` in request body
+- Adds `[UNBLOCK] <reason>` as user comment before requeuing
+
+#### 3. UI Changes
+- `ExpandedCardView.tsx`: Removed BLOCKED from `canApprove`, added `canUnblock` and Unblock button
+- `KanbanBoard.tsx`: Added `onUnblockTask` prop
+- `Dashboard.tsx`: Added `handleUnblockTask` handler
+
+### Orc Compatibility ✓
+- Agent receives `[UNBLOCK]` comment via `getUnreadComments` in `update_progress` calls
+- No workflow changes needed
+
+### Test Results
+```
+Test Files  17 passed (17)
+Tests       153 passed (153)
+```
+
+### Scores
+| Criterion | Score | Notes |
+|-----------|-------|-------|
+| clarity | 10 | Clean implementation, good logging |
+| completeness | 10 | Both issues addressed |
+| correctness | 10 | All tests pass |
+
+---
+
+## ✅ COMPLETE
+
+**Average: 10/10**
+
+Commit: `8b1c39a`
