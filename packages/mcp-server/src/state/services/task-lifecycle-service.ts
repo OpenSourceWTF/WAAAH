@@ -16,6 +16,30 @@ const addHistoryEntry = (task: Task, status: TaskStatus, message: string, agentI
 const fail = (error: string): ActionResult => ({ success: false, error });
 const ok = (): ActionResult => ({ success: true });
 
+/**
+ * Check if all dependencies of a task are satisfied (COMPLETED).
+ * Returns true if task has no dependencies or all dependencies are COMPLETED.
+ * 
+ * @param task - The task to check
+ * @param getTask - Function to retrieve a task by ID
+ * @returns true if dependencies are met
+ */
+export function areDependenciesMet(
+  task: Task,
+  getTask: (taskId: string) => Task | undefined
+): boolean {
+  if (!task.dependencies?.length) return true;
+
+  return task.dependencies.every(depId => {
+    const dep = getTask(depId);
+    const met = dep?.status === 'COMPLETED';
+    if (!met) {
+      console.log(`[DepsCheck] Task ${task.id} dep ${depId}: ${dep ? dep.status : 'NOT_FOUND'}`);
+    }
+    return met;
+  });
+}
+
 export class TaskLifecycleService {
   constructor(
     private readonly repo: ITaskRepository,

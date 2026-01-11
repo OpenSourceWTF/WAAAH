@@ -6,12 +6,13 @@ import {
 import { QueuePersistence } from '../persistence/queue-persistence.js';
 import { ITaskRepository } from '../persistence/task-repository.js';
 import { isTaskForAgent } from '../agent-matcher.js';
+import { areDependenciesMet } from './task-lifecycle-service.js';
 
 export class AgentMatchingService {
   constructor(
     private readonly repo: ITaskRepository,
     private readonly persistence: QueuePersistence
-  ) {}
+  ) { }
 
   /**
    * Finds a pending task suitable for an agent.
@@ -22,21 +23,8 @@ export class AgentMatchingService {
     const candidates = this.repo.getByStatuses(['QUEUED', 'APPROVED_QUEUED']);
 
     // Filter out tasks with unsatisfied dependencies
-    const eligibleCandidates = candidates.filter(task => {
-      if (!task.dependencies || task.dependencies.length === 0) {
-        return true; // No dependencies - eligible
-      }
-      // Check all dependencies are COMPLETED
-      // Note: We need access to getTask logic. Ideally repo has getById.
-      const allMet = task.dependencies.every(depId => {
-        const dep = this.repo.getById(depId);
-        return dep && dep.status === 'COMPLETED';
-      });
-      if (!allMet) {
-        console.log(`[AgentMatching] Skipping task ${task.id} - dependencies not satisfied`);
-      }
-      return allMet;
-    });
+    const getTaskFn = (id: string) => this.repo.getById(id) ?? undefined;
+    const eligibleCandidates = candidates.filter(task => areDependenciesMet(task, getTaskFn));
 
     // Sort by: 1) Agent affinity (previously assigned to this agent), 2) Priority, 3) Age
     eligibleCandidates.sort((a: Task, b: Task) => {
@@ -87,15 +75,15 @@ export class AgentMatchingService {
       if (isTaskForAgent(task, agentId, capabilities)) {
         // Atomic reservation
         // We perform the updates directly here to ensure atomicity logic is encapsulated
-        
+
         // 1. Update status
         task.status = 'PENDING_ACK';
         if (!task.history) task.history = [];
         task.history.push({
-            timestamp: Date.now(),
-            status: 'PENDING_ACK',
-            agentId: undefined,
-            message: `Reserved for agent ${agentId}`
+          timestamp: Date.now(),
+          status: 'PENDING_ACK',
+          agentId: undefined,
+          message: `Reserved for agent ${agentId}`
         });
         this.repo.update(task);
 

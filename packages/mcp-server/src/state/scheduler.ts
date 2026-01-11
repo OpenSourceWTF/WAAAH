@@ -12,6 +12,7 @@
 
 import type { Task, TaskStatus } from '@opensourcewtf/waaah-types';
 import { ACK_TIMEOUT_MS, SCHEDULER_INTERVAL_MS, ORPHAN_TIMEOUT_MS } from './constants.js';
+import { areDependenciesMet } from './services/task-lifecycle-service.js';
 
 /**
  * Interface for the task queue operations needed by the scheduler.
@@ -119,12 +120,8 @@ export class HybridScheduler {
         continue;
       }
 
-      const allMet = task.dependencies.every(depId => {
-        const dep = this.queue.getTask(depId) || this.queue.getTaskFromDB(depId);
-        return dep && dep.status === 'COMPLETED';
-      });
-
-      if (allMet) {
+      const getTaskFn = (id: string) => this.queue.getTask(id) || this.queue.getTaskFromDB(id);
+      if (areDependenciesMet(task, getTaskFn)) {
         console.log(`[Queue] Task ${task.id} dependencies met. Unblocking -> QUEUED`);
         this.queue.updateStatus(task.id, 'QUEUED');
       }
@@ -147,21 +144,8 @@ export class HybridScheduler {
     if (queuedTasks.length === 0) return;
 
     // Filter out tasks with unmet dependencies
-    const assignableTasks = queuedTasks.filter(task => {
-      if (!task.dependencies || task.dependencies.length === 0) return true;
-      const allMet = task.dependencies.every(depId => {
-        const dep = this.queue.getTask(depId) || this.queue.getTaskFromDB(depId);
-        const met = dep && dep.status === 'COMPLETED';
-        if (!met) {
-          console.log(`[Scheduler DEBUG] Task ${task.id} dependency ${depId} unmet. Found: ${!!dep}, Status: ${dep?.status}`);
-        }
-        return met;
-      });
-      if (!allMet) {
-        console.log(`[Scheduler] Task ${task.id} has unmet dependencies - skipping until deps complete`);
-      }
-      return allMet;
-    });
+    const getTaskFn = (id: string) => this.queue.getTask(id) || this.queue.getTaskFromDB(id);
+    const assignableTasks = queuedTasks.filter(task => areDependenciesMet(task, getTaskFn));
 
     if (assignableTasks.length === 0) return;
 
