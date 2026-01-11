@@ -9,12 +9,15 @@
 
 import { spawn, ChildProcess } from 'child_process';
 
-// Try to load node-pty, use child_process otherwise
-let pty: typeof import('node-pty') | null = null;
+// Require node-pty - fallback to script is buggy and causes fork bombs
+let pty: typeof import('node-pty');
 try {
   pty = await import('node-pty');
-} catch {
-  console.warn('[PTYManager] node-pty not available, using child_process fallback');
+} catch (e) {
+  throw new Error(
+    'node-pty native module required but not available. ' +
+    'Run: npm install node-pty --save (or pnpm rebuild node-pty)'
+  );
 }
 
 export interface PTYSpawnOptions {
@@ -67,13 +70,7 @@ export class PTYManager {
     } = options;
 
     this.sanitizeOutput = sanitizeOutput;
-
-    if (pty) {
-      const success = await this.spawnNative(command, args, cwd, env as Record<string, string>, cols, rows);
-      if (success) return;
-    }
-
-    await this.spawnFallback(command, args, cwd, env);
+    await this.spawnNative(command, args, cwd, env as Record<string, string>, cols, rows);
   }
 
   private dispatchData(data: string): void {
@@ -123,74 +120,6 @@ export class PTYManager {
       console.warn('[PTYManager] node-pty spawn failed, falling back:', err);
       return false;
     }
-  }
-
-  private getFallbackCommand(command: string, args: string[]): { cmd: string, args: string[] } {
-    const escapeArg = (arg: string) => `'${arg.replace(/'/g, "'\\''")}'`;
-    const fullCommand = [command, ...args].map(escapeArg).join(' ');
-
-    if (process.platform === 'linux') {
-      return { cmd: 'script', args: ['-q', '-e', '-c', fullCommand, '/dev/null'] };
-    }
-
-    if (process.platform === 'darwin') {
-      return { cmd: 'script', args: ['-q', '/dev/null', ...[command, ...args]] };
-    }
-
-    return { cmd: command, args: args };
-  }
-
-  private setupChildProcessListeners(): void {
-    if (!this.childProcess) return;
-
-    const handleData = (data: Buffer) => {
-      this.lastDataTimestamp = Date.now();
-      const str = data.toString();
-      const output = this.sanitizeOutput ? sanitizeTuiOutput(str) : str;
-      this.dispatchData(output);
-    };
-
-    this.childProcess.stdout?.on('data', handleData);
-    this.childProcess.stderr?.on('data', handleData);
-
-    this.childProcess.on('exit', (code, signal) => {
-      this.stopHeartbeat();
-      this.running = false;
-      this.childPid = null;
-      this.dispatchExit(code ?? 1, signal ? 0 : undefined);
-    });
-
-    this.childProcess.on('error', (err) => {
-      this.stopHeartbeat();
-      this.running = false;
-      this.childPid = null;
-      console.error('[PTYManager] Spawn error:', err.message);
-      this.dispatchExit(1);
-    });
-  }
-
-  private async spawnFallback(
-    command: string,
-    args: string[],
-    cwd: string,
-    env: Record<string, string | undefined>
-  ): Promise<void> {
-    this.useNativePty = false;
-    const { cmd, args: spawnArgs } = this.getFallbackCommand(command, args);
-
-    this.childProcess = spawn(cmd, spawnArgs, {
-      cwd,
-      env: { ...env, NODE_NO_WARNINGS: '1' } as NodeJS.ProcessEnv,
-      stdio: ['pipe', 'pipe', 'pipe'],
-      shell: false,
-      detached: false,  // MUST be false to prevent orphan processes on restart
-    });
-
-    this.running = true;
-    this.childPid = this.childProcess.pid ?? null;
-
-    this.setupChildProcessListeners();
-    this.startHeartbeat();
   }
 
   private startHeartbeat(): void {
