@@ -7,97 +7,106 @@ description: Interactive task refinement with custom quality gates
 
 **Loop: Task + Criteria → Refine until 10/10.**
 
-## RULES
+## Ralph Promise
+- Ralph is a loop — iterate until perfect
+- Faith in eventual consistency — each failure tunes the next run
+- Signs next to the slide — explicit guardrails prevent repeated mistakes
 
-| # | Rule |
-|---|------|
-| 1 | Exit: ALL criteria = 10 |
-| 2 | Max: 5 iterations |
-| 3 | Log: `.waaah/ralph/NNN-slug/progress.md` |
-| 4 | Code: tests+types+lint must pass |
-
-## TASK TYPES
-
-| Type | Triggers | Actions |
-|------|----------|---------|
-| `code` | implement, refactor, fix, test, API | tests + git |
-| `doc` | write, document, README | — |
-| `optimize` | optimize, compress, refine | → `/waaah-optimize` |
-| `spec` | spec, requirements, PRD | → `/waaah-spec` |
-| `generic` | (default) | — |
-
-## INIT
+## State Machine
 
 ```
-mkdir -p .waaah/ralph
-NEXT = (ls .waaah/ralph | grep -E "^[0-9]{3}-" | wc -l) + 1
+INIT → COLLECT ──⏸️──→ PLAN ──⏸️──→ EXECUTE → SCORE ──⏸️──→ [LOOP | FINALIZE]
+          ↑                                        ↓
+          └────────────────────────────────────────┘
 
-# Check incomplete sessions
-FOR folder in .waaah/ralph/*:
-  IF progress.md exists AND NOT "✅ COMPLETE":
-    PROMPT "Resume [folder]? (y/n)" → y: SESSION=folder; goto LOOP
+⏸️ = BLOCKED: Use notify_user, await user response before proceeding
 ```
 
-## COLLECT
+**States:**
+| State | Action | Gate |
+|-------|--------|------|
+| INIT | Check for incomplete sessions | — |
+| COLLECT | Get task + criteria from user | ⏸️ User confirms |
+| PLAN | Draft approach, show user | ⏸️ User approves |
+| EXECUTE | Implement the task | — |
+| SCORE | Rate against criteria, show user | ⏸️ User approves |
+| LOOP | Refine lowest-scoring criterion | → EXECUTE |
+| FINALIZE | Mark complete | ⏸️ User confirms |
 
+## Rules
+
+1. **Exit:** ALL criteria = 10
+2. **Max:** 5 iterations
+3. **Log:** `.waaah/ralph/NNN-slug/progress.md`
+4. **Code tasks:** tests + types + lint must pass
+5. **Conservative:** Never auto-proceed; always `notify_user` at gates
+
+## Workflow
+
+### 1. INIT
 ```
-PROMPT "Task?" → TASK
-PROMPT "Criteria? (csv)" → CRITERIA | default: [clarity,completeness,correctness]
-TYPE = match(TASK, triggers)
+Check .waaah/ralph for incomplete sessions
+If found: notify_user "Resume [folder]?" → await response
+Else: proceed to COLLECT
+```
 
-IF TYPE ∈ {optimize,spec}:
-  PROMPT "Switch to /waaah-[TYPE]? y/n" → y: EXIT
-
-SLUG = slugify(first 4 words)
-SESSION = .waaah/ralph/[printf "%03d" NEXT]-[SLUG]
+### 2. COLLECT
+```
+notify_user "Task?" → await TASK
+notify_user "Criteria? (default: clarity,completeness,correctness)" → await CRITERIA
+TYPE = code | doc | optimize | spec | generic (based on keywords)
+SLUG = first 4 words slugified
+SESSION = .waaah/ralph/[NNN]-[SLUG]
 mkdir -p SESSION
-PROMPT "Start? (y/n)" → n: EXIT
+```
+**⏸️ STOP:** `notify_user "Start? (y/n)"` → await confirmation
+
+### 3. PLAN
+```
+Draft approach to complete TASK
+Log plan to SESSION/progress.md
+```
+**⏸️ STOP:** `notify_user` with plan summary → await user approval before EXECUTE
+
+### 4. EXECUTE
+```
+Implement the task
+If TYPE=code: run pnpm typecheck && test && lint; fix failures
+Log work to SESSION/progress.md
 ```
 
-## EXECUTE
-
+### 5. SCORE
 ```
-RESULT = do(TASK)
-IF TYPE=code: RUN pnpm typecheck && test && lint; fail → fix
-SCORES = rate(RESULT, CRITERIA, 1-10)
-LOG(SESSION/progress.md, iter=0, SCORES)
-IF TYPE=code: git commit -m "ralph: iter 0 - [SLUG]"
+Rate RESULT against each criterion (1-10)
+Log scores to SESSION/progress.md
+If TYPE=code: git commit -m "ralph: iter N - [SLUG]"
 ```
+**⏸️ STOP:** `notify_user` with scores table → ask "Continue refining?" → await response
 
-## LOOP (i=1..5)
-
+### 6. LOOP (if any score < 10, iterations < 5)
 ```
-FOCUS = argmin(SCORES)
-STRATEGY = {
-  clarity → simplify, add examples
-  brevity → compress
-  correctness → fix errors
-  completeness → add cases
-  performance → benchmark
-}
-RESULT = apply(STRATEGY[FOCUS])
-IF TYPE=code: RUN feedback; fail → fix, CONTINUE
-SCORES = rate(RESULT)
-LOG(iter=i, FOCUS, SCORES)
-IF TYPE=code: git commit -m "ralph: iter [i] - [FOCUS]"
-IF all(SCORES)==10: FINALIZE
-IF i==5: WARN "Max iter"; FINALIZE
+FOCUS = lowest-scoring criterion
+Apply targeted strategy:
+  - clarity → simplify, add examples
+  - brevity → compress
+  - correctness → fix errors
+  - completeness → add missing cases
+  - performance → benchmark and optimize
 ```
+→ Go to EXECUTE
 
-## FINALIZE
-
+### 7. FINALIZE
 ```
-LOG "✅ COMPLETE"
-DISPLAY: RESULT + journey table
-PROMPT "1. New task  2. Add criteria  3. Exit"
+Log "✅ COMPLETE" to SESSION/progress.md
 ```
+**⏸️ STOP:** `notify_user` with final result + journey table → offer: "1. New task  2. Add criteria  3. Exit"
 
-## RUBRIC
+## Rubric
 
 | Score | Meaning |
 |-------|---------|
 | 1-3 | Broken |
 | 4-6 | Gaps |
-| 7-8 | Minor |
-| 9 | Nitpicks |
+| 7-8 | Minor issues |
+| 9 | Nitpicks only |
 | 10 | Perfect |
