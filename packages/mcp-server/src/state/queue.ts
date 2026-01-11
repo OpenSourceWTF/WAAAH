@@ -67,7 +67,7 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
   private readonly pollingService: PollingService;
 
   /** Task state management */
-  private readonly lifecycleService: TaskLifecycleService;
+  private readonly stateService: TaskLifecycleService;
 
   /**
    * Create a new TaskQueue instance.
@@ -146,14 +146,14 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
    * Cancels a task not already in a terminal state.
    */
   cancelTask(taskId: string): { success: boolean; error?: string } {
-    return this.lifecycleService.cancelTask(taskId);
+    return this.stateService.cancelTask(taskId);
   }
 
   /**
    * Forces a retry of a task by resetting its status to 'QUEUED'.
    */
   forceRetry(taskId: string): { success: boolean; error?: string } {
-    return this.lifecycleService.forceRetry(taskId);
+    return this.stateService.forceRetry(taskId);
   }
 
   // ===== Messages (Delegated) =====
@@ -201,7 +201,7 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
   }
 
   ackTask(taskId: string, agentId: string): { success: boolean; error?: string } {
-    return this.lifecycleService.ackTask(taskId, agentId);
+    return this.stateService.ackTask(taskId, agentId);
   }
 
   async waitForTaskCompletion(taskId: string, timeoutMs: number = 300000): Promise<Task | null> {

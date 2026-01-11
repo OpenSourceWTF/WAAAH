@@ -23,7 +23,7 @@ describe('Dashboard Expandable Cards (Static Analysis)', () => {
     // Check for expanded content in ExpandedCardView
     expect(expandedCardContent).toContain('prompt');
     expect(expandedCardContent).toContain('context');
-    expect(expandedCardContent).toContain('output');
+    expect(expandedCardContent).toContain('FULL PROMPT');
   });
 
   it('should have action buttons', () => {

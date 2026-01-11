@@ -1,4 +1,4 @@
-import { spawn, ChildProcess } from 'child_process';
+import pty from 'node-pty';
 import { SupportedCLI, getConfigPath } from './agent-utils.js';
 
 const MAX_RESTARTS = 10;
@@ -6,10 +6,11 @@ const RESTART_DELAY_MS = 2000;
 const HEARTBEAT_TIMEOUT_MS = 300_000; // 5 minutes
 
 /**
- * Agent runner with restart and heartbeat support
+ * Agent runner with PTY support for Claude/Gemini
+ * Uses node-pty for proper terminal emulation
  */
 export class AgentRunner {
-  private child: ChildProcess | null = null;
+  private ptyProcess: pty.IPty | null = null;
   private restartCount = 0;
   private lastActivity = Date.now();
   private heartbeatInterval: NodeJS.Timeout | null = null;
@@ -44,7 +45,6 @@ export class AgentRunner {
       args = ['-i', prompt, '--yolo', '--output-format', 'text'];
     } else if (this.cli === 'claude') {
       // Claude: uses --resume or prompt
-      // We must pass --mcp-config explicitly because we might be running in a different cwd
       const configPath = getConfigPath('claude');
 
       const promptArgs = this.resume
@@ -58,17 +58,26 @@ export class AgentRunner {
       ];
     }
 
-    console.log(`\n🚀 Spawning ${this.cli}...`);
-    this.child = spawn(this.cli, args, {
+    console.log(`\n🚀 Spawning ${this.cli} with PTY...`);
+
+    // Use node-pty for proper terminal emulation
+    this.ptyProcess = pty.spawn(this.cli, args, {
+      name: 'xterm-256color',
+      cols: 120,
+      rows: 40,
       cwd: this.cwd,
-      stdio: 'inherit',
-      env: { ...this.env, NODE_NO_WARNINGS: '1' },
-      detached: true  // Spawn in new process group for clean cleanup
+      env: { ...this.env, NODE_NO_WARNINGS: '1' } as { [key: string]: string }
     });
 
     this.lastActivity = Date.now();
 
-    this.child.on('exit', (code, signal) => {
+    // Pipe PTY output to stdout
+    this.ptyProcess.onData((data: string) => {
+      process.stdout.write(data);
+      this.lastActivity = Date.now();
+    });
+
+    this.ptyProcess.onExit(({ exitCode, signal }) => {
       if (this.shouldStop) {
         console.log('\n✅ Agent stopped.');
         process.exit(0);
@@ -76,17 +85,12 @@ export class AgentRunner {
 
       if (signal) {
         console.log(`\n⚠️  Agent killed by signal: ${signal}`);
-      } else if (code !== 0) {
-        console.log(`\n⚠️  Agent exited with code: ${code}`);
+      } else if (exitCode !== 0) {
+        console.log(`\n⚠️  Agent exited with code: ${exitCode}`);
       } else {
         console.log('\n✅ Agent exited successfully.');
       }
 
-      this.scheduleRestart();
-    });
-
-    this.child.on('error', (err) => {
-      console.error(`\n❌ Failed to spawn ${this.cli}: ${err.message}`);
       this.scheduleRestart();
     });
   }
@@ -109,9 +113,9 @@ export class AgentRunner {
   private startHeartbeat(): void {
     this.heartbeatInterval = setInterval(() => {
       const staleTime = Date.now() - this.lastActivity;
-      if (staleTime > HEARTBEAT_TIMEOUT_MS && this.child) {
+      if (staleTime > HEARTBEAT_TIMEOUT_MS && this.ptyProcess) {
         console.log(`\n⚠️  Agent appears stuck (no activity for ${Math.floor(staleTime / 60000)}m). Restarting...`);
-        this.child.kill('SIGTERM');
+        this.ptyProcess.kill();
         // Exit handler will trigger restart
       }
     }, 60_000); // Check every minute
@@ -129,14 +133,8 @@ export class AgentRunner {
   stop(): void {
     this.shouldStop = true;
     this.cleanup();
-    if (this.child && this.child.pid) {
-      // Kill entire process group (negative PID) to clean up all children
-      try {
-        process.kill(-this.child.pid, 'SIGTERM');
-      } catch {
-        // Process may already be dead
-        this.child.kill('SIGTERM');
-      }
+    if (this.ptyProcess) {
+      this.ptyProcess.kill();
     }
   }
 
