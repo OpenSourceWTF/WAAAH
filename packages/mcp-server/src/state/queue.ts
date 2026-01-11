@@ -202,7 +202,7 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
     agentId: string,
     capabilities: StandardCapability[],
     timeoutMs: number = 290000
-  ): Promise<Task | { controlSignal: 'EVICT'; reason: string; action: 'RESTART' | 'SHUTDOWN' } | null> {
+  ): Promise<WaitResult> {
     return this.pollingService.waitForTask(agentId, capabilities, timeoutMs);
   }
 

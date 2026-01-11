@@ -9,14 +9,13 @@ const dashboardContent = fs.readFileSync(dashboardPath, 'utf-8');
 describe('Dashboard UI Refinements (Static Analysis)', () => {
 
   it('should use custom hooks for data fetching', () => {
-    // Check for useTaskData and useAgentData hooks
-    expect(dashboardContent).toContain('useTaskData');
-    expect(dashboardContent).toContain('useAgentData');
+    // Check for useDashboard hook (refactored)
+    expect(dashboardContent).toContain('useDashboard');
   });
 
   it('should have theme controls', () => {
-    // Theme hook
-    expect(dashboardContent).toContain('useTheme');
+    // Theme props passed from useDashboard
+    expect(dashboardContent).toContain('theme');
     expect(dashboardContent).toContain('setTheme');
   });
 

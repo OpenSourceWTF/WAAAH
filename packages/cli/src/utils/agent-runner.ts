@@ -1,5 +1,5 @@
 import { spawn, ChildProcess } from 'child_process';
-import { SupportedCLI } from './agent-utils.js';
+import { SupportedCLI, getConfigPath } from './agent-utils.js';
 
 const MAX_RESTARTS = 10;
 const RESTART_DELAY_MS = 2000;
@@ -22,7 +22,7 @@ export class AgentRunner {
     private env: NodeJS.ProcessEnv,
     private workflow: string,
     private resume: boolean
-  ) { } 
+  ) { }
 
   start(): void {
     this.shouldStop = false;
@@ -41,10 +41,21 @@ export class AgentRunner {
       const prompt = this.resume
         ? `Resume the /${this.workflow} workflow. Continue from where you left off.`
         : `Follow the /${this.workflow} workflow exactly.`;
-      args = ['-i', prompt, '--yolo'];
+      args = ['-i', prompt, '--yolo', '--output-format', 'text'];
     } else if (this.cli === 'claude') {
       // Claude: uses --resume or prompt
-      args = this.resume ? ['--resume'] : ['-p', `Follow the /${this.workflow} workflow exactly.`];
+      // We must pass --mcp-config explicitly because we might be running in a different cwd
+      const configPath = getConfigPath('claude');
+
+      const promptArgs = this.resume
+        ? ['--resume']
+        : ['-p', `Follow the /${this.workflow} workflow exactly.`];
+
+      args = [
+        ...promptArgs,
+        '--dangerously-skip-permissions', // Needed for autonomous op
+        '--mcp-config', configPath
+      ];
     }
 
     console.log(`\n🚀 Spawning ${this.cli}...`);

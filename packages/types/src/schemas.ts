@@ -10,7 +10,8 @@ export const StandardCapability = z.enum([
   'spec-writing',   // Planning, specifications, technical design
   'code-writing',   // Code development, implementation
   'test-writing',   // Testing, QA, verification
-  'doc-writing'     // Documentation, technical writing
+  'doc-writing',    // Documentation, technical writing
+  'code-doctor'     // Code review, quality checks, static analysis (no source edits)
 ]);
 export type StandardCapability = z.infer<typeof StandardCapability>;
 

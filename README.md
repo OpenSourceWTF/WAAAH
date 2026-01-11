@@ -280,7 +280,7 @@ This is a monorepo managed with `pnpm workspaces`.
 | Script | Description |
 |--------|-------------|
 | `pnpm serve` | Start MCP orchestration server |
-| `pnpm cli <command>` | CLI for local testing |
+| `pnpm cli <command>` | CLI for local testing (see [CLI Reference](docs/CLI_REFERENCE.md)) |
 | `pnpm bot` | Start Discord/Slack bot |
 | `pnpm proxy` | Start MCP proxy instance |
 | `pnpm build` | Build all packages |

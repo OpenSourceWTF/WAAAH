@@ -23,13 +23,17 @@ export class AgentRepository implements IAgentRepository {
       // Check if existing agent is stale (> 5 min)
       const isStale = !existing.lastSeen || (now - existing.lastSeen > AGENT_OFFLINE_THRESHOLD_MS);
 
-      if (!isStale) {
-        // Active collision: generate new ID
+      // Check if this is the same agent re-registering (same displayName = same agent)
+      const isSameAgent = existing.displayName === agent.displayName;
+
+      if (!isStale && !isSameAgent) {
+        // Active collision from DIFFERENT agent: generate new ID
         const newId = `${agent.id}-${Date.now().toString(36)}`;
         console.log(`[AgentRepo] ID collision for ${agent.id}, assigning ${newId}`);
         return this.register({ ...agent, id: newId });
       }
-      // Stale: update existing
+      // Stale OR same agent re-registering: update existing (fall through to upsert)
+      console.log(`[AgentRepo] Re-registering agent ${agent.id} (stale=${isStale}, sameAgent=${isSameAgent})`);
     }
 
     const stmt = this.db.prepare(`
