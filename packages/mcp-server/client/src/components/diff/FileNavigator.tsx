@@ -24,7 +24,7 @@ export function FileNavigator({
   };
 
   return (
-    <>
+    <div className="fixed right-8 top-32 z-50">
       {!isOpen ? (
         <Button
           variant="default"
@@ -89,6 +89,6 @@ export function FileNavigator({
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 }

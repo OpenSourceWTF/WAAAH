@@ -35,9 +35,14 @@ export function DiffViewer({ taskId, onAddComment }: DiffViewerProps) {
     setLoading(true);
     try {
       const res = await apiFetch(`/admin/tasks/${taskId}/diff`);
-      res.ok
-        ? (setFiles(parseDiff((await res.json()).diff || '')), setExpandedFiles(new Set(files.map(f => f.path))), diffLoaded.current = true)
-        : setError('No diff available');
+      if (res.ok) {
+        const parsed = parseDiff((await res.json()).diff || '');
+        setFiles(parsed);
+        setExpandedFiles(new Set(parsed.map(f => f.path)));  // Use parsed directly to start expanded
+        diffLoaded.current = true;
+      } else {
+        setError('No diff available');
+      }
     } catch (e: any) { setError(e.message); }
     setLoading(false);
   }, [taskId]);
@@ -87,8 +92,9 @@ export function DiffViewer({ taskId, onAddComment }: DiffViewerProps) {
             <Badge variant="outline" className="border-red-500/50 text-red-400">−{totalDeletions}</Badge>
             {unresolvedCount > 0 && <Badge className="bg-orange-500 text-white">{unresolvedCount} unresolved</Badge>}
           </div>
-          <FileNavigator fileStats={fileStats} totalAdditions={totalAdditions} totalDeletions={totalDeletions} onJumpToFile={jumpToFile} />
         </div>
+
+        <FileNavigator fileStats={fileStats} totalAdditions={totalAdditions} totalDeletions={totalDeletions} onJumpToFile={jumpToFile} />
 
         {files.map(file => (
           <div key={file.path} className="border border-primary/30 bg-black/20" ref={el => { el && fileRefs.current.set(file.path, el); }}>
