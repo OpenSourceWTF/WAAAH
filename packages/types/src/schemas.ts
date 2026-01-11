@@ -7,11 +7,12 @@ import { z } from 'zod';
  * These are used for matching tasks to agents.
  */
 export const StandardCapability = z.enum([
-  'spec-writing',   // Planning, specifications, technical design
-  'code-writing',   // Code development, implementation
-  'test-writing',   // Testing, QA, verification
-  'doc-writing',    // Documentation, technical writing
-  'code-doctor'     // Code review, quality checks, static analysis (no source edits)
+  'spec-writing',     // Planning, specifications, technical design
+  'code-writing',     // Code development, implementation
+  'test-writing',     // Testing, QA, verification
+  'doc-writing',      // Documentation, technical writing
+  'code-doctor',      // Code review, quality checks, static analysis (no source edits)
+  'general-purpose'   // Fallback for ambiguous tasks or inference failure
 ]);
 export type StandardCapability = z.infer<typeof StandardCapability>;
 
