@@ -12,8 +12,9 @@ export class PollingService {
     private readonly persistence: QueuePersistence,
     private readonly matchingService: AgentMatchingService,
     private readonly evictionService: IEvictionService,
-    private readonly emitter: TypedEventEmitter
-  ) {}
+    private readonly emitter: TypedEventEmitter,
+    private readonly onAgentWaiting?: () => void
+  ) { }
 
   /**
    * Waits for a task suitable for the specified agent.
@@ -32,6 +33,11 @@ export class PollingService {
 
     // Track this agent as waiting in DB
     this.persistence.setAgentWaiting(agentId, capabilities);
+
+    // Trigger immediate scheduler cycle to minimize assignment latency (deferred to not race)
+    if (this.onAgentWaiting) {
+      setImmediate(() => this.onAgentWaiting?.());
+    }
 
     // 1. Check if there are pending tasks for this agent
     const pendingTask = this.matchingService.findPendingTaskForAgent(agentId, capabilities);

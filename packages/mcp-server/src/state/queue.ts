@@ -101,7 +101,9 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
       this.persistence,
       this.matchingService,
       this.evictionService,
-      this
+      this,
+      // Callback when agent starts waiting - trigger immediate scheduler cycle
+      () => this.scheduler?.runCycle()
     );
 
     // Init state management
@@ -223,6 +225,14 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
 
   stopScheduler(): void {
     this.scheduler.stop();
+  }
+
+  /**
+   * Triggers an immediate scheduler cycle.
+   * Called when an agent becomes available to minimize assignment latency.
+   */
+  triggerImmediateAssignment(): void {
+    this.scheduler.runCycle();
   }
 
   // ===== Accessors =====
