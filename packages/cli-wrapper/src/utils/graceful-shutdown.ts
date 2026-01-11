@@ -1,9 +1,9 @@
 /**
  * GracefulShutdown - Signal handlers to clean termination
- * 
+ *
  * Handles SIGINT (Ctrl+C) and SIGTERM signals to ensure clean shutdown
  * of agent processes with session state preservation.
- * 
+ *
  * @packageDocumentation
  */
 
@@ -39,82 +39,38 @@ export interface ShutdownResult {
   success: boolean;
 }
 
+const DEFAULT_KILL_TIMEOUT_MS = 5000;
+const SHUTDOWN_SIGNALS: NodeJS.Signals[] = ['SIGINT', 'SIGTERM'];
+
 /**
  * Manages graceful shutdown on SIGINT and SIGTERM signals.
- * 
- * When a termination signal is received:
- * 1. Saves current session state
- * 2. Kills the PTY process gracefully
- * 3. Displays resume instructions
- * 4. Exits cleanly
- * 
- * @example
- * ```typescript
- * const shutdown = new GracefulShutdown({
- *   sessionManager: new SessionManager(workspaceRoot),
- *   killAgent: async () => { await agent.kill(); },
- *   getSessionState: () => currentSession,
- *   onLog: console.log,
- * });
- * 
- * shutdown.install();
- * 
- * // On shutdown, user will see:
- * // "Session saved. Run `waaah agent --resume` to continue."
- * ```
  */
 export class GracefulShutdown {
   private options: Required<GracefulShutdownOptions>;
   private isShuttingDown = false;
   private signalHandlers: Map<NodeJS.Signals, NodeJS.SignalsListener> = new Map();
+  private emergencyCleanup: (() => void) | null = null;
 
-  /**
-   * Creates a new GracefulShutdown instance.
-   * @param options - Configuration options
-   */
   constructor(options: GracefulShutdownOptions) {
     this.options = {
       ...options,
       getSessionState: options.getSessionState ?? (() => null),
       onLog: options.onLog ?? (() => { }),
-      killTimeoutMs: options.killTimeoutMs ?? 5000,
+      killTimeoutMs: options.killTimeoutMs ?? DEFAULT_KILL_TIMEOUT_MS,
     };
   }
 
-  private emergencyCleanup: (() => void) | null = null;
-
   /**
    * Installs signal handlers to SIGINT and SIGTERM.
-   * Also installs emergency cleanup handlers to unexpected exits.
-   * 
-   * @example
-   * ```typescript
-   * shutdown.install();
-   * // Now Ctrl+C will trigger graceful shutdown
-   * ```
    */
   public install(): void {
     const handler = this.createSignalHandler();
+    SHUTDOWN_SIGNALS.forEach(sig => (this.signalHandlers.set(sig, handler), process.on(sig, handler)));
 
-    this.signalHandlers.set('SIGINT', handler);
-    this.signalHandlers.set('SIGTERM', handler);
-
-    process.on('SIGINT', handler);
-    process.on('SIGTERM', handler);
-
-    this.emergencyCleanup = () => {
-      if (!this.isShuttingDown) {
-        this.options.killAgent().catch(() => { });
-      }
-    };
-
+    this.emergencyCleanup = () => !this.isShuttingDown && this.options.killAgent().catch(() => { });
     process.on('exit', this.emergencyCleanup);
-    
-    const errorHandler = (err: any) => {
-      console.error(err);
-      this.emergencyCleanup?.();
-      process.exit(1);
-    };
+
+    const errorHandler = (err: any) => (console.error(err), this.emergencyCleanup?.(), process.exit(1));
     process.on('uncaughtException', errorHandler);
     process.on('unhandledRejection', errorHandler);
 
@@ -125,35 +81,19 @@ export class GracefulShutdown {
    * Removes installed signal handlers.
    */
   public uninstall(): void {
-    for (const [signal, handler] of this.signalHandlers) {
-      process.removeListener(signal, handler);
-    }
+    this.signalHandlers.forEach((handler, signal) => process.removeListener(signal, handler));
     this.signalHandlers.clear();
     this.log('Signal handlers removed');
   }
 
-  /**
-   * Creates the signal handler function.
-   * @private
-   */
   private createSignalHandler(): NodeJS.SignalsListener {
-    return async (signal: NodeJS.Signals) => {
-      if (this.isShuttingDown) return;
-      this.isShuttingDown = true;
-
-      try {
-        const result = await this.performShutdown();
-        this.handleShutdownResult(result);
-      } catch {
-        process.exit(1);
-      }
+    return async () => {
+      this.isShuttingDown || (this.isShuttingDown = true, this.handleShutdownResult(await this.performShutdown().catch(() => ({ success: false, sessionSaved: false }))));
     };
   }
 
   private handleShutdownResult(result: ShutdownResult): void {
-    if (result.success && result.sessionSaved && result.sessionId) {
-      console.log(`\n✅ Session saved: ${result.sessionId}\n`);
-    }
+    result.success && result.sessionSaved && result.sessionId && console.log(`\n✅ Session saved: ${result.sessionId}\n`);
     process.exit(result.success ? 0 : 1);
   }
 
@@ -163,12 +103,7 @@ export class GracefulShutdown {
 
     try {
       const state = this.options.getSessionState();
-      if (state) {
-        await this.saveSession(state);
-        sessionSaved = true;
-        sessionId = state.id;
-      }
-
+      state && (await this.saveSession(state), sessionSaved = true, sessionId = state.id);
       await this.killWithTimeout();
       return { success: true, sessionSaved, sessionId };
     } catch (error) {
@@ -187,59 +122,26 @@ export class GracefulShutdown {
     await this.options.sessionManager.save(state);
   }
 
-  /**
-   * Kills the agent with a timeout.
-   * @private
-   */
   private async killWithTimeout(): Promise<void> {
     return new Promise((resolve, reject) => {
-      const timeoutId = setTimeout(() => {
-        this.log('Kill timeout reached, forcing exit');
-        resolve();
-      }, this.options.killTimeoutMs);
-
+      const timeoutId = setTimeout(() => (this.log('Kill timeout reached, forcing exit'), resolve()), this.options.killTimeoutMs);
       this.options.killAgent()
-        .then(() => {
-          clearTimeout(timeoutId);
-          resolve();
-        })
-        .catch((error) => {
-          clearTimeout(timeoutId);
-          reject(error);
-        });
+        .then(() => (clearTimeout(timeoutId), resolve()))
+        .catch((error) => (clearTimeout(timeoutId), reject(error)));
     });
   }
 
-  /**
-   * Logs a message using the configured logger.
-   * @private
-   */
   private log(message: string): void {
     this.options.onLog(`[Shutdown] ${message}`);
   }
 
-  /**
-   * Returns whether a shutdown is in progress.
-   */
   public isShutdownInProgress(): boolean {
     return this.isShuttingDown;
   }
 
-  /**
-   * Manually triggers a graceful shutdown.
-   * Useful for programmatic shutdown scenarios.
-   */
   public async triggerShutdown(): Promise<ShutdownResult> {
-    if (this.isShuttingDown) {
-      return {
-        success: false,
-        sessionSaved: false,
-        error: 'Shutdown already in progress',
-      };
-    }
-
-    this.isShuttingDown = true;
-    this.log('Manual shutdown triggered');
-    return this.performShutdown();
+    return this.isShuttingDown
+      ? { success: false, sessionSaved: false, error: 'Shutdown already in progress' }
+      : (this.isShuttingDown = true, this.log('Manual shutdown triggered'), this.performShutdown());
   }
 }
