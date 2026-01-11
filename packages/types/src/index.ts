@@ -166,17 +166,3 @@ export interface SystemPrompt {
   payload?: Record<string, unknown>;
   priority?: 'normal' | 'high' | 'critical';
 }
-
-/**
- * Standardized response type for MCP tool calls.
- * Used by tools like send_response and wait_for_prompt to provide structured feedback.
- */
-export interface MCPToolResponse {
-  /** Whether the operation succeeded */
-  success: boolean;
-  /** Human-readable status message */
-  message: string;
-  /** Optional markdown instruction for the agent to execute */
-  prompt?: string;
-}
-

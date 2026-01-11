@@ -1,5 +1,6 @@
 import type { Database } from 'better-sqlite3';
 import type { Task, TaskStatus } from '@opensourcewtf/waaah-types';
+import { emitTaskCreated, emitTaskUpdated } from '../eventbus.js';
 
 /**
  * Interface for task repository operations.
@@ -79,6 +80,9 @@ export class TaskRepository implements ITaskRepository {
       createdAt: task.createdAt || Date.now(),
       completedAt: task.completedAt || null
     });
+
+    // Emit event for real-time UI updates (unified event architecture)
+    emitTaskCreated(task);
   }
 
   update(task: Task): void {
@@ -105,12 +109,23 @@ export class TaskRepository implements ITaskRepository {
       history: task.history ? JSON.stringify(task.history) : '[]',
       completedAt: task.completedAt || null
     });
+
+    // Emit event for real-time UI updates (unified event architecture)
+    emitTaskUpdated(task.id, {
+      status: task.status,
+      assignedTo: task.assignedTo,
+      response: task.response,
+      completedAt: task.completedAt
+    });
   }
 
   updateStatus(taskId: string, status: TaskStatus): void {
     const completedAt = TERMINAL_STATUSES.includes(status) ? Date.now() : null;
     this.database.prepare('UPDATE tasks SET status = ?, completedAt = ? WHERE id = ?')
       .run(status, completedAt, taskId);
+
+    // Emit event for real-time UI updates (unified event architecture)
+    emitTaskUpdated(taskId, { status, completedAt });
   }
 
   getById(taskId: string): Task | null {

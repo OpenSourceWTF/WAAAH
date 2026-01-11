@@ -89,41 +89,8 @@ export class PollingService {
     });
   }
 
-  /**
-   * Acknowledges receipt of a task by an agent.
-   * Uses database-backed pending ACK state.
-   */
-  ackTask(taskId: string, agentId: string): { success: boolean; error?: string } {
-    const pendingAck = this.persistence.getPendingAck(taskId);
-
-    if (!pendingAck) {
-      return { success: false, error: 'No pending ACK found for task' };
-    }
-
-    if (pendingAck.agentId !== agentId) {
-      return { success: false, error: `Task was sent to ${pendingAck.agentId}, not ${agentId}` };
-    }
-
-    const task = this.repo.getById(taskId);
-    if (!task) return { success: false, error: 'Task not found' };
-
-    task.assignedTo = agentId;
-    task.status = 'ASSIGNED';
-
-    if (!task.history) task.history = [];
-    task.history.push({
-      timestamp: Date.now(),
-      status: 'ASSIGNED',
-      agentId: agentId,
-      message: `Task assigned to ${agentId}`
-    });
-
-    this.repo.update(task);
-    this.persistence.clearPendingAck(taskId);
-    console.log(`[PollingService] Task ${taskId} ACKed by ${agentId}, now ASSIGNED`);
-
-    return { success: true };
-  }
+  // REMOVED: ackTask - now handled by TaskLifecycleService via queue.ackTask()
+  // The duplicate implementation was dead code that bypassed event emission.
 
   async waitForTaskCompletion(taskId: string, timeoutMs: number = 300000): Promise<Task | null> {
     return new Promise((resolve) => {
