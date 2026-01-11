@@ -252,16 +252,11 @@ export const ExpandedCardView: React.FC<ExpandedCardViewProps> = ({
             {/* REVIEW TAB */}
             <TabsContent value="review" className="m-0 p-4 h-full overflow-y-auto">
               <div className="space-y-4">
-                {/* Sticky header row */}
-                <div className="sticky top-0 z-10 bg-background/95 backdrop-blur pb-2 -mt-2 pt-2 border-b border-primary/20 mb-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-sm font-bold text-primary/70 mb-2">REVIEW STATUS</h3>
-                      <div className="flex items-center gap-2">
-                        <Badge className={getStatusBadgeClass(task.status)}>{task.status}</Badge>
-                        {task.assignedTo && <span className="text-xs text-primary/60">Assigned to: <span className="font-mono">{task.assignedTo}</span></span>}
-                      </div>
-                    </div>
+                <div>
+                  <h3 className="text-sm font-bold text-primary/70 mb-2">REVIEW STATUS</h3>
+                  <div className="flex items-center gap-2 mb-4">
+                    <Badge className={getStatusBadgeClass(task.status)}>{task.status}</Badge>
+                    {task.assignedTo && <span className="text-xs text-primary/60">Assigned to: <span className="font-mono">{task.assignedTo}</span></span>}
                   </div>
                 </div>
                 <div>

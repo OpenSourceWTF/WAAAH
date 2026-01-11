@@ -24,7 +24,7 @@ export function FileNavigator({
   };
 
   return (
-    <>
+    <div className="sticky top-2 ml-auto w-fit z-50">
       {!isOpen ? (
         <Button
           variant="default"
@@ -89,6 +89,6 @@ export function FileNavigator({
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 }
