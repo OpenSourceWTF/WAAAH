@@ -90,6 +90,7 @@ export class PTYManager {
     rows: number
   ): Promise<boolean> {
     try {
+      console.log(`[PTYManager] Spawning: ${command} ${args.join(' ')}`);
       this.ptyProcess = pty!.spawn(command, args, {
         name: 'xterm-256color',
         cols,
@@ -100,8 +101,14 @@ export class PTYManager {
       this.useNativePty = true;
       this.running = true;
       this.childPid = this.ptyProcess.pid;
+      console.log(`[PTYManager] Spawned PID: ${this.childPid}`);
 
+      let firstData = true;
       this.ptyProcess.onData((data) => {
+        if (firstData) {
+          console.log('[PTYManager] First data received from PTY');
+          firstData = false;
+        }
         this.lastDataTimestamp = Date.now();
         const output = this.sanitizeOutput ? sanitizeTuiOutput(data) : data;
         this.dispatchData(output);

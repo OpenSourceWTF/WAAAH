@@ -130,9 +130,13 @@ export function useTaskData(options: UseTaskDataOptions = {}) {
     };
 
     // Handle full sync (initial data from server)
-    const handleSyncFull = (data: { tasks: Task[]; agents: unknown[] }) => {
+    const handleSyncFull = (data: { tasks: Task[]; agents: unknown[]; seq?: number }) => {
       console.log('[useTaskData] Received sync:full with', data.tasks.length, 'tasks');
-      console.log('[useTaskData] Raw tasks:', data.tasks);
+
+      // Reset sequence tracking after full sync
+      if (data.seq !== undefined) {
+        import('../lib/socket').then(({ resetSequence }) => resetSequence(data.seq!));
+      }
 
       // Separate tasks by status
       const active: Task[] = [];
@@ -140,7 +144,6 @@ export function useTaskData(options: UseTaskDataOptions = {}) {
       const cancelled: Task[] = [];
 
       for (const task of data.tasks) {
-        console.log(`[useTaskData] Task ${task.id} status: ${task.status}`);
         if (task.status === 'COMPLETED') {
           completed.push(task);
         } else if (task.status === 'CANCELLED') {
