@@ -7,3 +7,4 @@
 
 export { useTaskData, type Task } from './useTaskData';
 export { useAgentData, type Agent, type AgentStatusColor } from './useAgentData';
+export { useWebSocket, type WebSocketStatus, type SyncFullPayload, type UseWebSocketOptions, type UseWebSocketResult } from './useWebSocket';
