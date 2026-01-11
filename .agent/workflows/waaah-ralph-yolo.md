@@ -10,7 +10,7 @@ description: Autonomous task refinement - no human intervention
 ## Core Rules
 1. **NO** `notify_user` pauses - fully autonomous
 2. Log every iteration to `.waaah/ralph/NNN-slug/progress.md`
-3. Max 10 iterations (double standard Ralph)
+3. Max 100 iterations (double standard Ralph)
 4. **Code tasks**: `pnpm typecheck && pnpm test && pnpm lint` must pass
 5. **Non-code tasks**: Self-verify against stated criteria
 6. Exit conditions:
