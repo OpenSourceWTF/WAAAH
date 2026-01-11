@@ -78,5 +78,34 @@ export function createAgentRoutes({ registry, queue }: AgentRoutesConfig): Route
     }
   });
 
+  /**
+   * GET /workspaces
+   * Get deduplicated list of workspace roots from all agents
+   */
+  router.get('/workspaces', (req, res) => {
+    const agents = registry.getAll();
+
+    // Collect workspace roots from all agents (stored in metadata or source)
+    const workspaceSet = new Set<string>();
+    for (const agent of agents) {
+      // Agents may store workspace in metadata.workspaceRoot or other fields
+      const workspace = (agent as any).workspaceRoot || (agent as any).metadata?.workspaceRoot;
+      if (workspace && typeof workspace === 'string') {
+        workspaceSet.add(workspace);
+      }
+    }
+
+    // Convert to array of objects with metadata
+    const workspaces = Array.from(workspaceSet).map(path => ({
+      path,
+      agentCount: agents.filter(a =>
+        (a as any).workspaceRoot === path ||
+        (a as any).metadata?.workspaceRoot === path
+      ).length
+    }));
+
+    res.json(workspaces);
+  });
+
   return router;
 }
