@@ -60,24 +60,45 @@ Generate spec.md using TEMPLATE. Save to `.waaah/specs/NNN-slug/spec.md`.
 ⏸️ `notify_user` spec summary → await approval
 
 ### TASKS
-Generate tasks with dependencies and verify commands.
+Generate two types of tasks:
 
-| Task Type | Verify Example |
+**Implementation Tasks (T-prefix):** Build the feature.
+**Verification Tasks (V-prefix):** E2E tests proving feature works.
+
+| Task Type | Verify Command |
 |-----------|----------------|
 | CLI | `node dist/index.js --help \| grep "expected"` |
 | API | `curl localhost:3000/health \| jq .status` |
 | Component | `pnpm test -- ComponentName` |
+| E2E | `pnpm test -- feature.e2e --grep "scenario"` |
 
-Display: `T1: [title] - [size] - deps: [list] - verify: [cmd]`
-⏸️ `notify_user` task list → "Confirm to assign?"
+**Format:**
+```
+## Implementation Tasks
+| ID | Title | Size | Deps | Verify |
+|----|-------|------|------|--------|
+| T1 | [title] | S/M/L | — | [cmd] |
+
+## Verification Tasks (E2E)
+| ID | Title | Size | Deps | Verify |
+|----|-------|------|------|--------|
+| V1 | E2E: [scenario] | S/M | T1,T2 | [e2e cmd] |
+```
+
+**Rules:**
+- Every major feature needs at least 1 V-task
+- V-tasks depend on their related T-tasks
+- V-tasks test integration, not unit behavior
+
+⏸️ `notify_user` with both tables → "Confirm to assign?"
 
 On confirm:
 ```
 t1_id = assign_task({ prompt, verify })
-t2_id = assign_task({ prompt, dependencies: [t1_id], verify })
+v1_id = assign_task({ prompt, dependencies: [t1_id], verify })
 ```
 
-Report: `✅ Spec saved. [N] tasks queued.`
+Report: `✅ Spec saved. [N] implementation + [M] verification tasks queued.`
 
 ## SPEC TEMPLATE
 
