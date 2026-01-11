@@ -24,16 +24,17 @@ export function FileNavigator({
   };
 
   return (
-    <div className="fixed left-4 top-1/2 -translate-y-1/2 z-50">
+    <div className="absolute right-2 top-2 z-50">
       {!isOpen ? (
         <Button
           variant="default"
           size="sm"
-          className="h-10 w-10 p-0 bg-primary/90 hover:bg-primary shadow-lg border border-primary-foreground/20"
+          className="h-8 px-3 gap-2 bg-primary/90 hover:bg-primary shadow-lg border border-primary-foreground/20"
           onClick={() => setIsOpen(true)}
           title="Show file navigator"
         >
-          <FileText className="h-5 w-5" />
+          <FileText className="h-4 w-4" />
+          <span className="text-xs font-bold">Files ({fileStats.length})</span>
         </Button>
       ) : (
         <div className="bg-background/95 backdrop-blur border border-primary/30 shadow-xl w-72 max-h-[60vh] overflow-hidden flex flex-col">

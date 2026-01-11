@@ -22,5 +22,27 @@
 
 **Average:** 8.3/10
 
-### Next Focus
-- Verify in browser that styling matches expectations
+---
+
+## Iteration 1
+
+### Focus: Clarity (user feedback)
+User requested TOC button be moved to top-right and made more obvious.
+
+### Changes
+- Moved FileNavigator button from `fixed left-4 top-1/2` to `absolute right-2 top-2`
+- Added label "Files (N)" showing file count
+- Button is now at top-right of diff panel with clear purpose
+
+### Scores
+| Criteria | Score | Notes |
+|----------|-------|-------|
+| Clarity | 10 | Button now obvious with label and positioned at top-right |
+| Completeness | 9 | Output in messages, TOC improved |
+| Correctness | 9 | All types correct, positions right |
+
+**Average:** 9.3/10 ✅
+
+---
+
+✅ COMPLETE

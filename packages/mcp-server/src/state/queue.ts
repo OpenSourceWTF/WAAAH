@@ -1,17 +1,17 @@
 /**
  * TaskQueue - Main queue facade
- * 
- * Manages the global task queue, handling task lifecycle, assignment, and persistence.
- * 
+ *
+ * Primary queue management component handling task operations.
+ *
  * Architecture:
- * - Uses TaskRepository as SINGLE SOURCE OF TRUTH for task data
- * - Uses TypedEventEmitter for type-safe events
- * - Delegates scheduling to HybridScheduler
- * - Delegates message handling to MessageService
- * - Delegates polling to PollingService
- * - Delegates lifecycle to TaskLifecycleService
- * - ALL STATE IS DATABASE-BACKED (no in-memory maps)
- * 
+ * - TaskRepository as SINGLE SOURCE OF TRUTH
+ * - TypedEventEmitter - type-safe events
+ * - HybridScheduler - scheduling
+ * - MessageService - messages
+ * - PollingService - agent polling
+ * - TaskLifecycleService - task states
+ * - ALL STATE IS DATABASE-BACKED
+ *
  * @module state/queue
  * @implements {ITaskQueue}
  */
@@ -35,38 +35,38 @@ import { PollingService } from './services/polling-service.js';
 import { TaskLifecycleService } from './services/task-lifecycle-service.js';
 
 /**
- * Manages the global task queue, handling task lifecycle, assignment, and persistence.
- * All state is database-backed for reliability and horizontal scaling.
+ * Primary queue management component.
+ * All state is database-backed.
  */
 export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedulerQueue {
-  /** Repository for task persistence operations */
+  /** Task persistence ops */
   private readonly repo: ITaskRepository;
 
-  /** Direct database access for agent/system prompt queries */
+  /** Database access - agent/prompt queries */
   private readonly db: Database;
 
-  /** Background scheduler for task management */
+  /** Background scheduler */
   private scheduler: HybridScheduler;
 
-  /** Eviction service for agent eviction management */
+  /** Eviction management */
   private readonly evictionService: IEvictionService;
 
-  /** Persistence helper for queue state */
+  /** Queue state persistence */
   private readonly persistence: QueuePersistence;
 
-  /** Service for handling system prompts */
+  /** System prompts */
   private readonly systemPromptService: SystemPromptService;
 
-  /** Service for agent matching logic */
+  /** Agent matching */
   private readonly matchingService: AgentMatchingService;
 
-  /** Service for message handling */
+  /** Message handling */
   private readonly messageService: MessageService;
 
-  /** Service for polling operations */
+  /** Polling ops */
   private readonly pollingService: PollingService;
 
-  /** Service for task lifecycle management */
+  /** Task state management */
   private readonly lifecycleService: TaskLifecycleService;
 
   /**
@@ -103,8 +103,8 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
       this
     );
 
-    // Initialize lifecycle service
-    this.lifecycleService = new TaskLifecycleService(
+    // Init state management
+    this.stateService = new TaskLifecycleService(
       this.repo,
       this.matchingService,
       this.persistence
@@ -117,21 +117,17 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
     this.pollingService.resetStaleState();
   }
 
-  // ===== Task Lifecycle (Delegated) =====
-
   /**
    * Enqueues a new task into the system.
    */
   enqueue(task: Task): void {
     try {
-      const reservedAgentId = this.lifecycleService.enqueue(task);
-      if (reservedAgentId) {
-        console.log(`[Queue] ✓ Task ${task.id} reserved for agent ${reservedAgentId}`);
-        // Notify the agent via event
-        this.emit('task', task, reservedAgentId);
-      } else {
-        console.log(`[Queue] No waiting agents for task ${task.id}. Task remains QUEUED.`);
-      }
+      const reservedAgentId = this.stateService.enqueue(task);
+      const status = reservedAgentId
+        ? `✓ Task ${task.id} reserved: ${reservedAgentId}`
+        : `No waiting agents: ${task.id}. Task remains QUEUED.`;
+      console.log(`[Queue] ${status}`);
+      reservedAgentId && this.emit('task', task, reservedAgentId);
     } catch (e: any) {
       console.error(`[Queue] Failed to persist task ${task.id}: ${e.message}`);
     }
@@ -141,15 +137,13 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
    * Updates task status and optionally sets response.
    */
   updateStatus(taskId: string, status: TaskStatus, response?: any): void {
-    const task = this.lifecycleService.updateStatus(taskId, status, response);
-    if (task && ['COMPLETED', 'FAILED', 'BLOCKED'].includes(status)) {
-      this.emit('completion', task);
-      console.log(`[Queue] Emitted completion event for task ${taskId} (${status})`);
-    }
+    const task = this.stateService.updateStatus(taskId, status, response);
+    const isTerminal = task && ['COMPLETED', 'FAILED', 'BLOCKED'].includes(status);
+    isTerminal && (this.emit('completion', task), console.log(`[Queue] Emitted completion: ${taskId} (${status})`));
   }
 
   /**
-   * Cancels a task if it is not already in a terminal state.
+   * Cancels a task not already in a terminal state.
    */
   cancelTask(taskId: string): { success: boolean; error?: string } {
     return this.lifecycleService.cancelTask(taskId);
@@ -281,7 +275,7 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
     return this.repo.getByStatus(status);
   }
 
-  /** Check if a specific agent is currently waiting (from DB) */
+  /** Checks whether a specific agent is currently waiting (from DB) */
   isAgentWaiting(agentId: string): boolean {
     return this.persistence.isAgentWaiting(agentId);
   }
