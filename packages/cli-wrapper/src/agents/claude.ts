@@ -44,21 +44,9 @@ export class ClaudeAgent extends BaseAgent {
   }
 
   protected getCliArgs(): string[] {
-    const args = ['--dangerously-skip-permissions'];
-
-    if (this.sessionId) {
-      args.push('--resume', this.sessionId);
-    } else {
-      const prompt = this.config.resume
-        ? `Resume the /${this.config.workflow} workflow. Continue from where you left off.`
-        : `Follow the /${this.config.workflow} workflow exactly.`;
-      args.push(prompt);
-      
-      // Initialize sessionId for next restart
-      this.sessionId = `waaah-${Date.now()}`;
-    }
-
-    return args;
+    // Always start fresh - resume feature disabled (not working reliably)
+    const prompt = `Follow the /${this.config.workflow} workflow exactly.`;
+    return ['--dangerously-skip-permissions', prompt];
   }
 
   protected getAuthPatterns(): RegExp[] {
