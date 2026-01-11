@@ -74,6 +74,8 @@ export interface Task {
   response?: any; // The result payload
   threadId?: string;
   messages?: TaskMessage[];
+  /** Source of task creation: UI (dashboard), CLI (command line), or Agent (delegation) */
+  source?: 'UI' | 'CLI' | 'Agent';
   dependencies?: string[];
   history?: TaskHistoryEvent[];
 }
