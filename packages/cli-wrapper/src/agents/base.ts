@@ -80,34 +80,43 @@ export abstract class BaseAgent {
    */
   public async checkAuth(): Promise<AuthStatus> {
     const cmd = this.getCliCommand();
+    const output = this.tryGetVersionOutput(cmd);
+    return this.buildAuthStatus(cmd, output);
+  }
+
+  private tryGetVersionOutput(cmd: string): { output?: string; error?: string } {
     try {
       const output = execSync(`${cmd} --version 2>&1`, {
         encoding: 'utf-8',
         timeout: 10000,
         stdio: 'pipe',
       });
-
-      return this.requiresAuth(output) 
-        ? this.getUnauthenticatedStatus(cmd) 
-        : { authenticated: true };
+      return { output };
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
-      return this.requiresAuth(msg)
-        ? this.getUnauthenticatedStatus(cmd)
-        : {
-          authenticated: false,
-          error: `❌ Failed to check ${cmd} auth: ${msg}`,
-          instructions: this.getAuthInstructions(),
-        };
+      return { error: error instanceof Error ? error.message : String(error) };
     }
   }
 
-  private getUnauthenticatedStatus(cmd: string): AuthStatus {
-    return {
-      authenticated: false,
-      error: `❌ ${cmd} CLI requires authentication.`,
-      instructions: this.getAuthInstructions(),
-    };
+  private buildAuthStatus(cmd: string, result: { output?: string; error?: string }): AuthStatus {
+    const text = result.output || result.error || '';
+
+    if (this.requiresAuth(text)) {
+      return {
+        authenticated: false,
+        error: `❌ ${cmd} CLI requires authentication.`,
+        instructions: this.getAuthInstructions(),
+      };
+    }
+
+    if (result.error) {
+      return {
+        authenticated: false,
+        error: `❌ Failed to check ${cmd} auth: ${result.error}`,
+        instructions: this.getAuthInstructions(),
+      };
+    }
+
+    return { authenticated: true };
   }
 
   protected requiresAuth(output: string): boolean {
@@ -120,24 +129,30 @@ export abstract class BaseAgent {
 
   private async runWithRestart(): Promise<void> {
     const maxRestarts = this.getMaxRestarts();
-    let exitCode = 0;
+    let exitCode = await this.runOnce();
 
-    while (true) {
-      exitCode = await this.runOnce();
-      const canRestart = maxRestarts === Infinity || this.restartCount < maxRestarts;
-
-      if (!canRestart) {
-        break;
-      }
-
+    while (this.shouldRestart(exitCode, maxRestarts)) {
       this.restartCount++;
       console.log(`\n🔄 Restarting agent (attempt ${this.restartCount})...`);
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await this.delay(1000);
+      exitCode = await this.runOnce();
     }
 
+    this.logFinalExit(exitCode);
+  }
+
+  private shouldRestart(exitCode: number, maxRestarts: number): boolean {
+    return maxRestarts === Infinity || this.restartCount < maxRestarts;
+  }
+
+  private logFinalExit(exitCode: number): void {
     if (exitCode !== 0) {
       console.log(`\n❌ Agent exited with code ${exitCode}. No more restarts.`);
     }
+  }
+
+  private delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   private getMaxRestarts(): number {
@@ -170,52 +185,59 @@ export abstract class BaseAgent {
   protected setupPtyHandlers(): void {
     if (!this.ptyManager) return;
 
-    this.ptyManager.onData((data: string) => {
-      process.stdout.write(data);
-    });
-
+    this.ptyManager.onData((data: string) => process.stdout.write(data));
     process.stdin.on('data', this.stdinHandler);
-
-    if (process.stdin.isTTY) {
-      process.stdin.setRawMode(true);
-      process.stdin.resume();
-    }
-
+    this.enableRawMode();
     process.stdout.on('resize', this.resizeHandler);
   }
 
+  private enableRawMode(): void {
+    if (!process.stdin.isTTY) return;
+    process.stdin.setRawMode(true);
+    process.stdin.resume();
+  }
+
+  private disableRawMode(): void {
+    if (!process.stdin.isTTY) return;
+    process.stdin.setRawMode(false);
+    process.stdin.pause();
+  }
+
   private stdinHandler = (data: Buffer) => {
-    if (data.includes(0x03)) {
+    if (this.isInterruptSignal(data)) {
       process.emit('SIGINT', 'SIGINT');
       return;
     }
+    this.forwardToAgent(data);
+  };
+
+  private isInterruptSignal(data: Buffer): boolean {
+    return data.includes(0x03);
+  }
+
+  private forwardToAgent(data: Buffer): void {
     if (this.ptyManager?.isRunning()) {
       this.ptyManager.write(data.toString());
     }
-  };
+  }
 
   private resizeHandler = () => {
-    if (this.ptyManager?.isRunning()) {
-      this.ptyManager.resize(process.stdout.columns || 80, process.stdout.rows || 24);
-    }
+    if (!this.ptyManager?.isRunning()) return;
+    this.ptyManager.resize(process.stdout.columns || 80, process.stdout.rows || 24);
   };
 
   private cleanupHandlers(): void {
     process.stdin.removeListener('data', this.stdinHandler);
     process.stdout.removeListener('resize', this.resizeHandler);
-    if (process.stdin.isTTY) {
-      process.stdin.setRawMode(false);
-      process.stdin.pause();
-    }
+    this.disableRawMode();
     console.log('\nAgent exited.');
   }
 
   public async sendPrompt(prompt: string): Promise<void> {
-    if (this.ptyManager?.isRunning()) {
-      this.ptyManager.write(prompt + '\r');
-    } else {
+    if (!this.ptyManager?.isRunning()) {
       throw new Error('Agent not running');
     }
+    this.ptyManager.write(prompt + '\r');
   }
 
   public async stop(): Promise<void> {
