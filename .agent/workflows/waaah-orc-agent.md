@@ -155,9 +155,11 @@ git branch -D $BRANCH && git push origin --delete $BRANCH
 ## SMOKE (post-merge verification)
 
 ```
+0. IF ctx.dependencies → verify EACH dependency still works
 1. IF ctx.verify → RUN verify; fail → revert & block
 2. GRUMPY: "Can stranger run [cmd] and see [output]?" No → not done
 3. STUB: grep "TODO|Not implemented" [files]; found → not done
-4. Pass all → send_response(COMPLETED)
+4. BROWSER: does the UI still work? (if applicable)
+5. Pass all → send_response(COMPLETED)
 → WAIT
 ```
