@@ -1,50 +1,23 @@
-# Ralph Session: Scheduler Dependencies Fix
+# Ralph Session 025: Scheduler Dependencies
 
-## Task
-Fix scheduler dependency filtering - dependencies checked in 3 places but none work.
+## Findings
 
-## Root Cause
+| Issue | Solution |
+|-------|----------|
+| `findPendingTaskForAgent` called without `getTask` param | Pass `getTaskFn` at call site |
+| 5 duplicate dependency checks | Consolidated into `areDependenciesMet()` |
 
-**agent-matcher.ts:330** called `findPendingTaskForAgent()` WITHOUT the `getTask` parameter:
-```typescript
-// Line 268 - Without getTask, deps always fail!
-const dep = getTask ? getTask(depId) : undefined;  // Always undefined
-return dep && dep.status === 'COMPLETED';           // Always false
-```
+## Changes
 
-## Criteria
-| Criterion | Definition |
-|-----------|------------|
-| clarity | Clear why deps weren't working |
-| completeness | All 3 check locations work |
-| correctness | Tasks with unmet deps are skipped |
+**task-lifecycle-service.ts** - Added exported `areDependenciesMet(task, getTask)` utility
 
----
+**Updated to use shared function:**
+- scheduler.ts (2 locations)
+- agent-matcher.ts (1 location)
+- agent-matching-service.ts (1 location)
 
-## Iteration 1
-
-### Changes Made
-1. Added `getTask` and `getTaskFromDB` to `IMatcherQueue` interface
-2. Passed `getTaskFn` at `waitForTask` call site (line 331)
-
-### Verification
+## Verification
 - TypeScript: ✅ PASS
 - Tests: ✅ 182/182 PASS
 
-### Scores
-| Criterion | Score | Notes |
-|-----------|-------|-------|
-| clarity | 10/10 | Root cause documented |
-| completeness | 10/10 | Critical path fixed |
-| correctness | 10/10 | All tests pass |
-
-**Total: 30/30 (100%)**
-
----
-
 ## ✅ COMPLETE
-
-### Files Modified
-- `packages/mcp-server/src/state/agent-matcher.ts`
-  - Added `getTask?`, `getTaskFromDB?` to `IMatcherQueue` interface
-  - Passed `getTaskFn` at line 331 call site
