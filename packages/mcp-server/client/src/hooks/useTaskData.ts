@@ -1,4 +1,6 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { getSocket, connectSocket } from '../lib/socket';
+import type { ServerToClientEvents } from '../lib/socket';
 import { apiFetch } from '../lib/api';
 
 export interface Task {
@@ -19,28 +21,14 @@ export interface Task {
 }
 
 interface UseTaskDataOptions {
-  pollInterval?: number;
   search?: string;
   pageSize?: number;
 }
 
 const DEFAULT_PAGE_SIZE = 50;
 
-/** Compare and update state only if data differs (JSON comparison) */
-function updateIfChanged<T>(
-  newData: T,
-  prevRef: React.MutableRefObject<string>,
-  setter: React.Dispatch<React.SetStateAction<T>>
-) {
-  const newJson = JSON.stringify(newData);
-  if (newJson !== prevRef.current) {
-    prevRef.current = newJson;
-    setter(newData);
-  }
-}
-
 export function useTaskData(options: UseTaskDataOptions = {}) {
-  const { pollInterval = 2000, search = '', pageSize = DEFAULT_PAGE_SIZE } = options;
+  const { search = '', pageSize = DEFAULT_PAGE_SIZE } = options;
 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [recentCompleted, setRecentCompleted] = useState<Task[]>([]);
@@ -56,53 +44,111 @@ export function useTaskData(options: UseTaskDataOptions = {}) {
   const [botCount, setBotCount] = useState(0);
   const [stats, setStats] = useState({ total: 0, completed: 0 });
 
-  const prevTasksRef = useRef<string>('');
-  const prevCompletedRef = useRef<string>('');
-  const prevCancelledRef = useRef<string>('');
-  const prevStatsRef = useRef<string>('');
-
+  // Initial data fetch
   const fetchTaskData = useCallback(async () => {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3000);
     const searchParam = search.trim() ? `&q=${encodeURIComponent(search.trim())}` : '';
 
     try {
       const [tasksRes, botRes, statsRes, completedRes, cancelledRes] = await Promise.all([
-        apiFetch(`/admin/tasks?active=true&limit=1000${searchParam}`, { signal: controller.signal }),
-        apiFetch(`/admin/bot/status`, { signal: controller.signal }),
-        apiFetch(`/admin/stats`, { signal: controller.signal }),
-        apiFetch(`/admin/tasks?limit=${pageSize}&offset=0&status=COMPLETED${searchParam}`, { signal: controller.signal }),
-        apiFetch(`/admin/tasks?limit=${pageSize}&offset=0&status=CANCELLED${searchParam}`, { signal: controller.signal })
+        apiFetch(`/admin/tasks?active=true&limit=1000${searchParam}`),
+        apiFetch(`/admin/bot/status`),
+        apiFetch(`/admin/stats`),
+        apiFetch(`/admin/tasks?limit=${pageSize}&offset=0&status=COMPLETED${searchParam}`),
+        apiFetch(`/admin/tasks?limit=${pageSize}&offset=0&status=CANCELLED${searchParam}`)
       ]);
-
-      clearTimeout(timeoutId);
 
       if (!tasksRes.ok) { setConnected(false); return; }
       setConnected(true);
 
-      updateIfChanged(await tasksRes.json(), prevTasksRef, setTasks);
+      setTasks(await tasksRes.json());
       if (botRes.ok) setBotCount((await botRes.json()).count);
-      if (statsRes.ok) updateIfChanged(await statsRes.json(), prevStatsRef, setStats);
+      if (statsRes.ok) setStats(await statsRes.json());
 
       if (completedRes.ok) {
         const data = await completedRes.json();
-        updateIfChanged(data, prevCompletedRef, setRecentCompleted);
+        setRecentCompleted(data);
         setCompletedOffset(0);
         setHasMoreCompleted(data.length >= pageSize);
       }
 
       if (cancelledRes.ok) {
         const data = await cancelledRes.json();
-        updateIfChanged(data, prevCancelledRef, setRecentCancelled);
+        setRecentCancelled(data);
         setCancelledOffset(0);
         setHasMoreCancelled(data.length >= pageSize);
       }
     } catch (e) {
-      clearTimeout(timeoutId);
       console.error('Task fetch error:', e);
       setConnected(false);
     }
   }, [search, pageSize]);
+
+  // WebSocket subscription effect
+  useEffect(() => {
+    const socket = getSocket();
+    connectSocket();
+
+    // Initial fetch
+    fetchTaskData();
+
+    // Handle full sync on connect/reconnect
+    const handleSync: ServerToClientEvents['sync:full'] = (data) => {
+      if (data.tasks) {
+        setTasks(data.tasks);
+        setConnected(true);
+      }
+    };
+
+    // Handle task creation
+    const handleTaskCreated = (task: any) => {
+      setTasks(prev => [task, ...prev]);
+    };
+
+    // Handle task updates (patch)
+    const handleTaskUpdated = (patch: { id: string;[key: string]: any }) => {
+      setTasks(prev => prev.map(t => t.id === patch.id ? { ...t, ...patch } : t));
+
+      // Move to completed/cancelled swimlane if status changed
+      if (patch.status === 'COMPLETED') {
+        setTasks(prev => prev.filter(t => t.id !== patch.id));
+        setRecentCompleted(prev => {
+          const existing = prev.find(t => t.id === patch.id);
+          const updated = { ...existing, ...patch, id: patch.id } as Task;
+          return [updated, ...prev.filter(t => t.id !== patch.id)];
+        });
+      } else if (patch.status === 'CANCELLED') {
+        setTasks(prev => prev.filter(t => t.id !== patch.id));
+        setRecentCancelled(prev => {
+          const existing = prev.find(t => t.id === patch.id);
+          const updated = { ...existing, ...patch, id: patch.id } as Task;
+          return [updated, ...prev.filter(t => t.id !== patch.id)];
+        });
+      }
+    };
+
+    // Handle task deletion
+    const handleTaskDeleted = (data: { id: string }) => {
+      setTasks(prev => prev.filter(t => t.id !== data.id));
+      setRecentCompleted(prev => prev.filter(t => t.id !== data.id));
+      setRecentCancelled(prev => prev.filter(t => t.id !== data.id));
+    };
+
+    socket.on('sync:full', handleSync);
+    socket.on('task:created', handleTaskCreated);
+    socket.on('task:updated', handleTaskUpdated);
+    socket.on('task:deleted', handleTaskDeleted);
+    socket.on('connect', () => setConnected(true));
+    socket.on('disconnect', () => setConnected(false));
+
+    return () => {
+      socket.off('sync:full', handleSync);
+      socket.off('task:created', handleTaskCreated);
+      socket.off('task:updated', handleTaskUpdated);
+      socket.off('task:deleted', handleTaskDeleted);
+      socket.off('connect');
+      socket.off('disconnect');
+    };
+  }, [fetchTaskData]);
 
   /** Generic loadMore for completed/cancelled swimlanes */
   const loadMore = useCallback(async (
@@ -144,12 +190,6 @@ export function useTaskData(options: UseTaskDataOptions = {}) {
     if (loadingMore || !hasMoreCancelled) return;
     loadMore('CANCELLED', cancelledOffset, setCancelledOffset, setRecentCancelled, setHasMoreCancelled);
   }, [cancelledOffset, hasMoreCancelled, loadingMore, loadMore]);
-
-  useEffect(() => {
-    fetchTaskData();
-    const interval = setInterval(fetchTaskData, pollInterval);
-    return () => clearInterval(interval);
-  }, [fetchTaskData, pollInterval]);
 
   const activeTasks = useMemo(() =>
     tasks.filter(t => !['COMPLETED', 'FAILED', 'BLOCKED', 'CANCELLED'].includes(t.status)),

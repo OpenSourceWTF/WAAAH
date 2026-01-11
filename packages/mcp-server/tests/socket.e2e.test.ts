@@ -220,3 +220,50 @@ describe('Socket.io Agent Status Push', () => {
     socket.disconnect();
   });
 });
+
+describe('No Polling After Migration', () => {
+  it('useAgentData.ts does not use setInterval', async () => {
+    const fs = await import('fs/promises');
+    const path = await import('path');
+    const hookPath = path.resolve(__dirname, '../client/src/hooks/useAgentData.ts');
+    const content = await fs.readFile(hookPath, 'utf-8');
+
+    expect(content).not.toContain('setInterval');
+    expect(content).not.toContain('clearInterval');
+    // Should use socket instead
+    expect(content).toContain('getSocket');
+  });
+
+  it('useTaskData.ts does not use setInterval', async () => {
+    const fs = await import('fs/promises');
+    const path = await import('path');
+    const hookPath = path.resolve(__dirname, '../client/src/hooks/useTaskData.ts');
+    const content = await fs.readFile(hookPath, 'utf-8');
+
+    expect(content).not.toContain('setInterval');
+    expect(content).not.toContain('clearInterval');
+    // Should use socket instead
+    expect(content).toContain('getSocket');
+  });
+
+  it('hooks use WebSocket events for real-time updates', async () => {
+    const fs = await import('fs/promises');
+    const path = await import('path');
+
+    const agentHook = await fs.readFile(
+      path.resolve(__dirname, '../client/src/hooks/useAgentData.ts'),
+      'utf-8'
+    );
+    const taskHook = await fs.readFile(
+      path.resolve(__dirname, '../client/src/hooks/useTaskData.ts'),
+      'utf-8'
+    );
+
+    // Both hooks should subscribe to socket events
+    expect(agentHook).toContain("socket.on('sync:full'");
+    expect(agentHook).toContain("socket.on('agent:status'");
+    expect(taskHook).toContain("socket.on('sync:full'");
+    expect(taskHook).toContain("socket.on('task:created'");
+    expect(taskHook).toContain("socket.on('task:updated'");
+  });
+});
