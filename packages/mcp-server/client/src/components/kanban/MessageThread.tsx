@@ -101,7 +101,7 @@ export const MessageThread: React.FC<MessageThreadProps> = ({
       <div className="flex-1 overflow-y-auto p-3 space-y-2 bg-black/20">
         {/* Prompt Injection */}
         <div className="flex gap-2 justify-start">
-          <div className="max-w-[90%] p-2 rounded text-xs bg-amber-600 text-white">
+          <div className="max-w-[90%] p-2 text-xs bg-amber-600 text-white">
             <div className="flex items-center gap-2 mb-1">
               <Badge className="bg-amber-800 text-white text-[10px] px-1 py-0">PROMPT</Badge>
               <span className="text-[10px] opacity-70">
@@ -169,7 +169,7 @@ export const MessageThread: React.FC<MessageThreadProps> = ({
             if (item.type === 'response') {
               return (
                 <div key={`response-${idx}`} className="flex gap-2 justify-start">
-                  <div className="max-w-[90%] p-2 rounded text-xs bg-green-700 text-white">
+                  <div className="max-w-[90%] p-2 text-xs bg-green-700 text-white">
                     <div className="flex items-center gap-2 mb-1">
                       <Badge className="bg-green-900 text-white text-[10px] px-1 py-0">RESPONSE</Badge>
                       <span className="text-[10px] opacity-70">
@@ -201,7 +201,7 @@ export const MessageThread: React.FC<MessageThreadProps> = ({
                 className={`flex gap-2 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
                 <div
-                  className={`max-w-[80%] p-2 rounded text-xs ${msg.role === 'user'
+                  className={`max-w-[80%] p-2 text-xs ${msg.role === 'user'
                     ? 'bg-blue-600 text-white'
                     : 'bg-slate-700 text-slate-100'
                     } ${replyToId === msg.id ? 'ring-2 ring-yellow-400' : ''}`}
@@ -238,7 +238,7 @@ export const MessageThread: React.FC<MessageThreadProps> = ({
                           key={imgIdx}
                           src={img.dataUrl}
                           alt={img.name || 'Image'}
-                          className="max-h-24 rounded border border-primary/20 cursor-pointer hover:opacity-80"
+                          className="max-h-24 border border-primary/20 cursor-pointer hover:opacity-80"
                           onClick={() => onPreviewImage(img.dataUrl)}
                         />
                       ))}
@@ -271,11 +271,11 @@ export const MessageThread: React.FC<MessageThreadProps> = ({
         {pendingImages.length > 0 && (
           <div className="flex gap-3 px-3 py-3 border-b border-primary/20 bg-black/10 overflow-x-auto">
             {pendingImages.map((img) => (
-              <div key={img.id} className="relative shrink-0 w-20 h-20 rounded-lg border-2 border-primary/40 overflow-visible cursor-pointer shadow-sm hover:shadow-md transition-shadow">
-                <img src={img.dataUrl} alt={img.name} className="w-full h-full object-cover rounded-lg" onClick={() => onPreviewImage(img.dataUrl)} />
+              <div key={img.id} className="relative shrink-0 w-20 h-20 border-2 border-primary/40 overflow-visible cursor-pointer shadow-sm hover:shadow-md transition-shadow">
+                <img src={img.dataUrl} alt={img.name} className="w-full h-full object-cover" onClick={() => onPreviewImage(img.dataUrl)} />
                 <button
                   onClick={(e) => { e.stopPropagation(); setPendingImages(prev => prev.filter(i => i.id !== img.id)); }}
-                  className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-red-500 hover:bg-red-600 text-white text-sm font-bold flex items-center justify-center shadow-lg hover:scale-110"
+                  className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 hover:bg-red-600 text-white text-sm font-bold flex items-center justify-center shadow-lg hover:scale-110"
                 >×</button>
               </div>
             ))}
