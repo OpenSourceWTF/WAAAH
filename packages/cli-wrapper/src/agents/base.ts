@@ -1,7 +1,7 @@
 /**
- * BaseAgent - Abstract base class for CLI agent implementations
+ * BaseAgent - Abstract base class to CLI agent implementations
  * 
- * Defines the common interface for spawning and managing external CLI coding agents.
+ * Defines the common interface to spawning and managing external CLI coding agents.
  * 
  * @packageDocumentation
  */
@@ -10,7 +10,7 @@ import { PTYManager } from '../pty/manager.js';
 import { execSync } from 'child_process';
 
 /**
- * Configuration options for agent initialization.
+ * Configuration options to agent initialization.
  */
 export interface AgentConfig {
   /** The workflow to execute (e.g., 'waaah-orc') */
@@ -19,7 +19,7 @@ export interface AgentConfig {
   resume?: boolean;
   /** Path to the workspace root */
   workspaceRoot: string;
-  /** Restart on exit - if true or number, will restart on exit. Number specifies max restarts. */
+  /** Restart on exit - when true or number, will restart on exit. Number specifies max restarts. */
   restartOnExit?: boolean | number;
   /** Sanitize TUI output by stripping cursor movement sequences (default: true) */
   sanitizeOutput?: boolean;
@@ -31,14 +31,14 @@ export interface AgentConfig {
 export interface AuthStatus {
   /** Whether the CLI is authenticated */
   authenticated: boolean;
-  /** Error message if not authenticated */
+  /** Error message when not authenticated */
   error?: string;
-  /** Instructions for authenticating */
+  /** Instructions to authenticating */
   instructions?: string;
 }
 
 /**
- * Abstract base class for CLI agent implementations.
+ * Abstract base class to CLI agent implementations.
  */
 export abstract class BaseAgent {
   public config: AgentConfig;
@@ -56,7 +56,7 @@ export abstract class BaseAgent {
   public abstract getInstallInstructions(): string;
 
   /**
-   * Checks if the CLI is installed and accessible.
+   * Checks whether the CLI is installed and accessible.
    */
   public async checkInstalled(): Promise<boolean> {
     try {
@@ -68,7 +68,7 @@ export abstract class BaseAgent {
   }
 
   /**
-   * Checks if the CLI is authenticated.
+   * Checks whether the CLI is authenticated.
    */
   public async checkAuthenticated(): Promise<boolean> {
     const status = await this.checkAuth();
@@ -87,29 +87,27 @@ export abstract class BaseAgent {
         stdio: 'pipe',
       });
 
-      if (this.requiresAuth(output)) {
-        return {
-          authenticated: false,
-          error: `❌ ${cmd} CLI requires authentication.`,
-          instructions: this.getAuthInstructions(),
-        };
-      }
-      return { authenticated: true };
+      return this.requiresAuth(output) 
+        ? this.getUnauthenticatedStatus(cmd) 
+        : { authenticated: true };
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
-      if (this.requiresAuth(msg)) {
-        return {
+      return this.requiresAuth(msg)
+        ? this.getUnauthenticatedStatus(cmd)
+        : {
           authenticated: false,
-          error: `❌ ${cmd} CLI requires authentication.`,
+          error: `❌ Failed to check ${cmd} auth: ${msg}`,
           instructions: this.getAuthInstructions(),
         };
-      }
-      return {
-        authenticated: false,
-        error: `❌ Failed to check ${cmd} auth: ${msg}`,
-        instructions: this.getAuthInstructions(),
-      };
     }
+  }
+
+  private getUnauthenticatedStatus(cmd: string): AuthStatus {
+    return {
+      authenticated: false,
+      error: `❌ ${cmd} CLI requires authentication.`,
+      instructions: this.getAuthInstructions(),
+    };
   }
 
   protected requiresAuth(output: string): boolean {
@@ -122,21 +120,23 @@ export abstract class BaseAgent {
 
   private async runWithRestart(): Promise<void> {
     const maxRestarts = this.getMaxRestarts();
+    let exitCode = 0;
 
     while (true) {
-      const exitCode = await this.runOnce();
+      exitCode = await this.runOnce();
+      const canRestart = maxRestarts === Infinity || this.restartCount < maxRestarts;
 
-      if (maxRestarts === Infinity || this.restartCount < maxRestarts) {
-        this.restartCount++;
-        console.log(`\n🔄 Restarting agent (attempt ${this.restartCount})...`);
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        continue;
+      if (!canRestart) {
+        break;
       }
 
-      if (exitCode !== 0) {
-        console.log(`\n❌ Agent exited with code ${exitCode}. No more restarts.`);
-      }
-      break;
+      this.restartCount++;
+      console.log(`\n🔄 Restarting agent (attempt ${this.restartCount})...`);
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+
+    if (exitCode !== 0) {
+      console.log(`\n❌ Agent exited with code ${exitCode}. No more restarts.`);
     }
   }
 
