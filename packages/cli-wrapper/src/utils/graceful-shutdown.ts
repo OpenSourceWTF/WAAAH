@@ -1,9 +1,9 @@
 /**
  * GracefulShutdown - Signal handlers to clean termination
- *
+ * 
  * Handles SIGINT (Ctrl+C) and SIGTERM signals to ensure clean shutdown
  * of agent processes with session state preservation.
- *
+ * 
  * @packageDocumentation
  */
 
@@ -30,18 +30,18 @@ export interface GracefulShutdownOptions {
  */
 export interface ShutdownResult {
   /** Whether shutdown completed successfully */
-  success: boolean;
-  /** Whether session was saved */
   sessionSaved: boolean;
   /** Session ID when saved */
   sessionId?: string;
   /** Error message when failed */
   error?: string;
+  /** Whether shutdown completed successfully */
+  success: boolean;
 }
 
 /**
  * Manages graceful shutdown on SIGINT and SIGTERM signals.
- *
+ * 
  * When a termination signal is received:
  * 1. Saves current session state
  * 2. Kills the PTY process gracefully
@@ -72,14 +72,7 @@ export class GracefulShutdown {
    * Also installs emergency cleanup handlers to unexpected exits.
    */
   public install(): void {
-    const handler = this.handleSignal.bind(this);
-
-    this.signalHandlers.set('SIGINT', handler);
-    this.signalHandlers.set('SIGTERM', handler);
-
-    process.on('SIGINT', handler);
-    process.on('SIGTERM', handler);
-
+    this.installSignalHandlers();
     this.installEmergencyHandlers();
     this.log('Signal handlers installed');
   }
@@ -95,9 +88,20 @@ export class GracefulShutdown {
     this.log('Signal handlers removed');
   }
 
+  private installSignalHandlers(): void {
+    const handler = this.handleSignal.bind(this);
+    this.signalHandlers.set('SIGINT', handler);
+    this.signalHandlers.set('SIGTERM', handler);
+
+    process.on('SIGINT', handler);
+    process.on('SIGTERM', handler);
+  }
+
   private installEmergencyHandlers(): void {
     this.emergencyCleanup = () => {
-      this.isShuttingDown || this.options.killAgent().catch(() => { });
+      if (!this.isShuttingDown) {
+        this.options.killAgent().catch(() => { });
+      }
     };
 
     process.on('exit', this.emergencyCleanup);
@@ -136,27 +140,25 @@ export class GracefulShutdown {
   }
 
   public async performShutdown(): Promise<ShutdownResult> {
-    let sessionSaved = false;
-    let sessionId: string | undefined;
-
     try {
-      const state = this.options.getSessionState();
-      if (state) {
-        await this.saveSession(state);
-        sessionSaved = true;
-        sessionId = state.id;
-      }
-
+      const { sessionSaved, sessionId } = await this.saveStateIfAvailable();
       await this.killWithTimeout();
       return { success: true, sessionSaved, sessionId };
     } catch (error) {
       return {
         success: false,
-        sessionSaved,
-        sessionId,
+        sessionSaved: false,
         error: error instanceof Error ? error.message : String(error),
       };
     }
+  }
+
+  private async saveStateIfAvailable(): Promise<{ sessionSaved: boolean, sessionId?: string }> {
+    const state = this.options.getSessionState();
+    if (!state) return { sessionSaved: false };
+
+    await this.saveSession(state);
+    return { sessionSaved: true, sessionId: state.id };
   }
 
   private async saveSession(state: SessionState): Promise<void> {
@@ -205,6 +207,7 @@ export class GracefulShutdown {
 
   /**
    * Manually triggers a graceful shutdown.
+   * Useful for programmatic shutdown scenarios.
    */
   public async triggerShutdown(): Promise<ShutdownResult> {
     if (this.isShuttingDown) {
