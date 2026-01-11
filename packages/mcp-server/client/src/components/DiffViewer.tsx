@@ -106,7 +106,18 @@ export function DiffViewer({ taskId, onAddComment, onDiffLoaded }: DiffViewerPro
               {getCommentsForLine(file.path, null).length > 0 && (
                 <Badge variant="outline" className="text-xs"><MessageSquare className="h-3 w-3 mr-1" />{getCommentsForLine(file.path, null).length}</Badge>
               )}
+              {(() => {
+                const stats = fileStats.find(s => s.path === file.path);
+                if (!stats) return null;
+                return (
+                  <div className="ml-auto flex items-center gap-2">
+                    <span className="text-xs text-green-400">+{stats.additions}</span>
+                    <span className="text-xs text-red-400">−{stats.deletions}</span>
+                  </div>
+                );
+              })()}
             </div>
+
 
             {expandedFiles.has(file.path) && (
               <div className="text-xs overflow-x-auto normal-case" style={{ fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", monospace' }}>

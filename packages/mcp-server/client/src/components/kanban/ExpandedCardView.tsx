@@ -164,24 +164,24 @@ export const ExpandedCardView: React.FC<ExpandedCardViewProps> = ({
         >
           <TabsList className="bg-transparent border-b border-primary/20 w-full justify-start rounded-none p-0 h-auto gap-0 flex-shrink-0">
             <TabsTrigger value="prompt" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-primary/10 px-4 py-2 text-sm flex items-center gap-2">
-              <FileText className="h-4 w-4" /> Prompt
+              <FileText className="h-4 w-4" /> PROMPT
             </TabsTrigger>
 
             <TabsTrigger value="timeline" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-primary/10 px-4 py-2 text-sm flex items-center gap-2">
-              <Clock className="h-4 w-4" /> Timeline
+              <Clock className="h-4 w-4" /> TIMELINE
             </TabsTrigger>
 
             <div className="relative flex items-center border-b-2 border-transparent has-[[data-state=active]]:border-primary has-[[data-state=active]]:bg-primary/10">
               <TabsTrigger value="review" className="rounded-none border-b-0 border-transparent bg-transparent px-4 py-2 text-sm flex items-center gap-2 data-[state=active]:bg-transparent">
-                <CheckCircle className="h-4 w-4" /> Review {fileStats.length > 0 && <span className="text-xs opacity-70">({fileStats.length})</span>}
+                <CheckCircle className="h-4 w-4" /> REVIEW {fileStats.length > 0 && <span className="text-xs opacity-70">({fileStats.length})</span>}
               </TabsTrigger>
               {fileStats.length > 1 && (
                 <>
                   <button
                     onClick={(e) => { e.stopPropagation(); setNavigatorOpen(!navigatorOpen); }}
-                    className="h-full px-2 hover:bg-primary/20 text-primary/70 hover:text-primary transition-colors focus:outline-none"
+                    className="h-9 w-9 border-l border-primary/20 flex items-center justify-center hover:bg-primary/20 text-primary/70 hover:text-primary transition-colors focus:outline-none"
                   >
-                    <ChevronDown className="h-3 w-3" />
+                    <ChevronDown className="h-4 w-4" />
                   </button>
                   {navigatorOpen && (
                     <div className="absolute top-full left-0 mt-0 w-64 bg-popover/95 backdrop-blur z-50 shadow-xl border border-primary/20 rounded-b-md overflow-hidden flex flex-col max-h-[60vh]">
@@ -209,7 +209,7 @@ export const ExpandedCardView: React.FC<ExpandedCardViewProps> = ({
               )}
             </div>
             <TabsTrigger value="context" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-primary/10 px-4 py-2 text-sm flex items-center gap-2">
-              <Settings className="h-4 w-4" /> Context
+              <Settings className="h-4 w-4" /> CONTEXT
             </TabsTrigger>
           </TabsList>
 
