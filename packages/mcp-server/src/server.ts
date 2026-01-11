@@ -7,58 +7,18 @@ import bodyParser from 'body-parser';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
-import fs from 'fs';
-import crypto from 'crypto';
-import os from 'os';
 import { ToolHandler } from './mcp/tools.js';
 import { initEventLog } from './state/events.js';
 import { createProductionContext } from './state/context.js';
 import { CLEANUP_INTERVAL_MS } from '@opensourcewtf/waaah-types';
 import { emitActivity } from './state/events.js';
 import { createTaskRoutes, createReviewRoutes, createAgentRoutes, createSSERoutes } from './routes/index.js';
+import { getOrCreateApiKey } from './utils/auth.js';
 
 dotenv.config();
 
 const PORT = process.env.WAAAH_PORT || process.env.PORT || 3000;
 const WORKSPACE_ROOT = process.env.WORKSPACE_ROOT || process.cwd();
-
-// API Key management - auto-generate if not set
-function getOrCreateApiKey(): string {
-  // Check env first
-  if (process.env.WAAAH_API_KEY) {
-    return process.env.WAAAH_API_KEY;
-  }
-
-  // Check credentials file
-  const credDir = path.join(os.homedir(), '.waaah');
-  const credFile = path.join(credDir, 'credentials.json');
-
-  try {
-    if (fs.existsSync(credFile)) {
-      const creds = JSON.parse(fs.readFileSync(credFile, 'utf-8'));
-      if (creds['api-key']) {
-        console.log(`[Auth] Loaded API key from ${credFile}`);
-        return creds['api-key'];
-      }
-    }
-  } catch (e) {
-    // File doesn't exist or is invalid, create new key
-  }
-
-  // Generate new API key
-  const newKey = `waaah-${crypto.randomBytes(24).toString('hex')}`;
-
-  try {
-    fs.mkdirSync(credDir, { recursive: true });
-    fs.writeFileSync(credFile, JSON.stringify({ 'api-key': newKey }, null, 2));
-    fs.chmodSync(credFile, 0o600); // Restrict permissions
-    console.log(`[Auth] Generated new API key and saved to ${credFile}`);
-  } catch (e) {
-    console.warn(`[Auth] Could not save API key to ${credFile}:`, e);
-  }
-
-  return newKey;
-}
 
 const API_KEY = getOrCreateApiKey();
 

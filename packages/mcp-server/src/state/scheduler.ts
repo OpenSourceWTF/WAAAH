@@ -105,14 +105,17 @@ export class HybridScheduler {
 
   /**
    * Step 1.5: Check BLOCKED tasks for satisfied dependencies
+   * Only unblocks tasks that have dependencies AND all dependencies are complete.
+   * Tasks blocked for clarification/decision reasons (no dependencies) must be
+   * explicitly unblocked via answer_task.
    */
   private checkBlockedTasks(): void {
     const blockedTasks = this.queue.getByStatus('BLOCKED');
 
     for (const task of blockedTasks) {
+      // Only check tasks that have dependencies - others are blocked for non-dependency reasons
       if (!task.dependencies || task.dependencies.length === 0) {
-        console.warn(`[Queue] Task ${task.id} was BLOCKED but has no dependencies. Unblocking.`);
-        this.queue.updateStatus(task.id, 'QUEUED');
+        // Task is blocked for clarification/decision - leave it alone
         continue;
       }
 
