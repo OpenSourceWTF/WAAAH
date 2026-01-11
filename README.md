@@ -198,13 +198,9 @@ Connect your AI agent to a WAAAH server:
    ```
    *> Or install globally: `npm i -g @opensourcewtf/waaah-mcp-proxy`*
 
-2. **Initialize your agent** with a workflow command:
-   | Command | Role |
-   |---------|------|
-   | `/waaah-orchestrator` | **Orchestrator** (Unified PM/Dev/Test Loop) |
-   | `/waaah-boss` | **Tech Lead** (Pair Programming Co-pilot) |
+2. **Initialize your agent** with a workflow command (see below).
 
-3. **Start receiving tasks** — The Orchestrator enters an autonomous loop via `wait_for_prompt`. The Boss stays interactive.
+3. **Start receiving tasks** — The Orchestrator enters an autonomous loop via `wait_for_prompt`. Interactive mode stays with you.
 
 > [!TIP]
 > **Copy workflows to your project** for `/waaah-*` commands:
@@ -219,6 +215,59 @@ Connect your AI agent to a WAAAH server:
 
 ---
 
+## 🤖 Agent Workflows
+
+Agents connect to WAAAH via MCP tools. Two primary patterns:
+
+### Autonomous Agent (Orchestrator)
+
+Runs an infinite loop, processing tasks from the queue:
+
+```mermaid
+graph LR
+    Agent["AI Agent"] -->|"1. register_agent"| Server["MCP Server"]
+    Server -->|"2. wait_for_prompt (blocks)"| Agent
+    Agent -->|"3. ack_task"| Server
+    Agent -->|"4. send_response(IN_REVIEW)"| Server
+    Server -->|"5. wait_for_prompt (blocks)"| Agent
+    Agent -->|"6. send_response(COMPLETED)"| Server
+```
+
+**MCP Tool Sequence:**
+1. `register_agent({ role, capabilities })` — identify yourself
+2. `wait_for_prompt(timeout)` — block until task assigned (loops forever)
+3. `ack_task(taskId)` — accept the task
+4. `update_progress({ phase, message })` — report progress
+5. `send_response({ status: "IN_REVIEW" })` — request approval
+6. `send_response({ status: "COMPLETED" })` — mark done after approval
+
+**Start with:** `/waaah-orc` workflow
+
+### Interactive Agent (Pair Programming)
+
+You control the agent; delegate work to Orchestrators:
+
+**MCP Tool Sequence:**
+1. `register_agent({ role: "boss" })` — identify as interactive
+2. `assign_task({ targetAgentId, prompt })` — delegate to Orchestrators
+3. `list_agents()` — discover available workers
+4. `get_agent_status(agentId)` — check worker state
+
+**No workflow needed** — just connect and use tools directly.
+
+### Doctor Agent (QA Daemon)
+
+Background agent that monitors code health and creates tasks for issues:
+
+**MCP Tool Sequence:**
+1. `register_agent({ role: "doctor" })` — identify as QA
+2. Poll Git for changes since last run
+3. Analyze: coverage, complexity, stubs, dead code
+4. `assign_task({ prompt: "Fix coverage in X" })` — create remediation tasks
+
+**Start with:** `/waaah-doctor-agent` workflow
+
+---
 ## 🚀 Production Deployment
 
 1. **Configure Environment**: Set `DOMAIN_NAME` and tokens in `.env`.
@@ -272,8 +321,7 @@ This is a monorepo managed with `pnpm workspaces`.
 | [`packages/mcp-server`](packages/mcp-server) | Central orchestration server with Admin Dashboard |
 | [`packages/mcp-server/client`](packages/mcp-server/client) | Mission Command Dashboard (React + Vite) |
 | [`packages/mcp-proxy`](packages/mcp-proxy) | Stdio↔HTTP bridge for agents |
-| [`packages/cli`](packages/cli) | Command-line interface for task management |
-| [`packages/cli-wrapper`](packages/cli-wrapper) | Agent spawner with PTY, session persistence, MCP injection |
+| [`packages/cli`](packages/cli) + [`cli-wrapper`](packages/cli-wrapper) | `waaah` CLI: task management + agent spawning with PTY |
 | [`packages/bot`](packages/bot) | Unified Discord/Slack bot |
 | [`packages/types`](packages/types) | Shared TypeScript definitions and Zod schemas |
 
