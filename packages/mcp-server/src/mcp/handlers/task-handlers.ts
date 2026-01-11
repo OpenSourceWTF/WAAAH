@@ -46,8 +46,22 @@ export class TaskHandlers {
         blockedReason: params.blockedReason
       });
       console.log(`[Tool] Response from task ${params.taskId}: ${params.status}`);
+
+      // Build response with optional cleanup prompt for COMPLETED tasks
+      const response: { success: boolean; message: string; prompt?: string } = {
+        success: true,
+        message: `Response recorded for ${params.taskId}`
+      };
+
+      if (params.status === 'COMPLETED') {
+        response.prompt = `## REQUIRED ACTION
+1. Verify merged: git log origin/main --oneline | head -1
+2. If not merged: git push origin feature-${params.taskId}
+3. Cleanup: git worktree remove .worktrees/feature-${params.taskId} --force`;
+      }
+
       return {
-        content: [{ type: 'text', text: `Response recorded for ${params.taskId}` }]
+        content: [{ type: 'text', text: JSON.stringify(response) }]
       };
     } catch (e) { return this.handleError(e); }
   }
