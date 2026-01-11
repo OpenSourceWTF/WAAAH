@@ -3,6 +3,8 @@
  * Configures middleware, API routes, and tool handling.
  */
 import express from 'express';
+import { createServer } from 'http';
+import { Server as SocketIOServer } from 'socket.io';
 import bodyParser from 'body-parser';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -23,6 +25,13 @@ const WORKSPACE_ROOT = process.env.WORKSPACE_ROOT || process.cwd();
 const API_KEY = getOrCreateApiKey();
 
 const app = express();
+const httpServer = createServer(app);
+const io = new SocketIOServer(httpServer, {
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST']
+  }
+});
 
 // Create production context with all dependencies
 const ctx = createProductionContext();
@@ -161,12 +170,12 @@ app.post('/mcp/tools/:toolName', requireApiKey, async (req, res) => {
 let server: any;
 
 if (process.env.NODE_ENV !== 'test') {
-  server = app.listen(PORT, () => {
+  server = httpServer.listen(PORT, () => {
     console.log(`WAAAH MCP Server running on port ${PORT}`);
   });
 }
 
-export { app, server };
+export { app, server, io };
 
 // Graceful Shutdown
 const shutdown = () => {
