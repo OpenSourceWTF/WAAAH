@@ -96,36 +96,29 @@ export class GracefulShutdown {
   public install(): void {
     const handler = this.createSignalHandler();
 
-    // Install signal handlers
     this.signalHandlers.set('SIGINT', handler);
     this.signalHandlers.set('SIGTERM', handler);
 
     process.on('SIGINT', handler);
     process.on('SIGTERM', handler);
 
-    // Emergency cleanup for unexpected exits (orphan prevention)
     this.emergencyCleanup = () => {
       if (!this.isShuttingDown) {
-        try {
-          // Attempt synchronous kill - best effort
-          this.options.killAgent().catch(() => { });
-        } catch { /* ignore */ }
+        this.options.killAgent().catch(() => { });
       }
     };
 
     process.on('exit', this.emergencyCleanup);
-    process.on('uncaughtException', (err) => {
-      console.error('Uncaught exception:', err);
+    
+    const errorHandler = (err: any) => {
+      console.error(err);
       this.emergencyCleanup?.();
       process.exit(1);
-    });
-    process.on('unhandledRejection', (reason) => {
-      console.error('Unhandled rejection:', reason);
-      this.emergencyCleanup?.();
-      process.exit(1);
-    });
+    };
+    process.on('uncaughtException', errorHandler);
+    process.on('unhandledRejection', errorHandler);
 
-    this.log('Signal handlers installed (SIGINT, SIGTERM, exit, uncaught)');
+    this.log('Signal handlers installed');
   }
 
   /**
@@ -145,68 +138,41 @@ export class GracefulShutdown {
    */
   private createSignalHandler(): NodeJS.SignalsListener {
     return async (signal: NodeJS.Signals) => {
-      // Prevent multiple concurrent shutdowns
-      if (this.isShuttingDown) {
-        this.log(`Already shutting down, ignoring ${signal}`);
-        return;
-      }
-
+      if (this.isShuttingDown) return;
       this.isShuttingDown = true;
-      this.log(`\nReceived ${signal}, initiating graceful shutdown...`);
 
       try {
         const result = await this.performShutdown();
-
         if (result.success) {
           if (result.sessionSaved && result.sessionId) {
-            console.log('\n✅ Session saved.');
-            console.log(`   Run \`waaah agent --resume\` to continue.\n`);
-          } else {
-            console.log('\n✅ Shutdown complete.\n');
+            console.log(`\n✅ Session saved: ${result.sessionId}\n`);
           }
           process.exit(0);
         } else {
-          console.error(`\n❌ Shutdown error: ${result.error}\n`);
           process.exit(1);
         }
-      } catch (error) {
-        console.error('\n❌ Shutdown failed:', error);
+      } catch {
         process.exit(1);
       }
     };
   }
 
-  /**
-   * Performs the graceful shutdown sequence.
-   * @returns Result of the shutdown operation
-   */
   public async performShutdown(): Promise<ShutdownResult> {
     let sessionSaved = false;
     let sessionId: string | undefined;
 
     try {
-      // Step 1: Save session state
-      const sessionState = this.options.getSessionState();
-      if (sessionState) {
-        this.log('Saving session state...');
-        sessionState.gracefulExit = true;
-        sessionState.updatedAt = new Date();
-        await this.options.sessionManager.save(sessionState);
+      const state = this.options.getSessionState();
+      if (state) {
+        state.gracefulExit = true;
+        state.updatedAt = new Date();
+        await this.options.sessionManager.save(state);
         sessionSaved = true;
-        sessionId = sessionState.id;
-        this.log(`Session saved: ${sessionId}`);
+        sessionId = state.id;
       }
 
-      // Step 2: Kill PTY process with timeout
-      this.log('Terminating agent process...');
       await this.killWithTimeout();
-      this.log('Agent process terminated');
-
-      return {
-        success: true,
-        sessionSaved,
-        sessionId,
-      };
+      return { success: true, sessionSaved, sessionId };
     } catch (error) {
       return {
         success: false,

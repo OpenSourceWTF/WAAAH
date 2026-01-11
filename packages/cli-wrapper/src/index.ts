@@ -27,99 +27,7 @@ import { ClaudeAgent } from './agents/claude.js';
 import { MCPInjector, type AgentType } from './config/mcp-injector.js';
 import { GitUtils } from './utils/git.js';
 import { WorkflowInjector } from './workflow/injector.js';
-
-// ─────────────────────────────────────────────────────────────
-// Helper Functions for Interactive Prompts
-// ─────────────────────────────────────────────────────────────
-
-/**
- * Prompt user for yes/no input
- */
-async function promptYesNo(question: string): Promise<boolean> {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
-
-  return new Promise((resolve) => {
-    rl.question(question, (answer) => {
-      rl.close();
-      resolve(answer.toLowerCase().startsWith('y'));
-    });
-  });
-}
-
-/**
- * Check if waaah-proxy is globally installed
- */
-function isProxyGloballyInstalled(): boolean {
-  try {
-    execSync('which waaah-proxy', { stdio: 'ignore' });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Prompt user to choose proxy installation method
- */
-async function promptProxyMethod(): Promise<'global' | 'npx'> {
-  const isInstalled = isProxyGloballyInstalled();
-
-  if (isInstalled) {
-    console.log('   ✅ waaah-proxy is globally installed');
-    return 'global';
-  }
-
-  // Not installed - ask user what to do
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
-
-  return new Promise((resolve) => {
-    console.log('\n   ⚠️  waaah-proxy is not globally installed.');
-    console.log('   How should the WAAAH proxy be invoked?');
-    console.log('   1. Install globally now (npm install -g @opensourcewtf/waaah-mcp-proxy)');
-    console.log('   2. Use npx each time (slower, downloads on each run)');
-
-    rl.question('   Choose (1 or 2) [default: 1]: ', async (answer) => {
-      rl.close();
-
-      if (answer.trim() === '2') {
-        resolve('npx');
-      } else {
-        // Install globally
-        console.log('\n   📦 Installing waaah-proxy globally...');
-        try {
-          execSync('npm install -g @opensourcewtf/waaah-mcp-proxy', { stdio: 'inherit' });
-          console.log('   ✅ Installed successfully!');
-          resolve('global');
-        } catch (error) {
-          console.log('   ❌ Installation failed. Falling back to npx.');
-          resolve('npx');
-        }
-      }
-    });
-  });
-}
-
-/**
- * Configure MCP with interactive prompts
- */
-async function configureMcp(
-  injector: MCPInjector,
-  agentType: AgentType,
-  serverUrl: string
-): Promise<void> {
-  const method = await promptProxyMethod();
-
-  console.log(`\n   Configuring WAAAH MCP (${method === 'global' ? 'global link' : 'npx from npm'})...`);
-
-  await injector.inject(agentType, { url: serverUrl }, method);
-  console.log('   ✅ MCP configured.');
-}
+import { promptYesNo } from './utils/prompts.js';
 
 // Re-exports for library usage
 export { BaseAgent } from './agents/base.js';
@@ -230,15 +138,15 @@ async function launchAgent(options: any) {
         console.log(`   Expected: ${server}`);
 
         const overwrite = await promptYesNo('   Update to new URL? (y/n): ');
-        if (!overwrite) {
-          console.log('   Keeping existing config.');
+        if (overwrite) {
+          await injector.configureInteractive(agentType as 'gemini' | 'claude', server);
         } else {
-          await configureMcp(injector, agentType as 'gemini' | 'claude', server);
+          console.log('   Keeping existing config.');
         }
       }
     } else {
       console.log('\n⚙️  WAAAH MCP not configured.');
-      await configureMcp(injector, agentType as 'gemini' | 'claude', server);
+      await injector.configureInteractive(agentType as 'gemini' | 'claude', server);
     }
   }
 
@@ -250,127 +158,10 @@ async function launchAgent(options: any) {
     console.warn(`\n⚠️  Workflow '${workflow}' not found in .agent/workflows/`);
   }
 
-  // 6. Build the command based on agent type
-  if (agentType === 'gemini') {
-    // Gemini has built-in restart - just launch once
-    await launchGemini(workspaceRoot, workflow, resume);
-  } else {
-    // Claude needs manual restart with --resume
-    await launchClaudeWithRestart(workspaceRoot, workflow, resume);
-  }
-}
-
-/**
- * Launch Gemini - simple one-shot, it handles its own restarts
- */
-async function launchGemini(workspaceRoot: string, workflow: string, resume: boolean): Promise<void> {
-  const prompt = resume
-    ? `Resume the /${workflow} workflow. Continue from where you left off.`
-    : `Follow the /${workflow} workflow exactly.`;
-
-  console.log('\n' + '─'.repeat(60));
-  console.log(`Launching: gemini -i "${prompt.slice(0, 40)}..." --yolo`);
-  console.log('─'.repeat(60) + '\n');
-
-  const child = spawn('gemini', ['-i', prompt, '--yolo'], {
-    cwd: workspaceRoot,
-    stdio: 'inherit',
-    env: process.env,
-  });
-
-  process.on('SIGINT', () => child.kill('SIGINT'));
-  process.on('SIGTERM', () => child.kill('SIGTERM'));
-
-  return new Promise((resolve) => {
-    child.on('exit', (code) => {
-      process.exit(code ?? 0);
-    });
-  });
-}
-
-/**
- * Launch Claude with restart support using --resume
- */
-async function launchClaudeWithRestart(
-  workspaceRoot: string,
-  workflow: string,
-  resume: boolean,
-  maxRestarts: number = 10
-): Promise<void> {
-  let sessionId: string | undefined;
-  let restartCount = 0;
-
-  const prompt = resume
-    ? `Resume the /${workflow} workflow. Continue from where you left off.`
-    : `Follow the /${workflow} workflow exactly.`;
-
-  while (restartCount < maxRestarts) {
-    const args: string[] = ['--dangerously-skip-permissions'];
-
-    // If we have a session ID from previous run, use --resume
-    if (sessionId) {
-      args.push('--resume', sessionId);
-      console.log(`\n🔄 Restarting Claude (attempt ${restartCount + 1}/${maxRestarts})...`);
-      console.log(`   Resuming session: ${sessionId}`);
-    } else {
-      args.push(prompt);
-      console.log('\n' + '─'.repeat(60));
-      console.log(`Launching: claude ${args.join(' ').slice(0, 50)}...`);
-      console.log('─'.repeat(60));
-    }
-    console.log('');
-
-    const child = spawn('claude', args, {
-      cwd: workspaceRoot,
-      stdio: 'inherit',
-      env: process.env,
-    });
-
-    // Track session ID from Claude's output (would need to parse, for now use timestamp)
-    if (!sessionId) {
-      // Generate a session ID based on timestamp for now
-      // TODO: Parse Claude's actual session ID from output
-      sessionId = `waaah-${Date.now()}`;
-    }
-
-    // Handle signals
-    let signalReceived = false;
-    const handleSignal = (signal: NodeJS.Signals) => {
-      signalReceived = true;
-      child.kill(signal);
-    };
-    process.on('SIGINT', () => handleSignal('SIGINT'));
-    process.on('SIGTERM', () => handleSignal('SIGTERM'));
-
-    // Wait for exit
-    const exitCode = await new Promise<number>((resolve) => {
-      child.on('exit', (code) => resolve(code ?? 0));
-    });
-
-    // If user sent signal, exit cleanly
-    if (signalReceived) {
-      console.log('\n✅ Agent stopped by user.');
-      process.exit(0);
-    }
-
-    // If clean exit (0), we're done
-    if (exitCode === 0) {
-      console.log('\n✅ Agent completed successfully.');
-      process.exit(0);
-    }
-
-    // Otherwise, restart
-    restartCount++;
-    console.log(`\n⚠️  Claude exited with code ${exitCode}.`);
-
-    if (restartCount >= maxRestarts) {
-      console.log(`❌ Max restarts (${maxRestarts}) reached. Exiting.`);
-      process.exit(exitCode);
-    }
-
-    // Brief delay before restart
-    await new Promise(r => setTimeout(r, 2000));
-  }
+  // 6. Launch the agent
+  // Claude needs manual restart support which is now handled inside ClaudeAgent
+  agent.config.restartOnExit = 10;
+  await agent.start();
 }
 
 // Run main if executed directly

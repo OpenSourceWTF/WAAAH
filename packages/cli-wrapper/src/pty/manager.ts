@@ -58,7 +58,7 @@ export class PTYManager {
       command,
       args = [],
       cwd = process.cwd(),
-      env = process.env as Record<string, string>,
+      env = process.env as Record<string, string | undefined>,
       cols = 80,
       rows = 24,
       sanitizeOutput = false,
@@ -66,104 +66,104 @@ export class PTYManager {
 
     this.sanitizeOutput = sanitizeOutput;
 
-    // Try node-pty first
     if (pty) {
-      try {
-        this.ptyProcess = pty.spawn(command, args, {
-          name: 'xterm-256color',
-          cols,
-          rows,
-          cwd,
-          env,
-        });
-        this.useNativePty = true;
-        this.running = true;
-        this.childPid = this.ptyProcess.pid;
-
-        this.ptyProcess.onData((data) => {
-          const output = this.sanitizeOutput ? sanitizeTuiOutput(data) : data;
-          for (const cb of this.dataCallbacks) {
-            try { cb(output); } catch { }
-          }
-        });
-
-        this.ptyProcess.onExit(({ exitCode, signal }) => {
-          this.running = false;
-          this.childPid = null;
-          for (const cb of this.exitCallbacks) {
-            try { cb(exitCode, signal); } catch { }
-          }
-        });
-
-        return;
-      } catch (err) {
-        console.warn('[PTYManager] node-pty spawn failed, falling back:', err);
-      }
+      const success = await this.spawnNative(command, args, cwd, env as Record<string, string>, cols, rows);
+      if (success) return;
     }
 
-    // Fallback using 'script' command to emulate PTY (Linux/macOS)
-    // This allows TTY-requiring tools (gemini -i, claude) to work with piped IO
-    this.useNativePty = false;
+    await this.spawnFallback(command, args, cwd, env);
+  }
 
+  private async spawnNative(
+    command: string,
+    args: string[],
+    cwd: string,
+    env: Record<string, string>,
+    cols: number,
+    rows: number
+  ): Promise<boolean> {
+    try {
+      this.ptyProcess = pty!.spawn(command, args, {
+        name: 'xterm-256color',
+        cols,
+        rows,
+        cwd,
+        env,
+      });
+      this.useNativePty = true;
+      this.running = true;
+      this.childPid = this.ptyProcess.pid;
+
+      this.ptyProcess.onData((data) => {
+        const output = this.sanitizeOutput ? sanitizeTuiOutput(data) : data;
+        this.dataCallbacks.forEach(cb => { try { cb(output); } catch { } });
+      });
+
+      this.ptyProcess.onExit(({ exitCode, signal }) => {
+        this.running = false;
+        this.childPid = null;
+        this.exitCallbacks.forEach(cb => { try { cb(exitCode, signal); } catch { } });
+      });
+
+      return true;
+    } catch (err) {
+      console.warn('[PTYManager] node-pty spawn failed, falling back:', err);
+      return false;
+    }
+  }
+
+  private async spawnFallback(
+    command: string,
+    args: string[],
+    cwd: string,
+    env: Record<string, string | undefined>
+  ): Promise<void> {
+    this.useNativePty = false;
     let spawnCommand = command;
     let spawnArgs = args;
 
-    // Properly escape arguments for the shell
     const escapeArg = (arg: string) => `'${arg.replace(/'/g, "'\\''")}'`;
     const fullCommand = [command, ...args].map(escapeArg).join(' ');
 
-    // Use script command to wrap execution
-    // Linux: script -q -e -c "cmd" /dev/null
-    // macOS: script -q /dev/null cmd (detected by platform check if needed, simplified for Linux focus)
     if (process.platform === 'linux') {
       spawnCommand = 'script';
       spawnArgs = ['-q', '-e', '-c', fullCommand, '/dev/null'];
+    } else if (process.platform === 'darwin') {
+      spawnCommand = 'script';
+      spawnArgs = ['-q', '/dev/null', ...[command, ...args]];
     }
-    // TODO: macOS support if needed (different flags)
 
     this.childProcess = spawn(spawnCommand, spawnArgs, {
       cwd,
       env: { ...env, NODE_NO_WARNINGS: '1' } as NodeJS.ProcessEnv,
       stdio: ['pipe', 'pipe', 'pipe'],
       shell: false,
-      detached: true, // Create new process group for clean shutdown
+      detached: true,
     });
+
     this.running = true;
     this.childPid = this.childProcess.pid ?? null;
 
-    // Forward stdout to data callbacks
-    this.childProcess.stdout?.on('data', (data: Buffer) => {
+    const handleData = (data: Buffer) => {
       const str = data.toString();
       const output = this.sanitizeOutput ? sanitizeTuiOutput(str) : str;
-      for (const cb of this.dataCallbacks) {
-        try { cb(output); } catch { }
-      }
-    });
+      this.dataCallbacks.forEach(cb => { try { cb(output); } catch { } });
+    };
 
-    // Forward stderr to data callbacks too
-    this.childProcess.stderr?.on('data', (data: Buffer) => {
-      const str = data.toString();
-      const output = this.sanitizeOutput ? sanitizeTuiOutput(str) : str;
-      for (const cb of this.dataCallbacks) {
-        try { cb(output); } catch { }
-      }
-    });
+    this.childProcess.stdout?.on('data', handleData);
+    this.childProcess.stderr?.on('data', handleData);
 
     this.childProcess.on('exit', (code, signal) => {
       this.running = false;
       this.childPid = null;
-      for (const cb of this.exitCallbacks) {
-        try { cb(code ?? 1, signal ? 0 : undefined); } catch { }
-      }
+      this.exitCallbacks.forEach(cb => { try { cb(code ?? 1, signal ? 0 : undefined); } catch { } });
     });
 
     this.childProcess.on('error', (err) => {
       this.running = false;
       this.childPid = null;
       console.error('[PTYManager] Spawn error:', err.message);
-      for (const cb of this.exitCallbacks) {
-        try { cb(1); } catch { }
-      }
+      this.exitCallbacks.forEach(cb => { try { cb(1); } catch { } });
     });
   }
 

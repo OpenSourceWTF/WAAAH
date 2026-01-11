@@ -10,6 +10,7 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as readline from 'readline';
+import { promptProxyMethod } from '../utils/prompts.js';
 
 /** WAAAH MCP server name used in config files */
 const WAAAH_MCP_NAME = 'waaah';
@@ -378,5 +379,20 @@ export class MCPInjector {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Configure MCP with interactive prompts
+   */
+  public async configureInteractive(
+    agentType: AgentType,
+    serverUrl: string
+  ): Promise<void> {
+    const method = await promptProxyMethod();
+
+    console.log(`\n   Configuring WAAAH MCP (${method === 'global' ? 'global link' : 'npx from npm'})...`);
+
+    await this.inject(agentType, { url: serverUrl }, method);
+    console.log('   ✅ MCP configured.');
   }
 }

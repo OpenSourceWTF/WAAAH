@@ -5,14 +5,13 @@
 export {
   BaseAgent,
   type AgentConfig,
+  type AuthStatus,
 } from './base.js';
 
 export {
   GeminiAgent,
-  type AuthStatus as GeminiAuthStatus,
 } from './gemini.js';
 
 export {
   ClaudeAgent,
-  type AuthStatus as ClaudeAuthStatus,
 } from './claude.js';
