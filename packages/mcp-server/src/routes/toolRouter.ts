@@ -1,10 +1,13 @@
 /**
  * Tool router factory
  * Extracted from server.ts to reduce complexity
+ * 
+ * Includes centralized heartbeat handling with debouncing.
  */
 import express from 'express';
 import type { ToolHandler } from '../mcp/tools.js';
 import type { ServerContext } from '../state/context.js';
+import { processHeartbeat } from '../mcp/heartbeat-middleware.js';
 
 const VALID_TOOLS = [
   'register_agent', 'wait_for_prompt', 'send_response', 'assign_task',
@@ -35,6 +38,12 @@ export function createToolRouter(tools: ToolHandler, ctx: ServerContext) {
       res.status(404).json({ error: `Tool ${toolName} not found` });
       return;
     }
+
+    // Centralized heartbeat processing with debouncing
+    // Triggers on ANY tool call, but writes max once per 10s per agent
+    processHeartbeat(toolName, args, {
+      heartbeat: (agentId: string) => ctx.registry.heartbeat(agentId)
+    });
 
     const method = tools[toolName as keyof typeof tools];
     if (typeof method !== 'function') {
