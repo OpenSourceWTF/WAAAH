@@ -1,19 +1,11 @@
-import { describe, it, expect, vi, beforeEach, type Mocked } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type Mocked } from 'vitest';
 import axios from 'axios';
-import fs from 'fs';
-import yaml from 'js-yaml';
 import { BotCore, BotCoreConfig } from './bot';
 import { PlatformAdapter, MessageContext } from '../adapters/interface';
 
 // Mock axios
 vi.mock('axios');
 const mockedAxios = axios as Mocked<typeof axios>;
-
-// Mock fs and yaml
-vi.mock('fs');
-vi.mock('js-yaml');
-const mockedFs = fs as Mocked<typeof fs>;
-const mockedYaml = yaml as Mocked<typeof yaml>;
 
 // Mock PlatformAdapter
 const mockAdapter = {
@@ -35,21 +27,24 @@ describe('BotCore', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    // Setup default config mock
-    mockedFs.readFileSync.mockReturnValue('agents: {}');
-    mockedYaml.load.mockReturnValue({
-      agents: {
-        'test-engineer': { displayName: '@TestEng', aliases: ['tester'] }
+    // Mock dynamic alias loading from MCP server
+    mockedAxios.get.mockImplementation(async (url: string) => {
+      if (url.includes('/admin/agents/status')) {
+        return {
+          data: [
+            { displayName: '@TestEng', role: 'test-engineer' },
+            { displayName: '@FullStack', role: 'full-stack-engineer' }
+          ]
+        };
       }
+      throw new Error(`Unexpected GET: ${url}`);
     });
 
     config = {
       mcpServerUrl: 'http://localhost:3000',
-      apiKey: 'test-api-key',
-      configPath: '/dummy/config.yaml'
+      apiKey: 'test-api-key'
     };
     bot = new BotCore(mockAdapter, config);
-
 
     // Capture the message handler when start() is called
     mockAdapter.onMessage.mockImplementation((handler) => {
@@ -57,13 +52,29 @@ describe('BotCore', () => {
     });
   });
 
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
   describe('start', () => {
     it('initializes adapter and connects', async () => {
       await bot.start();
+
       expect(mockAdapter.onMessage).toHaveBeenCalled();
       expect(mockAdapter.connect).toHaveBeenCalled();
       expect(axios.defaults.headers.common['X-API-Key']).toBe('test-api-key');
-      expect(mockedFs.readFileSync).toHaveBeenCalledWith('/dummy/config.yaml', 'utf8');
+      // Verify dynamic aliases were loaded
+      expect(mockedAxios.get).toHaveBeenCalledWith(
+        expect.stringContaining('/admin/agents/status')
+      );
+    });
+
+    it('handles failed dynamic alias loading gracefully', async () => {
+      mockedAxios.get.mockRejectedValue(new Error('Network error'));
+
+      // Should not throw - just log warning
+      await expect(bot.start()).resolves.not.toThrow();
+      expect(mockAdapter.connect).toHaveBeenCalled();
     });
   });
 
@@ -118,7 +129,6 @@ describe('BotCore', () => {
 
     it('enqueues task when target agent is specified', async () => {
       mockedAxios.post.mockResolvedValueOnce({ data: { taskId: 'task-123' } });
-      // Fake timers for polling
       vi.useFakeTimers();
 
       await messageHandler('@TestEng check this', context);
@@ -127,7 +137,7 @@ describe('BotCore', () => {
         expect.stringContaining('/admin/enqueue'),
         expect.objectContaining({
           prompt: 'check this',
-          role: expect.any(String), // aliases might map @testeng to something
+          role: 'test-engineer',
         })
       );
 
@@ -137,6 +147,61 @@ describe('BotCore', () => {
       );
 
       vi.useRealTimers();
+    });
+
+    it('handles update command', async () => {
+      mockedAxios.post.mockResolvedValueOnce({});
+
+      await messageHandler('update agent-1 name=NewName color=#FF0000', context);
+
+      expect(mockedAxios.post).toHaveBeenCalledWith(
+        expect.stringContaining('/mcp/tools/admin_update_agent'),
+        expect.objectContaining({
+          agentId: 'agent-1',
+          displayName: 'NewName',
+          color: '#FF0000'
+        })
+      );
+      expect(mockAdapter.reply).toHaveBeenCalledWith(
+        context,
+        expect.stringContaining('Updated agent')
+      );
+    });
+
+    it('handles answer command', async () => {
+      mockedAxios.post.mockResolvedValueOnce({});
+
+      await messageHandler('answer task-123 Yes, that looks correct', context);
+
+      expect(mockedAxios.post).toHaveBeenCalledWith(
+        expect.stringContaining('/mcp/tools/answer_task'),
+        expect.objectContaining({
+          taskId: 'task-123',
+          answer: 'Yes, that looks correct'
+        })
+      );
+      expect(mockAdapter.reply).toHaveBeenCalledWith(
+        context,
+        expect.stringContaining('Answered task')
+      );
+    });
+
+    it('shows usage for update command without target', async () => {
+      await messageHandler('update', context);
+
+      expect(mockAdapter.reply).toHaveBeenCalledWith(
+        context,
+        expect.stringContaining('Usage:')
+      );
+    });
+
+    it('shows usage for answer command without args', async () => {
+      await messageHandler('answer', context);
+
+      expect(mockAdapter.reply).toHaveBeenCalledWith(
+        context,
+        expect.stringContaining('Usage:')
+      );
     });
   });
 });
