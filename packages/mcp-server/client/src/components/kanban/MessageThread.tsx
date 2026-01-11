@@ -1,4 +1,16 @@
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { MessageCircle, Reply, CornerDownRight, ImagePlus, Send, CheckCircle } from "lucide-react";
+import type { Task } from './types';
 import { useTheme } from '@/contexts/ThemeContext';
+
+interface MessageThreadProps {
+  task: Task;
+  width: number;
+  onSendComment: (taskId: string, content: string, replyTo?: string, images?: Array<{ id: string; dataUrl: string; mimeType: string; name: string }>) => void;
+  onPreviewImage: (url: string) => void;
+}
 
 export const MessageThread: React.FC<MessageThreadProps> = ({
   task,
