@@ -16,7 +16,7 @@ export function FileNavigator({
   totalDeletions,
   onJumpToFile
 }: FileNavigatorProps) {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(true);
 
   const handleJumpToFile = (path: string) => {
     onJumpToFile(path);
@@ -24,7 +24,7 @@ export function FileNavigator({
   };
 
   return (
-    <div className="sticky top-0 right-0 z-50 float-right mr-2 mt-2">
+    <>
       {!isOpen ? (
         <Button
           variant="default"
@@ -89,6 +89,6 @@ export function FileNavigator({
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
