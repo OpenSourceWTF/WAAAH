@@ -9,6 +9,7 @@
  * - Delegates scheduling to HybridScheduler
  * - Delegates message handling to MessageService
  * - Delegates polling to PollingService
+ * - Delegates lifecycle to TaskLifecycleService
  * - ALL STATE IS DATABASE-BACKED (no in-memory maps)
  * 
  * @module state/queue
@@ -31,6 +32,7 @@ import { SystemPromptService } from './services/system-prompt-service.js';
 import { AgentMatchingService } from './services/agent-matching-service.js';
 import { MessageService } from './services/message-service.js';
 import { PollingService } from './services/polling-service.js';
+import { TaskLifecycleService } from './services/task-lifecycle-service.js';
 
 /**
  * Manages the global task queue, handling task lifecycle, assignment, and persistence.
@@ -64,6 +66,9 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
   /** Service for polling operations */
   private readonly pollingService: PollingService;
 
+  /** Service for task lifecycle management */
+  private readonly lifecycleService: TaskLifecycleService;
+
   /**
    * Create a new TaskQueue instance.
    * @param databaseOrRepo - Database instance or TaskRepository (REQUIRED - no default to prevent production leaks)
@@ -84,9 +89,6 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
     this.persistence = new QueuePersistence(this.db);
     this.systemPromptService = new SystemPromptService(this.db);
     this.matchingService = new AgentMatchingService(this.repo, this.persistence);
-    // Core Services
-    this.lifecycleService = new TaskLifecycleService(this.repo, this.matchingService, this.persistence);
-    console.log('[Queue] lifecycleService initialized:', !!this.lifecycleService);
     this.messageService = new MessageService(this.repo);
 
     // Initialize eviction service
@@ -101,44 +103,28 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
       this
     );
 
+    // Initialize lifecycle service
+    this.lifecycleService = new TaskLifecycleService(
+      this.repo,
+      this.matchingService,
+      this.persistence
+    );
+
     // Initialize scheduler with this queue (implements ISchedulerQueue directly)
     this.scheduler = new HybridScheduler(this);
 
     // Reset any PENDING_ACK tasks and waiting agents from previous run
-    this.resetStaleState();
+    this.pollingService.resetStaleState();
   }
 
-  /** Reset PENDING_ACK tasks and waiting agents on startup */
-  private resetStaleState(): void {
-    this.lifecycleService.resetStaleState();
-  }
-
-  // ===== Task Lifecycle =====
+  // ===== Task Lifecycle (Delegated) =====
 
   /**
    * Enqueues a new task into the system.
    */
   enqueue(task: Task): void {
-    // Check dependencies before enqueueing
-    if (task.dependencies && task.dependencies.length > 0) {
-      const allMet = task.dependencies.every(depId => {
-        const dep = this.getTask(depId) || this.getTaskFromDB(depId);
-        return dep && dep.status === 'COMPLETED';
-      });
-
-      if (!allMet) {
-        task.status = 'BLOCKED';
-        console.log(`[Queue] Task ${task.id} BLOCKED by dependencies: ${task.dependencies.join(', ')}`);
-      }
-    }
-
     try {
-      this.repo.insert(task);
-      console.log(`[Queue] Enqueued task: ${task.id} (${task.status})`);
-
-      // ATOMIC ASSIGNMENT: Find and reserve agent synchronously
-      const reservedAgentId = this.matchingService.reserveAgentForTask(task);
-
+      const reservedAgentId = this.lifecycleService.enqueue(task);
       if (reservedAgentId) {
         console.log(`[Queue] ✓ Task ${task.id} reserved for agent ${reservedAgentId}`);
         // Notify the agent via event
@@ -155,30 +141,10 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
    * Updates task status and optionally sets response.
    */
   updateStatus(taskId: string, status: TaskStatus, response?: any): void {
-    const task = this.repo.getById(taskId);
-    if (task) {
-      task.status = status;
-      if (response) {
-        task.response = response;
-        task.completedAt = Date.now();
-      }
-
-      // Record History Event
-      if (!task.history) task.history = [];
-      task.history.push({
-        timestamp: Date.now(),
-        status,
-        agentId: task.assignedTo,
-        message: response ? 'Status updated with response' : `Status changed to ${status}`
-      });
-
-      this.persistUpdate(task);
-
-      // Emit completion event for listeners
-      if (['COMPLETED', 'FAILED', 'BLOCKED'].includes(status)) {
-        this.emit('completion', task);
-        console.log(`[Queue] Emitted completion event for task ${taskId} (${status})`);
-      }
+    const task = this.lifecycleService.updateStatus(taskId, status, response);
+    if (task && ['COMPLETED', 'FAILED', 'BLOCKED'].includes(status)) {
+      this.emit('completion', task);
+      console.log(`[Queue] Emitted completion event for task ${taskId} (${status})`);
     }
   }
 
@@ -186,59 +152,14 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
    * Cancels a task if it is not already in a terminal state.
    */
   cancelTask(taskId: string): { success: boolean; error?: string } {
-    const task = this.getTask(taskId);
-
-    if (!task) {
-      return { success: false, error: 'Task not found' };
-    }
-
-    const terminalStates: TaskStatus[] = ['COMPLETED', 'FAILED', 'BLOCKED', 'CANCELLED'];
-    if (terminalStates.includes(task.status)) {
-      return { success: false, error: `Task is already ${task.status}` };
-    }
-
-    this.updateStatus(taskId, 'CANCELLED');
-    this.persistence.clearPendingAck(taskId);
-
-    console.log(`[Queue] Task ${taskId} cancelled by admin`);
-    return { success: true };
+    return this.lifecycleService.cancelTask(taskId);
   }
 
   /**
    * Forces a retry of a task by resetting its status to 'QUEUED'.
    */
   forceRetry(taskId: string): { success: boolean; error?: string } {
-    const task = this.getTask(taskId);
-
-    if (!task) {
-      return { success: false, error: 'Task not found' };
-    }
-
-    const retryableStatuses: TaskStatus[] = ['ASSIGNED', 'IN_PROGRESS', 'PENDING_ACK', 'CANCELLED', 'FAILED'];
-    if (!retryableStatuses.includes(task.status)) {
-      return { success: false, error: `Task status ${task.status} is not retryable` };
-    }
-
-    // Reset assignment and response
-    task.assignedTo = undefined;
-    task.response = undefined;
-    task.completedAt = undefined;
-    task.status = 'QUEUED';
-
-    // Record History Event
-    if (!task.history) task.history = [];
-    task.history.push({
-      timestamp: Date.now(),
-      status: 'QUEUED',
-      agentId: undefined,
-      message: 'Force-retried by admin'
-    });
-
-    this.persistUpdate(task);
-    this.persistence.clearPendingAck(taskId);
-
-    console.log(`[Queue] Task ${taskId} force-retried by admin`);
-    return { success: true };
+    return this.lifecycleService.forceRetry(taskId);
   }
 
   // ===== Messages (Delegated) =====

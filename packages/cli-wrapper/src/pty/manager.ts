@@ -132,7 +132,7 @@ export class PTYManager {
     if (process.platform === 'linux') {
       return { cmd: 'script', args: ['-q', '-e', '-c', fullCommand, '/dev/null'] };
     }
-    
+
     if (process.platform === 'darwin') {
       return { cmd: 'script', args: ['-q', '/dev/null', ...[command, ...args]] };
     }
@@ -183,7 +183,7 @@ export class PTYManager {
       env: { ...env, NODE_NO_WARNINGS: '1' } as NodeJS.ProcessEnv,
       stdio: ['pipe', 'pipe', 'pipe'],
       shell: false,
-      detached: true,
+      detached: false,  // MUST be false to prevent orphan processes on restart
     });
 
     this.running = true;
@@ -235,19 +235,10 @@ export class PTYManager {
 
   public kill(signal: NodeJS.Signals = 'SIGTERM'): void {
     this.stopHeartbeat();
-    // Kill entire process group to prevent orphans
-    if (this.childPid) {
-      try {
-        // Negative PID kills the entire process group
-        process.kill(-this.childPid, signal);
-      } catch {
-        // Fallback to direct kill if process group kill fails
-        if (this.useNativePty && this.ptyProcess) {
-          this.ptyProcess.kill(signal);
-        } else if (this.childProcess) {
-          this.childProcess.kill(signal);
-        }
-      }
+    if (this.useNativePty && this.ptyProcess) {
+      this.ptyProcess.kill(signal);
+    } else if (this.childProcess) {
+      this.childProcess.kill(signal);
     }
     this.childPid = null;
   }

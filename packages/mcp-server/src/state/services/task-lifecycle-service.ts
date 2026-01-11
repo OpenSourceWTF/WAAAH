@@ -113,23 +113,4 @@ export class TaskLifecycleService {
     console.log(`[Lifecycle] Task ${taskId} force-retried by admin`);
     return { success: true };
   }
-
-  resetStaleState(): void {
-    try {
-      // Reset PENDING_ACK tasks to QUEUED
-      const stale = this.repo.getByStatus('PENDING_ACK');
-      for (const task of stale) {
-        console.log(`[Lifecycle] Resetting PENDING_ACK task ${task.id} to QUEUED on startup`);
-        this.repo.updateStatus(task.id, 'QUEUED');
-        this.persistence.clearPendingAck(task.id);
-      }
-
-      // Clear all waiting agents
-      this.persistence.resetWaitingAgents();
-
-      console.log(`[Lifecycle] Loaded ${this.repo.getActive().length} active tasks from DB`);
-    } catch {
-      console.log('[Lifecycle] Database not ready, skipping stale state reset');
-    }
-  }
 }
