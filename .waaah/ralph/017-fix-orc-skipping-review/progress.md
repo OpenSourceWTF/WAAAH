@@ -43,4 +43,25 @@
 
 ---
 
-*(Awaiting next iteration or finalization)*
+## Iteration 2: LOOP (correctness)
+
+### Changes Made
+Added **Anti-Patterns** section with explicit wrong vs correct patterns:
+
+| ❌ Wrong | ✅ Correct |
+|----------|-----------|
+| BUILD → COMPLETED | BUILD → IN_REVIEW → MERGE → COMPLETED |
+| Skip IN_REVIEW | Always wait for approval |
+| SMOKE before merge | SMOKE only after merge |
+
+### Scores
+
+| Criterion | Score | Notes |
+|-----------|-------|-------|
+| clarity | 10 | State machine + anti-patterns |
+| completeness | 10 | All cases covered |
+| correctness | 10 | Wrong patterns explicitly blocked |
+
+---
+
+## ✅ COMPLETE
