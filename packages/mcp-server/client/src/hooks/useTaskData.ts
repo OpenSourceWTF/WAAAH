@@ -171,7 +171,7 @@ export function useTaskData(options: UseTaskDataOptions = {}) {
 
     // Handle task updated (patch merge)
     const handleTaskUpdated = (patch: { id: string;[key: string]: unknown }) => {
-      console.log('[useTaskData] task:updated', patch.id);
+      console.log('[useTaskData] task:updated', patch.id, 'status:', patch.status);
 
       // Helper to apply patch
       const applyPatch = (tasks: Task[]): Task[] => {
@@ -187,22 +187,41 @@ export function useTaskData(options: UseTaskDataOptions = {}) {
       const newStatus = patch.status as string | undefined;
 
       if (newStatus === 'COMPLETED' || newStatus === 'CANCELLED') {
-        // Move from active to completed/cancelled
+        // First check if task exists in active tasks
         setTasks(prev => {
           const task = prev.find(t => t.id === patch.id);
           if (task) {
             const updatedTask = { ...task, ...patch } as Task;
             if (newStatus === 'COMPLETED') {
-              setRecentCompleted(prevCompleted => [updatedTask, ...prevCompleted]);
+              setRecentCompleted(prevCompleted => {
+                // Avoid duplicates
+                if (prevCompleted.some(t => t.id === patch.id)) {
+                  return applyPatch(prevCompleted);
+                }
+                return [updatedTask, ...prevCompleted];
+              });
             } else {
-              setRecentCancelled(prevCancelled => [updatedTask, ...prevCancelled]);
+              setRecentCancelled(prevCancelled => {
+                // Avoid duplicates
+                if (prevCancelled.some(t => t.id === patch.id)) {
+                  return applyPatch(prevCancelled);
+                }
+                return [updatedTask, ...prevCancelled];
+              });
             }
             return prev.filter(t => t.id !== patch.id);
           }
           return prev;
         });
+
+        // Also update if already in completed/cancelled arrays (status might be re-sent)
+        if (newStatus === 'COMPLETED') {
+          setRecentCompleted(applyPatch);
+        } else {
+          setRecentCancelled(applyPatch);
+        }
       } else {
-        // Just update in place
+        // Non-terminal status - just update in place across all arrays
         setTasks(applyPatch);
         setRecentCompleted(applyPatch);
         setRecentCancelled(applyPatch);
