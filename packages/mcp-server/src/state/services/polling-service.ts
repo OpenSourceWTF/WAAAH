@@ -84,39 +84,35 @@ export class PollingService {
   }
 
   /**
-   * Acknowledges receipt of a task by an agent.
-   * Uses database-backed pending ACK state.
+   * Reset PENDING_ACK tasks and waiting agents on startup
    */
-  ackTask(taskId: string, agentId: string): { success: boolean; error?: string } {
-    const pendingAck = this.persistence.getPendingAck(taskId);
+  resetStaleState(): void {
+    try {
+      // Reset PENDING_ACK tasks to QUEUED
+      const stale = this.repo.getByStatus('PENDING_ACK');
+      for (const task of stale) {
+        console.log(`[PollingService] Resetting PENDING_ACK task ${task.id} to QUEUED on startup`);
+        
+        task.status = 'QUEUED';
+        if (!task.history) task.history = [];
+        task.history.push({
+            timestamp: Date.now(),
+            status: 'QUEUED',
+            agentId: undefined,
+            message: 'Resetting PENDING_ACK to QUEUED on startup'
+        });
+        
+        this.repo.update(task);
+        this.persistence.clearPendingAck(task.id);
+      }
 
-    if (!pendingAck) {
-      return { success: false, error: 'No pending ACK found for task' };
+      // Clear all waiting agents
+      this.persistence.resetWaitingAgents();
+
+      console.log(`[PollingService] Loaded ${this.repo.getActive().length} active tasks from DB`);
+    } catch (e: any) {
+      console.log(`[PollingService] Database not ready, skipping stale state reset: ${e.message}`);
     }
-
-    if (pendingAck.agentId !== agentId) {
-      return { success: false, error: `Task was sent to ${pendingAck.agentId}, not ${agentId}` };
-    }
-
-    const task = this.repo.getById(taskId);
-    if (!task) return { success: false, error: 'Task not found' };
-
-    task.assignedTo = agentId;
-    task.status = 'ASSIGNED';
-
-    if (!task.history) task.history = [];
-    task.history.push({
-      timestamp: Date.now(),
-      status: 'ASSIGNED',
-      agentId: agentId,
-      message: `Task assigned to ${agentId}`
-    });
-
-    this.repo.update(task);
-    this.persistence.clearPendingAck(taskId);
-    console.log(`[PollingService] Task ${taskId} ACKed by ${agentId}, now ASSIGNED`);
-
-    return { success: true };
   }
 
   async waitForTaskCompletion(taskId: string, timeoutMs: number = 300000): Promise<Task | null> {
@@ -151,25 +147,5 @@ export class PollingService {
         }
       }, timeoutMs);
     });
-  }
-
-  /** Reset PENDING_ACK tasks and waiting agents on startup */
-  resetStaleState(): void {
-    try {
-      // Reset PENDING_ACK tasks to QUEUED
-      const stale = this.repo.getByStatus('PENDING_ACK');
-      for (const task of stale) {
-        console.log(`[PollingService] Resetting PENDING_ACK task ${task.id} to QUEUED on startup`);
-        this.repo.updateStatus(task.id, 'QUEUED');
-        this.persistence.clearPendingAck(task.id);
-      }
-
-      // Clear all waiting agents
-      this.persistence.resetWaitingAgents();
-
-      console.log(`[PollingService] Loaded ${this.repo.getActive().length} active tasks from DB`);
-    } catch {
-      console.log('[PollingService] Database not ready, skipping stale state reset');
-    }
   }
 }
