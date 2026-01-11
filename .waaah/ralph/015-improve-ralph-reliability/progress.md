@@ -119,3 +119,24 @@ Rewrite workflow with:
 
 ### Next
 All scores ≥ 8. Continue to Iteration 3?
+
+---
+
+## Iteration 3
+
+### Changes Made (cross-pollination from spec/optimize)
+1. **Default Criteria Table** — Added definitions for clarity, completeness, correctness
+2. **Strategy Table** — LOOP section now has explicit strategy mapping
+3. **Compression Patterns** — Reference section from waaah-optimize for self-improvement
+4. Workflow now 77 lines (up from 57, but more structured)
+
+### Scores
+
+| Criterion | Score | Notes |
+|-----------|-------|-------|
+| reliability | 9 | Explicit tables reduce ambiguity |
+| succinctness | 7 | Added 20 lines but more actionable |
+| llm_optimized | 9 | Tables + patterns = better parsing |
+
+### Focus for Iteration 4
+`succinctness` dropped to 7 — can we trim without losing value?
