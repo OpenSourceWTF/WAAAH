@@ -1,6 +1,6 @@
 # Data Layer Overhaul Specification
 
-**Version:** 0.2 | **Status:** PHASE 1 - Interview
+**Version:** 0.3 | **Status:** PHASE 1 - Interview
 
 ---
 
@@ -14,81 +14,102 @@
 
 ---
 
-## Requirements (from user)
+## Requirements
 
-| Question | Answer |
-|----------|--------|
-| Freshness | ASAP (real-time preferred) |
-| Scale | <10 users, 100s tasks, 10s agents |
-| Persistence | Yes (survive restarts) |
-| Complexity | A or B (simple or tRPC) |
+| Requirement | Answer |
+|-------------|--------|
+| Users | <10 simultaneous |
+| Tasks | 100s |
+| Agents | 10s |
+| Persistence | Yes |
 | Deployment | Single server |
+| Transport | WebSocket (Socket.io) |
 
 ---
 
-## tRPC vs WebSocket Analysis
+## Design Decisions
 
-**tRPC:**
-- ✅ End-to-end type safety
-- ✅ Great DX with TypeScript
-- ⚠️ **Does NOT improve speed** — still HTTP requests under the hood
-- ⚠️ Subscriptions require WebSocket transport anyway
+### 1. Event Taxonomy
+**Pattern:** `{entity}:{id}:{action}` with wildcard support
 
-**WebSocket (Socket.io or native):**
-- ✅ True push — server can send updates instantly
-- ✅ Single connection vs many HTTP requests
-- ✅ Works with current SQLite + Express
-- ⚠️ Requires new event architecture
+| Event | Example | Wildcard |
+|-------|---------|----------|
+| Task updated | `task:abc123:updated` | `task:*:updated` |
+| Task created | `task:def456:created` | `task:*:created` |
+| Agent status | `agent:orc-01:status` | `agent:*:status` |
+| Global refresh | `sync:full` | — |
 
-**Recommendation:** **WebSocket (Socket.io)** — simplest path to real-time with minimal migration. tRPC would add complexity without speed gains.
+**Implementation:** Socket.io rooms or custom wildcard matcher.
+
+### 2. Initial Load (RECOMMENDED)
+**Hybrid approach:**
+- On connect: server sends `sync:full` with current state snapshot
+- REST endpoints remain for pagination (completed/cancelled tasks)
+
+**Why:** Avoids race condition between connect and first update. Client has immediate state.
+
+### 3. Reconnection (RECOMMENDED)
+**Auto-reconnect + delta sync:**
+- Socket.io has built-in reconnection
+- On reconnect: client sends `lastEventTimestamp`
+- Server sends missed events OR `sync:full` if too many
+
+**Why:** Minimal data transfer, graceful degradation.
+
+### 4. REST Endpoints (RECOMMENDED)
+**Keep both:**
+- WebSocket for real-time dashboard
+- REST for pagination, search, CLI tools, external integrations
+
+**Why:** Backward compat, different use cases.
 
 ---
 
-## Proposed Architecture
+## Architecture
 
 ```
 ┌─────────────────────────────────────────┐
-│                Browser                   │
+│          Browser (Dashboard)             │
 │  ┌─────────────────────────────────────┐│
-│  │ WebSocket Client (Socket.io-client) ││
-│  │   - Subscribe to: tasks, agents     ││
-│  │   - Receive: push updates           ││
+│  │ Socket.io Client                    ││
+│  │   - Subscribe: task:*:*, agent:*:*  ││
+│  │   - On connect: receive sync:full   ││
 │  └─────────────────────────────────────┘│
 └──────────────────┬──────────────────────┘
                    │ ws://
 ┌──────────────────▼──────────────────────┐
-│           Express + Socket.io            │
+│        Express + Socket.io Server        │
 │  ┌─────────────────────────────────────┐│
-│  │ Event Emitter (in-memory)           ││
-│  │   - task:created, task:updated      ││
-│  │   - agent:status, agent:heartbeat   ││
-│  └─────────────────────────────────────┘│
-│                    │                     │
-│  ┌─────────────────▼─────────────────┐  │
-│  │ SQLite (better-sqlite3)           │  │
-│  │   - No change needed              │  │
-│  └───────────────────────────────────┘  │
-└─────────────────────────────────────────┘
+│  │ EventBus (in-memory)                ││
+│  │   - On task change: emit to room    ││
+│  │   - Wildcard matching via regex     ││
+│  └──────────────────┬──────────────────┘│
+│                     │                    │
+│  ┌──────────────────▼─────────────────┐ │
+│  │ SQLite (no change)                 │ │
+│  └────────────────────────────────────┘ │
+│                                          │
+│  ┌────────────────────────────────────┐ │
+│  │ REST API (kept for compat)         │ │
+│  └────────────────────────────────────┘ │
+└──────────────────────────────────────────┘
 ```
 
 ---
 
-## Score: 6/10
+## Score: 8/10
 
-### Gaps Remaining
-1. **Event taxonomy** — which events, what payloads?
-2. **Initial state** — how does client get data on connect?
-3. **Reconnection** — what happens on disconnect?
-4. **Backward compat** — keep REST endpoints for non-WS clients?
+### Remaining Gaps
+1. **Payload schema** — what data does each event carry?
+2. **Error events** — how are errors communicated?
+3. **Auth** — WebSocket authentication strategy?
 
 ---
 
 ## Questions
 
-1. **Events:** Should we emit per-entity (task:123:updated) or per-type (tasks:updated)?
+1. **Payload:** Full entity on update, or just changed fields (patch)?
 
-2. **Initial Load:** On connect, send full state or let client fetch via REST?
+2. **Errors:** Emit `error` event, or include in response?
 
-3. **Reconnection:** Auto-reconnect + refetch, or resume from last known state?
-
-4. **REST:** Keep REST endpoints alongside WebSocket, or deprecate?
+3. **Auth:** Use existing API key in WS handshake, or session-based?

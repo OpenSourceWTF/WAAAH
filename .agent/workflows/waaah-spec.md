@@ -5,85 +5,79 @@ description: Interactive spec generation with quality gate
 
 # WAAAH Spec Generator
 
-**Input:** Vague idea. **Output:** 10/10 spec + tasks with dependencies.
+**Vague idea → 10/10 spec + tasks with dependencies.**
 
-## RULES
+## Core Rules
+1. `notify_user` + await at every ⏸️
+2. Log each iteration to `.waaah/specs/NNN-slug/spec.md`
+3. NEVER finalize below 10/10
+4. ALWAYS challenge vague answers
 
-| # | Rule |
-|---|------|
-| 1 | NEVER finalize spec below 10/10 |
-| 2 | ALWAYS challenge vague answers |
-| 3 | ALWAYS generate tasks with dependencies |
-| 4 | NEVER skip edge cases |
+## State Machine
+```
+INIT → COLLECT ⏸️→ INTERVIEW ⏸️→ [LOOP | FINALIZE ⏸️→ TASKS ⏸️]
+          ↑             ↓
+          └─────────────┘
+```
 
-## QUALITY GATE (10/10 required)
+## Default Criteria
 
 | Criterion | Definition |
 |-----------|------------|
-| Completeness | All features defined |
-| Specificity | No ambiguous requirements |
-| Testability | Every requirement verifiable |
-| Consistency | No conflicting rules |
-| Edge Coverage | Error states defined |
+| completeness | All features defined |
+| specificity | No ambiguous requirements |
+| testability | Every requirement verifiable |
 
-## PHASE 0: INIT
+## Workflow
 
-```
-1. Greet: "I'm your PM. I ask hard questions until spec = 10/10."
-2. Ask: "What are you building? Who is it for? What problem?"
-3. Ask: "Criteria? (default: completeness, specificity, testability)"
-4. Collect: problem, users, MVP, metrics, criteria
-```
+### INIT
+Check `.waaah/specs` for incomplete sessions.
+If found: ⏸️ `notify_user "Resume [folder]?"` → await
 
-## PHASE 1: INTERVIEW LOOP
+### COLLECT
+1. ⏸️ `notify_user "What are you building? Who? What problem?"` → await
+2. ⏸️ `notify_user "Criteria? (default: completeness, specificity, testability)"` → await
+3. Create `.waaah/specs/NNN-slug`
+4. ⏸️ `notify_user "Start interview?"` → await
 
-```
-WHILE score < 10:
-  1. ANALYZE: gaps, conflicts, ambiguities, missing edge cases
-  2. SCORE 1-10
-  3. GENERATE 2-5 targeted questions
-  4. PRESENT: "## Score: [N]/10  Gaps: [list]  Questions: [1. ...]"
-  5. PROCESS response → update spec
-```
+### INTERVIEW
+Analyze gaps, score 1-10, generate 2-5 targeted questions.
 
-### Question Types
-| Type | Template |
-|------|----------|
+| Question Type | Template |
+|---------------|----------|
 | Edge | "What happens if [X] fails?" |
-| Flow | "After [action], what does user see?" |
+| Flow | "After [action], what next?" |
 | Conflict | "You said X but also Y - which wins?" |
 | Scope | "Is [feature] v1 or later?" |
 
-## PHASE 2: FINALIZE
+⏸️ `notify_user` with score + gaps + questions → await
 
-```
-ON "done" OR score = 10:
-  1. Generate spec.md using TEMPLATE
-  2. Self-assess: IF < 10 → continue PHASE 1
-  3. Save to .waaah/specs/[N]-[name]/spec.md
-```
+### LOOP (if score < 10)
+Process response → update spec → INTERVIEW
 
-## PHASE 3: TASK ASSIGNMENT
+### FINALIZE (if score = 10)
+Generate spec.md using TEMPLATE. Save to `.waaah/specs/NNN-slug/spec.md`.
+⏸️ `notify_user` spec summary → await approval
 
-```
-1. Generate tasks: group by feature, order by deps, estimate S/M/L
-   REQUIRED: verify command (shell command that fails if incomplete)
+### TASKS
+Generate tasks with dependencies and verify commands.
 
-2. Display: "T1: [title] - [size] - deps: none - verify: [cmd]"
-
-3. On confirm:
-   t1_id = assign_task({ prompt, verify })
-   t2_id = assign_task({ prompt, dependencies: [t1_id], verify })
-
-4. Report: "✅ Spec saved. [N] tasks queued."
-```
-
-### Verify Commands
-| Task Type | Example |
-|-----------|---------|
+| Task Type | Verify Example |
+|-----------|----------------|
 | CLI | `node dist/index.js --help \| grep "expected"` |
-| API | `curl -s localhost:3000/health \| jq .status` |
+| API | `curl localhost:3000/health \| jq .status` |
 | Component | `pnpm test -- ComponentName` |
+
+Display: `T1: [title] - [size] - deps: [list] - verify: [cmd]`
+⏸️ `notify_user` task list → "Confirm to assign?"
+
+On confirm:
+```
+t1_id = assign_task({ prompt, verify })
+t2_id = assign_task({ prompt, dependencies: [t1_id], verify })
+```
+
+Report: `✅ Spec saved. [N] tasks queued.`
 
 ## SPEC TEMPLATE
 
@@ -101,7 +95,7 @@ Problem: [X] | Users: [Y] | Solution: [Z]
 | ID | Requirement |
 |----|-------------|
 | FR-1 | [functional] |
-| NFR-1 | [non-functional: performance/security] |
+| NFR-1 | [non-functional] |
 
 ## 4. Edge Cases
 | Scenario | Behavior |
