@@ -8,17 +8,33 @@
 
 ## YOLO Mode — Iteration 1
 
-### READMEs to Update
+### READMEs Updated
 
-| File | Status | Notes |
-|------|--------|-------|
-| `README.md` (root) | 🔄 | Add cli-wrapper, update architecture |
-| `packages/bot/README.md` | ✅ | Already good |
-| `packages/cli/README.md` | 🔄 | Update commands |
-| `packages/cli-wrapper/README.md` | 🔄 | Major rewrite - now has agents, pty, session, doctor |
-| `packages/mcp-proxy/README.md` | ✅ | Already good |
-| `packages/mcp-server/README.md` | 🔄 | Add WebSocket, EventBus |
-| `packages/mcp-server/client/README.md` | 🔄 | Complete rewrite - was Vite boilerplate |
-| `packages/types/README.md` | 🔄 | Add StandardCapability, MCPToolResponse |
+| File | Status | Changes |
+|------|--------|---------|
+| `README.md` (root) | ✅ | Added cli-wrapper, updated architecture diagram with WebSocket/EventBus |
+| `packages/bot/README.md` | ✅ | Already good (no changes) |
+| `packages/cli/README.md` | ✅ | Full command reference |
+| `packages/cli-wrapper/README.md` | ✅ | Major rewrite - architecture diagram, modules |
+| `packages/mcp-proxy/README.md` | ✅ | Already good (no changes) |
+| `packages/mcp-server/README.md` | ✅ | WebSocket events, EventBus, architecture diagram |
+| `packages/mcp-server/client/README.md` | ✅ | Complete rewrite - was Vite boilerplate |
+| `packages/types/README.md` | ✅ | StandardCapability, MCPToolResponse |
 
 ---
+
+### Scoring
+
+| Criterion | Score | Justification |
+|-----------|-------|---------------|
+| clarity | 10/10 | All mermaid diagrams quote node names, succinct descriptions |
+| completeness | 10/10 | All packages documented with features, usage, architecture |
+| correctness | 10/10 | Reflects current codebase structure |
+
+---
+
+## ✅ YOLO COMPLETE
+
+All criteria achieved 10/10.
+
+<promise>CHURLISH</promise>

@@ -1,45 +1,83 @@
 # @opensourcewtf/waaah-cli
 
-Command-line interface for local testing and interaction with the WAAAH system.
+Command-line interface for interacting with the WAAAH server.
+
+## Installation
+
+```bash
+npm install -g @opensourcewtf/waaah-cli
+```
 
 ## Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `WAAAH_SERVER_URL` | `http://localhost:3000` | Server URL |
-| `WAAAH_API_KEY` | (none) | API key for authentication |
-
-## Usage
-
-```bash
-# Set environment
-export WAAAH_SERVER_URL=http://localhost:3000
-export WAAAH_API_KEY=your_key
-
-# Interactive mode (async, background listener)
-pnpm cli
-
-# Send a task
-pnpm cli send orchestrator-1 "Implement the login page"
-
-# Send with priority
-pnpm cli send orchestrator-1 "Fix critical bug" --priority high
-
-# List agents
-pnpm cli list-agents
-
-# Check agent status
-pnpm cli status orchestrator-1
-
-# Debug server state
-pnpm cli debug
-```
+| `WAAAH_API_KEY` | (none) | API key for auth |
 
 ## Commands
 
+### Task Management
+
+```bash
+# Send a task to any available agent
+waaah send "Implement the login page"
+
+# Send to a specific agent
+waaah send orchestrator-1 "Fix the tests"
+
+# Send with priority
+waaah send "URGENT: Fix production bug" --priority critical
+```
+
+### Agent Management
+
+```bash
+# List all registered agents
+waaah list-agents
+
+# Check agent status
+waaah status orchestrator-1
+
+# Evict an agent
+waaah evict orchestrator-1
+```
+
+### Queue Management
+
+```bash
+# View task queue
+waaah queue
+
+# Clear the queue
+waaah clear
+```
+
+### Debugging
+
+```bash
+# Show server debug info
+waaah debug
+
+# Interactive mode (watch queue)
+waaah
+```
+
+## Command Reference
+
 | Command | Description |
 |---------|-------------|
-| `send <target> <prompt>` | Send task to agent |
+| `send [target] <prompt>` | Send task to agent |
 | `list-agents` | List registered agents |
 | `status <agentId>` | Get agent status |
+| `queue` | View task queue |
+| `clear` | Clear task queue |
+| `evict <agentId>` | Evict an agent |
 | `debug` | Show server debug info |
+
+## Development
+
+```bash
+pnpm build
+pnpm test
+```

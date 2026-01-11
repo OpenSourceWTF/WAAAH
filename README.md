@@ -243,19 +243,21 @@ Connect your AI agent to a WAAAH server:
 ```mermaid
 graph TD
     User(("User/Admin")) -->|"Enqueues Tasks"| DiscordBot["Discord/Slack Bot"]
-    User -->|"Monitors"| Dashboard["Admin Dashboard"]
-    DiscordBot -->|"HTTP"| MB["MCP Server"]
-    Dashboard -->|"HTTP/SSE"| MB
+    User -->|"Monitors"| Dashboard["Mission Command Dashboard"]
+    DiscordBot -->|"HTTP"| Server["MCP Server"]
+    Dashboard <-->|"WebSocket"| Server
     
     subgraph "Core System"
-        MB["MCP Server"]
-        MB -->|"State"| DB[("SQLite: Agents, Tasks, Logs")]
-        MB -->|"Scheduler"| Scheduler["Hybrid Scheduler"]
+        Server["MCP Server"]
+        Server -->|"State"| DB[("SQLite: Agents, Tasks")]
+        Server -->|"Events"| EventBus["EventBus"]
+        EventBus -->|"Push"| Scheduler["Scheduler"]
     end
     
     subgraph "Agent Runtime"
-        Proxy["MCP Proxy"] -->|"Long Polling / Tools"| MB
-        Agent["Autonomous Agent"] -->|"Stdio / JSON-RPC"| Proxy
+        CLIWrapper["CLI Wrapper"] -->|"Spawns"| Agent["AI Agent (Gemini/Claude)"]
+        Agent -->|"Stdio"| Proxy["MCP Proxy"]
+        Proxy -->|"HTTP/Long Poll"| Server
     end
 ```
 
@@ -268,9 +270,11 @@ This is a monorepo managed with `pnpm workspaces`.
 | Package | Description |
 |---------|-------------|
 | [`packages/mcp-server`](packages/mcp-server) | Central orchestration server with Admin Dashboard |
+| [`packages/mcp-server/client`](packages/mcp-server/client) | Mission Command Dashboard (React + Vite) |
 | [`packages/mcp-proxy`](packages/mcp-proxy) | Stdio↔HTTP bridge for agents |
+| [`packages/cli`](packages/cli) | Command-line interface for task management |
+| [`packages/cli-wrapper`](packages/cli-wrapper) | Agent spawner with PTY, session persistence, MCP injection |
 | [`packages/bot`](packages/bot) | Unified Discord/Slack bot |
-| [`packages/cli`](packages/cli) | Command-line interface for local testing |
 | [`packages/types`](packages/types) | Shared TypeScript definitions and Zod schemas |
 
 ---
