@@ -77,7 +77,7 @@ describe('useTaskData', () => {
         // Initial load returns 1 item
         if (url.includes('offset=0')) return { ok: true, json: async () => [{ id: '1', status: 'COMPLETED' }] };
         // Load more returns another item
-        if (url.includes('offset=50')) return { ok: true, json: async () => [{ id: '2', status: 'COMPLETED' }] };
+        if (url.includes('offset=1')) return { ok: true, json: async () => [{ id: '2', status: 'COMPLETED' }] };
       }
       return { ok: true, json: async () => ({}) };
     });
@@ -97,4 +97,33 @@ describe('useTaskData', () => {
       expect(result.current.recentCompleted[1].id).toBe('2');
     });
   });
+
+  it('loads more cancelled tasks', async () => {
+    // Setup initial fetch
+    mockApiFetch.mockImplementation(async (url: string) => {
+     if (url.includes('/admin/tasks?active=true')) return { ok: true, json: async () => [] };
+     if (url.includes('status=CANCELLED')) {
+       // Initial load returns 1 item
+       if (url.includes('offset=0')) return { ok: true, json: async () => [{ id: '1', status: 'CANCELLED' }] };
+       // Load more returns another item
+       if (url.includes('offset=1')) return { ok: true, json: async () => [{ id: '2', status: 'CANCELLED' }] };
+     }
+     return { ok: true, json: async () => ({}) };
+   });
+
+   const { result } = renderHook(() => useTaskData({ pageSize: 1 }));
+
+   // Wait for initial load
+   await waitFor(() => {
+     expect(result.current.recentCancelled).toHaveLength(1);
+   });
+
+   // Trigger load more
+   await result.current.loadMoreCancelled();
+
+   await waitFor(() => {
+     expect(result.current.recentCancelled).toHaveLength(2);
+     expect(result.current.recentCancelled[1].id).toBe('2');
+   });
+ });
 });

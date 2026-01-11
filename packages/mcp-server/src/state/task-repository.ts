@@ -22,6 +22,8 @@ export interface ITaskRepository {
   getByStatuses(statuses: TaskStatus[]): Task[];
   /** Get tasks assigned to a specific agent */
   getByAssignedTo(agentId: string): Task[];
+  /** Get all agents that are currently assigned tasks (Active only) */
+  getBusyAgentIds(): string[];
   /** Get task history with filtering and search */
   getHistory(options: { status?: TaskStatus | 'ACTIVE'; limit?: number; offset?: number; agentId?: string; search?: string }): Task[];
   /** Get queue statistics */
@@ -139,6 +141,13 @@ export class TaskRepository implements ITaskRepository {
   getByAssignedTo(agentId: string): Task[] {
     const rows = this.database.prepare('SELECT * FROM tasks WHERE assignedTo = ?').all(agentId) as any[];
     return rows.map(r => this.mapRowToTask(r));
+  }
+
+  getBusyAgentIds(): string[] {
+    const rows = this.database.prepare(
+      `SELECT DISTINCT assignedTo FROM tasks WHERE status IN ('ASSIGNED', 'IN_PROGRESS', 'PENDING_ACK') AND assignedTo IS NOT NULL`
+    ).all() as any[];
+    return rows.map(r => r.assignedTo);
   }
 
   getHistory(options: { status?: TaskStatus | 'ACTIVE'; limit?: number; offset?: number; agentId?: string; search?: string }): Task[] {
