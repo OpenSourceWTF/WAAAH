@@ -85,16 +85,16 @@
 #### 002 - WAAAH Doctor ⚠️
 - **US-1** Startup Scan: ⚠️ `git-poller.ts` exists but unclear if builds "Mental Map"
 - **US-2** Git Polling: ✅ `git-poller.ts` has commit tracking
-- **US-3** Triage: ⚠️ `health-report.ts` exists but no task generation visible
+- **US-3** Triage: ✅ Workflow defines violation→capability mapping
 - **US-4** Reporting: ⚠️ Health report module exists, need to verify output location
-- **US-5** Context Flushing: ❌ Not evident
-- **FR-3.1** Task Generation via `assign_task`: ❌ Not found
-- **Usable:** Partially - runs but doesn't generate tasks
+- **US-5** Context Flushing: ❌ Not evident in implementation
+- **FR-3.1** Task Generation via `assign_task`: ✅ Workflow defines this
+- **Usable:** Partially - workflow exists at `.agent/workflows/waaah-doctor-agent.md`
 - **Spec gaps:**
-  1. No workflow file specified for Doctor agent (unlike Orc)
+  1. Spec doesn't reference the workflow file (should add "Related Workflows" field)
   2. Missing implementation tasks table (unlike other specs)
   3. No verification commands
-  4. Unclear how Doctor integrates with WAAAH MCP server
+  4. Spec and workflow have different threshold values (spec says "90% coverage", workflow says "≥90%")
 
 #### 001 - CLI Agent Wrapper ✅
 - **FR-1.x** CLI Interface: ✅ `waaah agent --start=gemini --as=orc` works
@@ -254,7 +254,7 @@ Run this after FINALIZE for completed specs, updating status to:
 | 005 | ✅ Works | Missing API contract | Add diff response format |
 | 004 | ✅ Works | Missing E2E cmds | Add runnable verification |
 | 003 | ✅ Works | No impl tasks | Add task table |
-| 002 | ⚠️ Partial | Missing impl tasks, workflow | Add task table, workflow ref |
+| 002 | ⚠️ Partial | Spec doesn't reference workflow | Add workflow cross-ref |
 | 001 | ✅ Works | Unresolved questions | Close out open questions |
 
 ---
