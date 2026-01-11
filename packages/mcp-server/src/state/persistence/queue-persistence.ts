@@ -114,4 +114,27 @@ export class QueuePersistence {
   resetWaitingAgents(): void {
     this.db.prepare('UPDATE agents SET waitingSince = NULL').run();
   }
+
+  /**
+   * Get agent's last seen timestamp from database
+   */
+  getAgentLastSeen(agentId: string): number | undefined {
+    try {
+      const row = this.db.prepare('SELECT lastSeen FROM agents WHERE id = ?').get(agentId) as any;
+      return row?.lastSeen;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * Fetch recent activity logs.
+   */
+  getLogs(limit: number = 100): any[] {
+    const logs = this.db.prepare('SELECT * FROM logs ORDER BY timestamp DESC LIMIT ?').all(limit) as any[];
+    return logs.reverse().map(l => ({
+      ...l,
+      metadata: l.metadata ? JSON.parse(l.metadata) : undefined
+    }));
+  }
 }
