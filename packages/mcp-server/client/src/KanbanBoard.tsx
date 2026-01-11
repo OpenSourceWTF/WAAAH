@@ -203,9 +203,14 @@ export const KanbanBoard = React.memo(function KanbanBoard({
                   onClick={() => handleCardClick(task)}
                 >
                   <CardHeader className="p-3 pb-2 space-y-1">
-                    {/* Row 1: Status + NEW badge */}
+                    {/* Row 1: Status + BLOCKED/NEW badge */}
                     <div className="flex items-center justify-between">
-                      <Badge className={getStatusBadgeClass(task.status)}>{formatStatusLabel(task.status)}</Badge>
+                      <div className="flex items-center gap-1">
+                        <Badge className={getStatusBadgeClass(task.status)}>{formatStatusLabel(task.status)}</Badge>
+                        {task.status === 'BLOCKED' && (
+                          <Badge className="bg-orange-500 text-white text-[10px] px-1.5 py-0.5 border border-orange-700">⛔ BLOCKED</Badge>
+                        )}
+                      </div>
                       {unreadCount > 0 && (
                         <Badge className="bg-amber-500 text-white text-[10px] px-1.5 py-0.5">{unreadCount} PENDING</Badge>
                       )}
