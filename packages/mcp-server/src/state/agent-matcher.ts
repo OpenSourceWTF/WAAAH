@@ -65,6 +65,9 @@ export interface IMatcherQueue extends TypedEventEmitter {
   getByStatuses(statuses: TaskStatus[]): Task[];
   /** Pop eviction signal for agent */
   popEviction(agentId: string): { reason: string; action: 'RESTART' | 'SHUTDOWN' } | null;
+  /** Get task by ID (for dependency checking) */
+  getTask?(taskId: string): Task | undefined;
+  getTaskFromDB?(taskId: string): Task | undefined;
 }
 
 /**
@@ -327,7 +330,8 @@ export async function waitForTask(
   queue.addWaitingAgent(agentId, capabilities, workspaceContext);
 
   // 1. Check if there are pending tasks for this agent
-  const pendingTask = findPendingTaskForAgent(queue, agentId, capabilities, workspaceContext);
+  const getTaskFn = (taskId: string) => queue.getTask?.(taskId) || queue.getTaskFromDB?.(taskId);
+  const pendingTask = findPendingTaskForAgent(queue, agentId, capabilities, workspaceContext, getTaskFn);
   if (pendingTask) {
     queue.removeWaitingAgent(agentId);
     queue.updateStatus(pendingTask.id, 'PENDING_ACK');
