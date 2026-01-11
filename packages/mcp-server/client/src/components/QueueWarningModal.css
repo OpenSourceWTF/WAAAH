@@ -1,0 +1,131 @@
+/**
+ * QueueWarningModal Styles
+ * Centered modal overlay with warning styling
+ */
+
+.queue-warning-modal__overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  z-index: 1000;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+.queue-warning-modal {
+  background: var(--color-bg-elevated, #1a1a2e);
+  border-radius: 16px;
+  border: 1px solid var(--color-border, #2d2d44);
+  padding: 2rem;
+  max-width: 420px;
+  width: 90%;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+  animation: slideUp 0.25s ease;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.queue-warning-modal__icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+.queue-warning-modal__title {
+  margin: 0 0 0.75rem;
+  font-size: 1.375rem;
+  font-weight: 600;
+  color: var(--color-text-primary, #f0f0f5);
+}
+
+.queue-warning-modal__description {
+  margin: 0 0 1.5rem;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  color: var(--color-text-secondary, #a0a0b0);
+}
+
+.queue-warning-modal__details {
+  display: flex;
+  justify-content: center;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background: var(--color-bg-input, #0f0f1a);
+  border-radius: 8px;
+}
+
+.queue-warning-modal__detail {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--color-text-secondary, #a0a0b0);
+}
+
+.queue-warning-modal__capability-icon {
+  font-size: 1rem;
+}
+
+.queue-warning-modal__actions {
+  display: flex;
+  justify-content: center;
+  gap: 0.75rem;
+}
+
+.queue-warning-modal__button {
+  padding: 0.625rem 1.5rem;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.1s ease;
+}
+
+.queue-warning-modal__button:active {
+  transform: scale(0.98);
+}
+
+.queue-warning-modal__button--primary {
+  background: var(--color-warning, #f59e0b);
+  color: #000;
+}
+
+.queue-warning-modal__button--primary:hover {
+  background: var(--color-warning-hover, #d97706);
+}
+
+.queue-warning-modal__button--secondary {
+  background: transparent;
+  color: var(--color-text-secondary, #a0a0b0);
+  border: 1px solid var(--color-border, #2d2d44);
+}
+
+.queue-warning-modal__button--secondary:hover {
+  background: var(--color-bg-hover, rgba(255, 255, 255, 0.05));
+  color: var(--color-text-primary, #f0f0f5);
+}
