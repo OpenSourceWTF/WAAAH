@@ -6,6 +6,7 @@ import { AgentRepository } from '../../state/agent-repository.js';
 import { TaskQueue } from '../../state/queue.js';
 import { emitDelegation } from '../../state/events.js';
 import { scanPrompt, getSecurityContext } from '../../security/prompt-scanner.js';
+import { inferCapabilities } from '../../scheduling/capability-inference.js';
 import {
   sendResponseSchema,
   assignTaskSchema,
@@ -80,7 +81,10 @@ export class TaskHandlers {
       }
 
       if (!targetAgentId && !params.requiredCapabilities?.length) {
-        console.log(`[Tools] No target agent or capabilities specified, task will match any waiting agent`);
+        // Infer capabilities from prompt when not specified
+        const inference = inferCapabilities(params.prompt, { spec: params.spec, tasks: params.tasks });
+        params.requiredCapabilities = inference.capabilities;
+        console.log(`[Tools] Inferred capabilities: [${inference.capabilities.join(', ')}] (confidence: ${inference.confidence.toFixed(2)}, fallback: ${inference.fallback})`);
       }
 
       const scan = scanPrompt(params.prompt);
