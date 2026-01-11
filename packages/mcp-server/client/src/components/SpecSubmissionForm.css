@@ -71,6 +71,45 @@
   box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2);
 }
 
+/* Select dropdown styles */
+.spec-form__select {
+  width: 100%;
+  padding: 0.75rem;
+  font-size: 0.9375rem;
+  font-family: inherit;
+  color: var(--color-text-primary, #f0f0f5);
+  background: var(--color-bg-input, #0f0f1a);
+  border: 1px solid var(--color-border, #2d2d44);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23a0a0b0' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  padding-right: 2.5rem;
+}
+
+.spec-form__select:focus {
+  outline: none;
+  border-color: var(--color-primary, #6366f1);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+}
+
+.spec-form__select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.spec-form__select--error {
+  border-color: var(--color-error, #ef4444);
+}
+
+.spec-form__select option {
+  background: var(--color-bg-elevated, #1a1a2e);
+  color: var(--color-text-primary, #f0f0f5);
+}
+
 .spec-form__error {
   font-size: 0.8125rem;
   color: var(--color-error, #ef4444);

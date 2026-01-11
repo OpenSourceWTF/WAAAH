@@ -4,10 +4,17 @@
  * Fields: Problem, Users, Requirements, Success Metrics, Out of Scope
  * Required: Problem, Requirements
  */
-import { useState, FormEvent } from 'react';
+import { useState, useEffect, FormEvent } from 'react';
+import { apiFetch } from '../lib/api';
 import './SpecSubmissionForm.css';
 
+interface Workspace {
+  path: string;
+  agentCount: number;
+}
+
 export interface SpecFormData {
+  workspace: string;
   problem: string;
   users: string;
   requirements: string;
@@ -22,6 +29,7 @@ interface SpecSubmissionFormProps {
 
 export function SpecSubmissionForm({ onSubmit, onCancel }: SpecSubmissionFormProps) {
   const [formData, setFormData] = useState<SpecFormData>({
+    workspace: '',
     problem: '',
     users: '',
     requirements: '',
@@ -30,10 +38,34 @@ export function SpecSubmissionForm({ onSubmit, onCancel }: SpecSubmissionFormPro
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<keyof SpecFormData, string>>>({});
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [loadingWorkspaces, setLoadingWorkspaces] = useState(true);
+
+  // Fetch workspaces on mount
+  useEffect(() => {
+    const fetchWorkspaces = async () => {
+      try {
+        const data = await apiFetch<Workspace[]>('/admin/workspaces');
+        setWorkspaces(data);
+        // Auto-select if only one workspace
+        if (data.length === 1) {
+          setFormData(prev => ({ ...prev, workspace: data[0].path }));
+        }
+      } catch (err) {
+        console.error('Failed to fetch workspaces:', err);
+      } finally {
+        setLoadingWorkspaces(false);
+      }
+    };
+    fetchWorkspaces();
+  }, []);
 
   const validateForm = (): boolean => {
     const newErrors: Partial<Record<keyof SpecFormData, string>> = {};
 
+    if (!formData.workspace) {
+      newErrors.workspace = 'Workspace selection is required';
+    }
     if (!formData.problem.trim()) {
       newErrors.problem = 'Problem statement is required';
     }
@@ -77,6 +109,38 @@ export function SpecSubmissionForm({ onSubmit, onCancel }: SpecSubmissionFormPro
       aria-label="Spec Submission Form"
     >
       <h2 className="spec-form__title">Submit New Spec Request</h2>
+
+      {/* Workspace Selection */}
+      <div className="spec-form__field">
+        <label htmlFor="workspace" className="spec-form__label">
+          Workspace <span className="spec-form__required">*</span>
+        </label>
+        <select
+          id="workspace"
+          name="workspace"
+          className={`spec-form__select ${errors.workspace ? 'spec-form__select--error' : ''}`}
+          value={formData.workspace}
+          onChange={(e) => setFormData(prev => ({ ...prev, workspace: e.target.value }))}
+          disabled={loadingWorkspaces}
+          aria-required="true"
+          aria-invalid={!!errors.workspace}
+          aria-describedby={errors.workspace ? 'workspace-error' : undefined}
+        >
+          <option value="">
+            {loadingWorkspaces ? 'Loading workspaces...' : 'Select a workspace'}
+          </option>
+          {workspaces.map((ws) => (
+            <option key={ws.path} value={ws.path}>
+              {ws.path} ({ws.agentCount} agent{ws.agentCount !== 1 ? 's' : ''})
+            </option>
+          ))}
+        </select>
+        {errors.workspace && (
+          <span id="workspace-error" className="spec-form__error" role="alert">
+            {errors.workspace}
+          </span>
+        )}
+      </div>
 
       <div className="spec-form__field">
         <label htmlFor="problem" className="spec-form__label">
