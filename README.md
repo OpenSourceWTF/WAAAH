@@ -243,18 +243,6 @@ graph LR
 
 **Start with:** `/waaah-orc` workflow
 
-### Interactive Agent (Pair Programming)
-
-You control the agent; delegate work to Orchestrators:
-
-**MCP Tool Sequence:**
-1. `register_agent({ role: "boss" })` — identify as interactive
-2. `assign_task({ targetAgentId, prompt })` — delegate to Orchestrators
-3. `list_agents()` — discover available workers
-4. `get_agent_status(agentId)` — check worker state
-
-**No workflow needed** — just connect and use tools directly.
-
 ### Doctor Agent (QA Daemon)
 
 Background agent that monitors code health and creates tasks for issues:
