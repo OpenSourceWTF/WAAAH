@@ -52,7 +52,14 @@ Analyze gaps, score 1-10, generate 2-5 targeted questions.
 | Conflict | "You said X but also Y - which wins?" |
 | Scope | "Is [feature] v1 or later?" |
 | API | "What's the request/response shape for [endpoint]?" |
+| **Integration** | "How will users/other code USE this? (UI button? CLI command? API call? Import?)" |
 | Reconcile | "Did implementation reveal anything the spec missed?" |
+
+**MANDATORY:** Every spec MUST answer the Integration question. If unclear, ask:
+- "Where in the UI does the user trigger this?"
+- "What CLI command exposes this?"
+- "Which existing service imports/calls this new code?"
+- "Show me the call path from user action → this code"
 
 ⏸️ `notify_user` with score + gaps + questions → await
 
@@ -116,24 +123,31 @@ Report: `✅ Spec saved. [N] implementation + [M] verification tasks queued.`
 ## 1. Overview
 Problem: [X] | Users: [Y] | Solution: [Z]
 
-## 2. User Stories
+## 2. Integration Path
+**How users access this feature:**
+- UI: [Button/page/action] → [Component] → [Service] → [This code]
+- CLI: `waaah [command]` → [Handler] → [This code]
+- API: `[METHOD] /[endpoint]` → [Handler] → [This code]
+- Import: `import { X } from '[package]'` used by [Consumer]
+
+## 3. User Stories
 - [ ] US-1: As [user], I want [action], so that [benefit]
 
-## 3. Requirements
+## 4. Requirements
 | ID | Requirement |
 |----|-------------|
 | FR-1 | [functional] |
 | NFR-1 | [non-functional] |
 
-## 4. Edge Cases
+## 5. Edge Cases
 | Scenario | Behavior |
 |----------|----------|
 | [case] | [response] |
 
-## 5. Out of Scope
+## 6. Out of Scope
 - [excluded]
 
-## 6. Success Metrics
+## 7. Success Metrics
 | Metric | Target |
 |--------|--------|
 | [metric] | [value] |
