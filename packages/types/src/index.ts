@@ -117,6 +117,17 @@ export interface SSEEvent {
   data: unknown;
 }
 
+/**
+ * Standardized response type for MCP tool calls.
+ * All tool handlers should return this format for consistent processing.
+ */
+export interface MCPToolResponse {
+  success: boolean;
+  message: string;
+  /** Optional injected instruction/guidance in markdown format */
+  prompt?: string;
+}
+
 // ===== Tool Names =====
 export const TOOL_NAMES = [
   'register_agent',
