@@ -3,7 +3,6 @@ import { Badge } from "@/components/ui/badge";
 import { MessageSquare, ChevronDown, ChevronRight } from "lucide-react";
 import { parseDiff, getFileStats } from '@/utils/diffParser';
 import type { DiffFile, ReviewComment } from '@/utils/diffParser';
-import { FileNavigator } from './diff/FileNavigator';
 import { DiffLine } from './diff/DiffLine';
 import { CommentThread } from './diff/CommentThread';
 import { CommentInput } from './diff/CommentInput';
@@ -12,9 +11,10 @@ import { apiFetch } from '@/lib/api';
 interface DiffViewerProps {
   taskId: string;
   onAddComment: (filePath: string, lineNumber: number | null, content: string) => void;
+  onDiffLoaded?: (fileStats: import('@/utils/diffParser').FileStats[], jumpToFile: (path: string) => void) => void;
 }
 
-export function DiffViewer({ taskId, onAddComment }: DiffViewerProps) {
+export function DiffViewer({ taskId, onAddComment, onDiffLoaded }: DiffViewerProps) {
   const [files, setFiles] = useState<DiffFile[]>([]);
   const [comments, setComments] = useState<ReviewComment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -77,6 +77,12 @@ export function DiffViewer({ taskId, onAddComment }: DiffViewerProps) {
   const totalAdditions = fileStats.reduce((sum, f) => sum + f.additions, 0);
   const totalDeletions = fileStats.reduce((sum, f) => sum + f.deletions, 0);
 
+  useEffect(() => {
+    if (files.length > 0 && !loading) {
+      onDiffLoaded?.(fileStats, jumpToFile);
+    }
+  }, [files, loading, fileStats, onDiffLoaded, jumpToFile]); // Dependencies for notifying parent
+
   return loading ? <div className="flex items-center justify-center p-8 text-primary/50">Loading diff...</div>
     : error || files.length === 0 ? (
       <div className="text-center p-8 border-2 border-dashed border-primary/30 text-primary/40">
@@ -85,14 +91,11 @@ export function DiffViewer({ taskId, onAddComment }: DiffViewerProps) {
       </div>
     ) : (
       <div className="relative space-y-4">
-        <div className="flex items-center px-2">
-          <div className="flex items-center gap-2">
-            <Badge variant="outline" className="border-primary/50">{files.length} file{files.length !== 1 && 's'} changed</Badge>
-            <Badge variant="outline" className="border-green-500/50 text-green-400">+{totalAdditions}</Badge>
-            <Badge variant="outline" className="border-red-500/50 text-red-400">−{totalDeletions}</Badge>
-            {unresolvedCount > 0 && <Badge className="bg-orange-500 text-white">{unresolvedCount} unresolved</Badge>}
-          </div>
-          <FileNavigator fileStats={fileStats} totalAdditions={totalAdditions} totalDeletions={totalDeletions} onJumpToFile={jumpToFile} />
+        <div className="flex items-center gap-2">
+          <Badge variant="outline" className="border-primary/50">{files.length} file{files.length !== 1 && 's'} changed</Badge>
+          <Badge variant="outline" className="border-green-500/50 text-green-400">+{totalAdditions}</Badge>
+          <Badge variant="outline" className="border-red-500/50 text-red-400">−{totalDeletions}</Badge>
+          {unresolvedCount > 0 && <Badge className="bg-orange-500 text-white">{unresolvedCount} unresolved</Badge>}
         </div>
 
         {files.map(file => (

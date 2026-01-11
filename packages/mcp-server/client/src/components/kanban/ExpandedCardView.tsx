@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { X, Clock, User, FileText, Settings, CheckCircle, RefreshCw, XCircle } from "lucide-react";
+import { X, Clock, User, FileText, Settings, CheckCircle, RefreshCw, XCircle, ChevronDown } from "lucide-react";
 import { DiffViewer } from "@/components/DiffViewer";
 import type { Task } from './types';
 import { getStatusBadgeClass, formatDate, getTaskDuration, formatTaskTitle, getProgressUpdates } from './utils';
@@ -62,6 +62,20 @@ export const ExpandedCardView: React.FC<ExpandedCardViewProps> = ({
       document.removeEventListener('mouseup', handleMouseUp);
     };
   }, [isDragging, messagesWidth]);
+
+  // File navigator state
+  const [fileStats, setFileStats] = useState<import('@/utils/diffParser').FileStats[]>([]);
+  const [jumpToFile, setJumpToFile] = useState<((path: string) => void) | null>(null);
+  const [navigatorOpen, setNavigatorOpen] = useState(false);
+
+  // Close navigator when clicking outside (simple version)
+  useEffect(() => {
+    if (navigatorOpen) {
+      const close = () => setNavigatorOpen(false);
+      document.addEventListener('click', close);
+      return () => document.removeEventListener('click', close);
+    }
+  }, [navigatorOpen]);
 
   return (
     <div
@@ -156,9 +170,44 @@ export const ExpandedCardView: React.FC<ExpandedCardViewProps> = ({
             <TabsTrigger value="timeline" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-primary/10 px-4 py-2 text-sm flex items-center gap-2">
               <Clock className="h-4 w-4" /> Timeline
             </TabsTrigger>
-            <TabsTrigger value="review" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-primary/10 px-4 py-2 text-sm flex items-center gap-2">
-              <CheckCircle className="h-4 w-4" /> Review
-            </TabsTrigger>
+
+            <div className="relative flex items-center border-b-2 border-transparent has-[[data-state=active]]:border-primary has-[[data-state=active]]:bg-primary/10">
+              <TabsTrigger value="review" className="rounded-none border-b-0 border-transparent bg-transparent px-4 py-2 text-sm flex items-center gap-2 data-[state=active]:bg-transparent">
+                <CheckCircle className="h-4 w-4" /> Review {fileStats.length > 0 && <span className="text-xs opacity-70">({fileStats.length})</span>}
+              </TabsTrigger>
+              {fileStats.length > 1 && (
+                <>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setNavigatorOpen(!navigatorOpen); }}
+                    className="h-full px-2 hover:bg-primary/20 text-primary/70 hover:text-primary transition-colors focus:outline-none"
+                  >
+                    <ChevronDown className="h-3 w-3" />
+                  </button>
+                  {navigatorOpen && (
+                    <div className="absolute top-full left-0 mt-0 w-64 bg-popover/95 backdrop-blur z-50 shadow-xl border border-primary/20 rounded-b-md overflow-hidden flex flex-col max-h-[60vh]">
+                      <div className="overflow-y-auto p-1 bg-background">
+                        {fileStats.map(stat => (
+                          <button
+                            key={stat.path}
+                            className="w-full text-left px-2 py-1.5 hover:bg-primary/10 flex items-center gap-2 group border-b border-primary/10 last:border-0"
+                            onClick={() => { jumpToFile?.(stat.path); setNavigatorOpen(false); }}
+                          >
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-mono text-primary truncate" title={stat.path}>{stat.path.split('/').pop()}</p>
+                              <p className="text-[10px] text-primary/40 truncate">{stat.path}</p>
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                              {stat.additions > 0 && <span className="text-[10px] text-green-400">+{stat.additions}</span>}
+                              {stat.deletions > 0 && <span className="text-[10px] text-red-400">−{stat.deletions}</span>}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
             <TabsTrigger value="context" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-primary/10 px-4 py-2 text-sm flex items-center gap-2">
               <Settings className="h-4 w-4" /> Context
             </TabsTrigger>
@@ -261,7 +310,11 @@ export const ExpandedCardView: React.FC<ExpandedCardViewProps> = ({
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-primary/70 mb-2">CODE CHANGES</h3>
-                  <DiffViewer taskId={task.id} onAddComment={(filePath, lineNumber, content) => onAddReviewComment(task.id, filePath, lineNumber, content)} />
+                  <DiffViewer
+                    taskId={task.id}
+                    onAddComment={(filePath, lineNumber, content) => onAddReviewComment(task.id, filePath, lineNumber, content)}
+                    onDiffLoaded={(stats, jump) => { setFileStats(stats); setJumpToFile(() => jump); }}
+                  />
                 </div>
               </div>
             </TabsContent>
