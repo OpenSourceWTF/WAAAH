@@ -14,29 +14,29 @@ describe('apiFetch', () => {
     vi.restoreAllMocks();
   });
 
-  it('should call fetch with correct URL', async () => {
+  it('should call fetch with URL (potentially with base)', async () => {
     await apiFetch('/test');
-    expect(global.fetch).toHaveBeenCalledWith('/test', expect.any(Object));
+    // URL may include BASE_URL prefix, so match ending pattern
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/test'),
+      expect.any(Object)
+    );
   });
 
-  it('should respect custom options', async () => {
+  it('should pass custom options to fetch', async () => {
     await apiFetch('/test', { method: 'POST' });
-    expect(global.fetch).toHaveBeenCalledWith('/test', expect.objectContaining({
-      method: 'POST'
-    }));
+    const [, options] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(options.method).toBe('POST');
   });
 
-  it('should include API key header if configured', async () => {
-    // We can't easily modify import.meta.env during test execution without deeper hacks,
-    // but we can check if the header logic is generally sound.
-    // Assuming API_KEY is empty in test env by default.
-    
-    // Note: To properly test env var usage, we might need to mock the module or use import.meta.env injection 
-    // which is tricky with vitest + vite handled envs. 
-    // For now, let's verify basic fetch behavior.
-    
+  it('should include headers object', async () => {
     await apiFetch('/test');
-    // Just verify call structure
+    const [, options] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(options.headers).toBeInstanceOf(Headers);
+  });
+
+  it('should make fetch call exactly once', async () => {
+    await apiFetch('/test');
     expect(global.fetch).toHaveBeenCalledTimes(1);
   });
 });

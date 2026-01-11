@@ -3,21 +3,39 @@
  * 
  * Tests for the PTY lifecycle manager using node-pty.
  * These tests exercise the full PTY lifecycle including spawn, write, resize, and kill.
+ * 
+ * NOTE: These tests require the node-pty native module to be installed and built.
+ * They will be skipped if node-pty is not available (e.g., in CI without native deps).
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { PTYManager, PTYSpawnOptions } from './manager.js';
 
-describe('PTYManager', () => {
-  let manager: PTYManager;
+// Check if node-pty is available before running tests
+let nodePtyAvailable = false;
+try {
+  await import('node-pty');
+  nodePtyAvailable = true;
+} catch {
+  console.log('[PTYManager.test] Skipping tests - node-pty not available');
+}
 
-  beforeEach(() => {
+// Conditionally skip entire test suite if node-pty not built
+const describeIf = nodePtyAvailable ? describe : describe.skip;
+
+describeIf('PTYManager', () => {
+  // Dynamic import to avoid throw at module load time
+  let PTYManager: typeof import('./manager.js')['PTYManager'];
+  let manager: InstanceType<typeof PTYManager>;
+
+  beforeEach(async () => {
+    const mod = await import('./manager.js');
+    PTYManager = mod.PTYManager;
     manager = new PTYManager();
   });
 
   afterEach(async () => {
     // Clean up any running processes
-    if (manager.isRunning()) {
+    if (manager?.isRunning()) {
       manager.kill();
       // Wait for process to terminate
       await new Promise(resolve => setTimeout(resolve, 100));
