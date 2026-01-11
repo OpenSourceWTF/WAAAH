@@ -8,29 +8,45 @@
 
 ---
 
-## Iteration 0: PLAN
+## Iteration 1: EXECUTE
 
-### Problems Identified
+### Problems Found & Fixed
 
-1. **Race condition in useTaskData** — `connectSocket()` called before handlers registered
-   - Server sends `sync:full` immediately on connect
-   - Handlers not ready yet → data lost
-   
-2. **API URL env vars wrong** — Fixed: `WAAAH_*` → `VITE_*`
+1. **Race condition in hooks** 
+   - `connectSocket()` called BEFORE handlers registered
+   - Server sends `sync:full` immediately on connect → missed
+   - **Fix:** Move `connectSocket()` AFTER `.on()` handlers in both `useTaskData.ts` and `useAgentData.ts`
 
-3. **Potential other UI issues** — Need to verify after race condition fix
+2. **BLOCKED tasks filtered out**
+   - `activeTasks` useMemo filtered out BLOCKED status
+   - All 8 tasks were BLOCKED → nothing showed
+   - **Fix:** Remove BLOCKED from filter (it's not terminal like COMPLETED/CANCELLED)
 
-### Approach
+3. **sync:full only sent active tasks**
+   - `queue.getAll()` returns only active tasks
+   - Completed/cancelled swimlanes were empty
+   - **Fix:** Include `getTaskHistory({ status: 'COMPLETED' })` and `getTaskHistory({ status: 'CANCELLED' })` in sync:full
 
-1. Move `connectSocket()` call AFTER handlers are registered
-2. Verify data loads in dashboard
-3. Check for any remaining UI issues
-4. Verify agent data also works
+4. **API env vars wrong prefix**
+   - `api.ts` used `WAAAH_API_KEY` instead of `VITE_WAAAH_API_KEY`
+   - Vite only exposes `VITE_*` vars to client
+   - **Fix:** Change to `VITE_WAAAH_API_KEY` and `VITE_API_URL`
 
-### Files to Modify
+### Files Modified
 - `packages/mcp-server/client/src/hooks/useTaskData.ts`
-- Potentially `useAgentData.ts` if same issue exists
+- `packages/mcp-server/client/src/hooks/useAgentData.ts`
+- `packages/mcp-server/client/src/lib/api.ts`
+- `packages/mcp-server/src/server.ts`
+
+### Scores
+| Criterion | Score | Notes |
+|-----------|-------|-------|
+| clarity | 10 | Clean fixes, clear comments |
+| completeness | 10 | All swimlanes load correctly |
+| correctness | 10 | Verified working by user |
 
 ---
 
-*(Awaiting execution and verification)*
+## ✅ COMPLETE
+
+**Average: 10/10**
