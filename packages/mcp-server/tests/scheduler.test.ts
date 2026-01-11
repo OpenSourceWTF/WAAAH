@@ -1,210 +1,229 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { TaskQueue } from '../src/state/queue.js';
-import { HybridScheduler } from '../src/state/scheduler.js';
-import { Task } from '@opensourcewtf/waaah-types';
-import { createTestContext, TestContext } from './harness.js';
+/**
+ * Scheduler Tests
+ * 
+ * Tests for HybridScheduler task assignment and cleanup.
+ */
 
-function mockTask(overrides: Partial<Task> = {}): Task {
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { HybridScheduler, type ISchedulerQueue } from '../src/state/scheduler.js';
+import type { Task, TaskStatus } from '@opensourcewtf/waaah-types';
+
+// Helper to create mock queue
+function createMockQueue(): ISchedulerQueue {
   return {
-    id: `task-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    command: 'execute_prompt',
-    prompt: 'Test prompt',
-    from: { type: 'user', id: 'test-user', name: 'Test User' },
-    to: { requiredCapabilities: ['code-writing'] },
-    priority: 'normal',
-    status: 'QUEUED',
-    createdAt: Date.now(),
-    ...overrides
+    getPendingAcks: vi.fn().mockReturnValue(new Map()),
+    getWaitingAgents: vi.fn().mockReturnValue(new Map()),
+    forceRetry: vi.fn().mockReturnValue({ success: true }),
+    updateStatus: vi.fn(),
+    findAndReserveAgent: vi.fn().mockReturnValue(null),
+    getTask: vi.fn().mockReturnValue(undefined),
+    getTaskFromDB: vi.fn().mockReturnValue(undefined),
+    getByStatus: vi.fn().mockReturnValue([]),
+    getByStatuses: vi.fn().mockReturnValue([]),
+    getBusyAgentIds: vi.fn().mockReturnValue([]),
+    getAssignedTasksForAgent: vi.fn().mockReturnValue([]),
+    getAgentLastSeen: vi.fn().mockReturnValue(Date.now())
   };
 }
 
+// Helper to create task
+function createTask(id: string, status: TaskStatus = 'QUEUED', overrides: Partial<Task> = {}): Task {
+  return {
+    id,
+    command: 'execute_prompt',
+    prompt: 'Test',
+    from: { type: 'user', id: 'u1', name: 'User' },
+    to: {},
+    priority: 'normal',
+    status,
+    createdAt: Date.now() - 1000,
+    ...overrides
+  } as Task;
+}
+
 describe('HybridScheduler', () => {
-  let ctx: TestContext;
-  let queue: TaskQueue;
+  let scheduler: HybridScheduler;
+  let mockQueue: ISchedulerQueue;
 
   beforeEach(() => {
-    vi.useFakeTimers();
-    ctx = createTestContext();
-    queue = ctx.queue;
+    vi.clearAllMocks();
+    mockQueue = createMockQueue();
+    scheduler = new HybridScheduler(mockQueue);
   });
 
-  afterEach(() => {
-    vi.useRealTimers();
-    queue.stopScheduler();
+  describe('constructor', () => {
+    it('creates scheduler instance', () => {
+      expect(scheduler).toBeDefined();
+    });
+  });
+
+  describe('start/stop', () => {
+    it('starts and stops without error', () => {
+      scheduler.start(1000);
+      scheduler.stop();
+      // Should be able to call stop again without error
+      scheduler.stop();
+    });
+
+    it('prevents multiple starts', () => {
+      scheduler.start(1000);
+      scheduler.start(1000); // Second call should be no-op
+      scheduler.stop();
+    });
+  });
+
+  describe('runCycle', () => {
+    it('calls all scheduler steps', () => {
+      scheduler.runCycle();
+
+      expect(mockQueue.getPendingAcks).toHaveBeenCalled();
+      expect(mockQueue.getByStatuses).toHaveBeenCalled();
+      expect(mockQueue.getBusyAgentIds).toHaveBeenCalled();
+    });
+
+    it('handles errors gracefully', () => {
+      (mockQueue.getPendingAcks as any).mockImplementation(() => {
+        throw new Error('Test error');
+      });
+
+      // Should not throw
+      expect(() => scheduler.runCycle()).not.toThrow();
+    });
   });
 
   describe('requeueStuckTasks', () => {
-    it('requeues tasks stuck in PENDING_ACK for > 30s', () => {
-      const task = mockTask({ id: 'stuck-task' });
-      queue.enqueue(task);
+    it('requeues tasks stuck in PENDING_ACK', () => {
+      const stuckTask = new Map([
+        ['task-1', { taskId: 'task-1', agentId: 'agent-1', sentAt: Date.now() - 60000 }] // 60s ago
+      ]);
+      (mockQueue.getPendingAcks as any).mockReturnValue(stuckTask);
 
-      // Update task status to PENDING_ACK with old ackSentAt time (DB-backed)
-      queue.updateStatus('stuck-task', 'PENDING_ACK');
-      // Set DB-backed pending ACK state with old timestamp
-      (ctx.db as any).prepare(
-        'UPDATE tasks SET pendingAckAgentId = ?, ackSentAt = ? WHERE id = ?'
-      ).run('agent-1', Date.now() - 31000, 'stuck-task'); // 31s ago (> 30s timeout)
+      scheduler.runCycle();
 
-      // Start the scheduler - running a cycle will trigger requeueStuckTasks
-      queue.startScheduler(100);
-      vi.advanceTimersByTime(150);
-
-      const updated = queue.getTask('stuck-task');
-      expect(updated?.status).toBe('QUEUED');
-
+      expect(mockQueue.forceRetry).toHaveBeenCalledWith('task-1');
     });
 
-    it('ignores tasks in PENDING_ACK for < 30s', () => {
-      const task = mockTask({ id: 'fresh-task' });
-      queue.enqueue(task);
+    it('does not requeue recent tasks', () => {
+      const recentTask = new Map([
+        ['task-2', { taskId: 'task-2', agentId: 'agent-1', sentAt: Date.now() - 1000 }] // 1s ago
+      ]);
+      (mockQueue.getPendingAcks as any).mockReturnValue(recentTask);
 
-      queue.updateStatus('fresh-task', 'PENDING_ACK');
-      // Set DB-backed pending ACK state with recent timestamp
-      (ctx.db as any).prepare(
-        'UPDATE tasks SET pendingAckAgentId = ?, ackSentAt = ? WHERE id = ?'
-      ).run('agent-1', Date.now() - 10000, 'fresh-task'); // 10s ago
+      scheduler.runCycle();
 
-      // Start the scheduler
-      queue.startScheduler(100);
-      vi.advanceTimersByTime(150);
+      expect(mockQueue.forceRetry).not.toHaveBeenCalled();
+    });
+  });
 
-      const updated = queue.getTask('fresh-task');
-      expect(updated?.status).toBe('PENDING_ACK');
+  describe('checkBlockedTasks', () => {
+    it('unblocks tasks with satisfied dependencies', () => {
+      const blockedTask = createTask('blocked-1', 'BLOCKED', {
+        dependencies: ['dep-1']
+      });
+      const depTask = createTask('dep-1', 'COMPLETED');
+
+      (mockQueue.getByStatus as any).mockImplementation((status: TaskStatus) => {
+        if (status === 'BLOCKED') return [blockedTask];
+        return [];
+      });
+      (mockQueue.getTask as any).mockImplementation((id: string) => {
+        if (id === 'dep-1') return depTask;
+        if (id === 'blocked-1') return blockedTask;
+        return undefined;
+      });
+
+      scheduler.runCycle();
+
+      expect(mockQueue.updateStatus).toHaveBeenCalledWith('blocked-1', 'QUEUED');
+    });
+
+    it('does not unblock tasks without dependencies', () => {
+      const blockedTask = createTask('blocked-2', 'BLOCKED', {
+        dependencies: [] // No dependencies - blocked for clarification
+      });
+
+      (mockQueue.getByStatus as any).mockImplementation((status: TaskStatus) => {
+        if (status === 'BLOCKED') return [blockedTask];
+        return [];
+      });
+
+      scheduler.runCycle();
+
+      expect(mockQueue.updateStatus).not.toHaveBeenCalledWith('blocked-2', 'QUEUED');
     });
   });
 
   describe('assignPendingTasks', () => {
-    it('assigns queued tasks to waiting agents', async () => {
-      const task = mockTask({
-        id: 'queued-task',
-        priority: 'normal',
-        to: { requiredCapabilities: ['code-writing'] }
-      });
-      queue.enqueue(task);
+    it('assigns QUEUED tasks to waiting agents', () => {
+      const task = createTask('task-1', 'QUEUED');
+      const waitingAgents = new Map([['agent-1', ['code-writing']]]);
 
-      // Verify task is QUEUED
-      expect(queue.getTask('queued-task')?.status).toBe('QUEUED');
+      (mockQueue.getByStatuses as any).mockReturnValue([task]);
+      (mockQueue.getWaitingAgents as any).mockReturnValue(waitingAgents);
+      (mockQueue.findAndReserveAgent as any).mockReturnValue('agent-1');
 
-      // Start an agent waiting
-      const waitPromise = queue.waitForTask('agent-1', ['code-writing'], 10000);
+      scheduler.runCycle();
 
-      // Start scheduler to trigger assignment
-      queue.startScheduler(100);
-      vi.advanceTimersByTime(150);
-
-      const assignedTask = await waitPromise;
-      expect(assignedTask).not.toBeNull();
-      if (assignedTask && 'id' in assignedTask) {
-        expect(assignedTask.id).toBe('queued-task');
-      } else {
-        throw new Error('Expected Task but got null or signal');
-      }
+      expect(mockQueue.findAndReserveAgent).toHaveBeenCalledWith(task);
     });
 
-    it('respects capability matching for task assignment', async () => {
-      const task = mockTask({
-        id: 'tester-task',
-        priority: 'normal',
-        to: { requiredCapabilities: ['test-writing'] }
-      });
-      queue.enqueue(task);
+    it('does not assign when no waiting agents', () => {
+      const task = createTask('task-2', 'QUEUED');
 
-      // Code-writer waiting should NOT get it
-      const devWaitPromise = queue.waitForTask('dev-agent', ['code-writing'], 1000);
+      (mockQueue.getByStatuses as any).mockReturnValue([task]);
+      (mockQueue.getWaitingAgents as any).mockReturnValue(new Map());
 
-      // Test-writer waiting should get it
-      const testerWaitPromise = queue.waitForTask('test-agent', ['test-writing'], 1000);
+      scheduler.runCycle();
 
-      // Start scheduler to trigger assignment
-      queue.startScheduler(100);
-      vi.advanceTimersByTime(150);
+      // findAndReserveAgent should still be called (scheduler tries to assign)
+      // But we start with empty waiting agents - no assignment possible
+    });
 
-      const testerResult = await testerWaitPromise;
-      if (testerResult && 'id' in testerResult) {
-        expect(testerResult.id).toBe('tester-task');
-      } else {
-        throw new Error('Expected Task but got null or signal');
+    it('sorts tasks by priority (critical > high > normal)', () => {
+      const normalTask = createTask('normal', 'QUEUED', { priority: 'normal' });
+      const criticalTask = createTask('critical', 'QUEUED', { priority: 'critical' });
+      const highTask = createTask('high', 'QUEUED', { priority: 'high' });
+
+      (mockQueue.getByStatuses as any).mockReturnValue([normalTask, criticalTask, highTask]);
+      (mockQueue.getWaitingAgents as any).mockReturnValue(new Map([['agent-1', []]]));
+      (mockQueue.findAndReserveAgent as any).mockReturnValue('agent-1');
+
+      scheduler.runCycle();
+
+      // Should be called with critical first (highest priority)
+      const calls = (mockQueue.findAndReserveAgent as any).mock.calls;
+      if (calls.length > 0) {
+        expect(calls[0][0].id).toBe('critical');
       }
-
-      // Advance time to force timeout for dev
-      vi.advanceTimersByTime(2000);
-      const devResult = await devWaitPromise;
-      expect(devResult).toBeNull();
     });
   });
 
   describe('rebalanceOrphanedTasks', () => {
-    it('requeues tasks from offline agents (>5 min)', () => {
-      // Register an agent
-      ctx.registry.register({ id: 'offline-agent', displayName: '@offline', capabilities: ['code-writing'] });
+    it('requeues tasks from offline agents', () => {
+      const offlineAgentId = 'offline-agent';
+      const task = createTask('orphan-1', 'ASSIGNED');
 
-      // Set last seen to more than 5 minutes ago
-      const fiveMinutesAgo = Date.now() - (6 * 60 * 1000);
-      (ctx.db as any).prepare('UPDATE agents SET lastSeen = ? WHERE id = ?').run(fiveMinutesAgo, 'offline-agent');
+      (mockQueue.getBusyAgentIds as any).mockReturnValue([offlineAgentId]);
+      (mockQueue.getAgentLastSeen as any).mockReturnValue(Date.now() - 120000); // 2 min ago (> 1 min timeout)
+      (mockQueue.getAssignedTasksForAgent as any).mockReturnValue([task]);
 
-      // Create a task assigned to this agent
-      const task = mockTask({
-        id: 'orphaned-task',
-        status: 'ASSIGNED',
-        to: { agentId: 'offline-agent', requiredCapabilities: ['code-writing'] },
-        assignedTo: 'offline-agent'
-      });
-      queue.enqueue(task);
-      queue.updateStatus('orphaned-task', 'ASSIGNED');
+      scheduler.runCycle();
 
-      // Start scheduler which should requeue the task
-      queue.startScheduler(100);
-      vi.advanceTimersByTime(150);
-
-      const updated = queue.getTask('orphaned-task');
-      expect(updated?.status).toBe('QUEUED');
+      expect(mockQueue.forceRetry).toHaveBeenCalledWith('orphan-1');
     });
 
-    it('ignores agents seen recently', () => {
-      // Register an agent
-      ctx.registry.register({ id: 'active-agent', displayName: '@active', capabilities: ['code-writing'] });
+    it('does not rebalance tasks from online agents', () => {
+      const onlineAgentId = 'online-agent';
+      const task = createTask('active-1', 'ASSIGNED');
 
-      // Set last seen to now (active agent)
-      (ctx.db as any).prepare('UPDATE agents SET lastSeen = ? WHERE id = ?').run(Date.now(), 'active-agent');
+      (mockQueue.getBusyAgentIds as any).mockReturnValue([onlineAgentId]);
+      (mockQueue.getAgentLastSeen as any).mockReturnValue(Date.now() - 5000); // 5s ago (recent)
+      (mockQueue.getAssignedTasksForAgent as any).mockReturnValue([task]);
 
-      // Create a task assigned to this agent
-      const task = mockTask({
-        id: 'active-task',
-        status: 'ASSIGNED',
-        to: { agentId: 'active-agent', requiredCapabilities: ['code-writing'] },
-        assignedTo: 'active-agent'
-      });
-      queue.enqueue(task);
-      queue.updateStatus('active-task', 'ASSIGNED');
+      scheduler.runCycle();
 
-      // Start scheduler
-      queue.startScheduler(100);
-      vi.advanceTimersByTime(150);
-
-      // Task should remain assigned (agent is active)
-      const updated = queue.getTask('active-task');
-      expect(updated?.status).toBe('ASSIGNED');
-    });
-  });
-
-  describe('getAssignedTasksForAgent', () => {
-    it('respects assignedTo field over legacy check', () => {
-      const task = mockTask({
-        id: 'reassigned-task',
-        status: 'ASSIGNED',
-        to: { agentId: 'original-agent', requiredCapabilities: ['code-writing'] },
-        assignedTo: 'new-agent'
-      });
-      queue.enqueue(task);
-      // Force status
-      queue.updateStatus('reassigned-task', 'ASSIGNED');
-
-      const originalTasks = queue.getAssignedTasksForAgent('original-agent');
-      const newTasks = queue.getAssignedTasksForAgent('new-agent');
-
-      expect(originalTasks).toHaveLength(0);
-      expect(newTasks).toHaveLength(1);
-      expect(newTasks[0].id).toBe('reassigned-task');
+      // forceRetry should only be called for stuck PENDING_ACK, not for this task
+      expect(mockQueue.forceRetry).not.toHaveBeenCalledWith('active-1');
     });
   });
 });

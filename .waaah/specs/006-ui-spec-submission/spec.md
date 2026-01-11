@@ -17,6 +17,8 @@
 |----|-------------|
 | FR-1 | **Workspace Dropdown**: List workspaces from connected agents' `workspaceContext` |
 | FR-2 | **Capability Routing**: Route to `spec-writing` if available, else `code-writing` |
+| FR-2a | **Routing Logic**: If workspace has agent with `spec-writing` → route to spec-writing. Else → `code-writing`. Else → queue with warning. |
+| FR-2b | **API Payload**: `POST /admin/enqueue` body: `{ prompt, workspace, source: "UI", requiredCapabilities?: string[] }` |
 | FR-3 | **Pre-submit Validation**: Check capability exists on selected workspace |
 | FR-4 | **Spec Template Form**: Fields: Problem, Users, Requirements, Success Metrics, Out of Scope |
 | FR-5 | **Queue Warning Modal**: If no matching agents, warn but allow submit |
@@ -30,6 +32,8 @@
 | No agents connected | Disable submit, show "No agents available" |
 | No agents for workspace | Show warning modal, allow queuing |
 | Agent disconnects mid-form | Re-validate on submit |
+| No spec-writing agent | Route to code-writing agent |
+| No agents at all | Show modal: "No agents. Queue anyway?" → Queue with status QUEUED |
 
 ## 5. Out of Scope
 - Authentication (see Spec 007)
