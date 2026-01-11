@@ -203,5 +203,51 @@ describe('BotCore', () => {
         expect.stringContaining('Usage:')
       );
     });
+
+    it('handles clear command', async () => {
+      mockedAxios.post.mockResolvedValueOnce({});
+
+      await messageHandler('clear', context);
+
+      expect(mockAdapter.reply).toHaveBeenCalledWith(
+        context,
+        expect.stringContaining('Queue cleared')
+      );
+    });
+
+    it('handles role prompt format (@Role message)', async () => {
+      // Mock the endpoints for role-based prompts
+      mockedAxios.post.mockResolvedValue({
+        data: { success: true, taskId: 'task-role-1' }
+      });
+      mockedAxios.get.mockImplementation(async (url: string) => {
+        if (url.includes('/admin/agents/status')) {
+          return { data: [{ displayName: '@Dev', role: 'developer' }] };
+        }
+        if (url.includes('task-role-1')) {
+          return { data: { status: 'COMPLETED', response: { message: 'Done!' } } };
+        }
+        return { data: {} };
+      });
+
+      // Should not throw for role-based prompt
+      await expect(messageHandler('@Dev fix the bug', context)).resolves.not.toThrow();
+    });
+
+    it('handles prompt error gracefully', async () => {
+      // Make all posts fail
+      mockedAxios.post.mockRejectedValue(new Error('Network error'));
+
+      // Try answering (which uses post) - should not throw
+      await expect(messageHandler('answer task-1 test', context)).resolves.not.toThrow();
+    });
+
+    it('handles unknown text gracefully', async () => {
+      // Random message without any known command prefix
+      await messageHandler('just some random text', context);
+
+      // Should not throw
+      expect(true).toBe(true);
+    });
   });
 });
