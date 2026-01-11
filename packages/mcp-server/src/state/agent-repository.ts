@@ -8,6 +8,7 @@ import type { Database } from 'better-sqlite3';
 import type { AgentIdentity, StandardCapability } from '@opensourcewtf/waaah-types';
 import { AGENT_OFFLINE_THRESHOLD_MS } from '@opensourcewtf/waaah-types';
 import type { IAgentRepository, AgentInput } from './interfaces.js';
+import { emitAgentStatus } from './eventbus.js';
 
 /**
  * SQLite implementation of IAgentRepository.
@@ -63,6 +64,9 @@ export class AgentRepository implements IAgentRepository {
       createdAt: existing ? existing.lastSeen : now
     });
 
+    // Emit agent status event
+    emitAgentStatus(agent.id, 'registered', now);
+
     return agent.id;
   }
 
@@ -105,7 +109,9 @@ export class AgentRepository implements IAgentRepository {
   }
 
   heartbeat(agentId: string): void {
-    this.db.prepare('UPDATE agents SET lastSeen = ? WHERE id = ?').run(Date.now(), agentId);
+    const now = Date.now();
+    this.db.prepare('UPDATE agents SET lastSeen = ? WHERE id = ?').run(now, agentId);
+    emitAgentStatus(agentId, 'heartbeat', now);
   }
 
   update(agentId: string, updates: { displayName?: string; color?: string }): boolean {
