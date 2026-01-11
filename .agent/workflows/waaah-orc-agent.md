@@ -20,11 +20,14 @@ STARTUP → WAIT ──→ ACK ──→ PLAN ──→ BUILD ──→ SUBMIT
 ```
 
 ## Core Rules
-1. NEVER `send_response(COMPLETED)` until MERGED
-2. ALWAYS `send_response(IN_REVIEW)` after BUILD
-3. ALWAYS work in worktree
+1. NEVER `send_response(COMPLETED)` until MERGED to main
+2. ALWAYS `send_response(IN_REVIEW)` after BUILD - NO EXCEPTIONS
+3. ALWAYS work in worktree (NEVER commit directly to main)
 4. NEVER stop loop
-5. **NEVER skip IN_REVIEW even for "no changes needed" tasks**
+5. **NEVER skip IN_REVIEW even for "simple" or "no changes needed" tasks**
+6. **NEVER push to origin/main without going through IN_REVIEW first**
+
+> ⚠️ **HARD STOP**: If you find yourself thinking "this is simple, I can skip review" - STOP. That thought is the #1 cause of workflow violations. ALWAYS use IN_REVIEW.
 
 ## Anti-Patterns (NEVER DO)
 
@@ -36,6 +39,18 @@ STARTUP → WAIT ──→ ACK ──→ PLAN ──→ BUILD ──→ SUBMIT
 | COMPLETED without merge | COMPLETED only after push to main |
 | "Already done" → COMPLETED | "Already done" → IN_REVIEW with proof → approval → COMPLETED |
 | "No changes needed" → COMPLETED | Document findings → IN_REVIEW → approval → COMPLETED |
+| Push directly to main | ALWAYS push to feature branch first |
+| `git push origin main` | Only after IN_REVIEW → APPROVED → MERGE |
+
+### ⛔ Common Rationalizations That Lead to Violations
+
+**These are NEVER valid excuses to skip IN_REVIEW:**
+- "It's a simple change" → IN_REVIEW anyway
+- "It's just a one-liner" → IN_REVIEW anyway  
+- "Tests pass, so it's fine" → IN_REVIEW anyway
+- "Feature already exists" → IN_REVIEW with proof
+- "I'm confident in this" → IN_REVIEW anyway
+- "Time pressure" → IN_REVIEW anyway
 
 **⚠️ NO-OP TASKS:** Even if work is already complete or no changes are needed:
 1. Document what you found/verified
@@ -150,9 +165,18 @@ pnpm typecheck && pnpm lint
 
 ## SUBMIT
 
-```
-git add -A && git commit -m "feat(scope): desc" && git push
-DIFF = $(git diff origin/main...HEAD)
+### Pre-Submit Checklist (ALL MUST BE TRUE)
+- [ ] Working in feature branch (NOT main)
+- [ ] Changes committed to feature branch
+- [ ] Pushed to origin/feature-branch (NOT origin/main)
+- [ ] Tests passing
+
+```bash
+# Verify you're on feature branch, NOT main
+git branch --show-current  # Must NOT be 'main'
+git add -A && git commit -m "feat(scope): desc"
+git push origin $(git branch --show-current)  # Push to feature branch
+DIFF=$(git diff origin/main...HEAD)
 ```
 
 ```markdown
@@ -163,8 +187,10 @@ DIFF = $(git diff origin/main...HEAD)
 
 ```
 send_response({ status: "IN_REVIEW", diff: DIFF, artifacts: { branch } })
-→ WAIT  # BLOCKED until approved
+→ WAIT  # BLOCKED until approved - DO NOT PROCEED
 ```
+
+> ⚠️ After IN_REVIEW, you MUST call `wait_for_prompt` and wait for APPROVED status before proceeding to MERGE.
 
 ## MERGE (only after APPROVED)
 
@@ -181,6 +207,12 @@ git branch -D $BRANCH && git push origin --delete $BRANCH
 
 ## SMOKE (post-merge verification)
 
+### Pre-COMPLETED Checklist (ALL MUST BE TRUE)
+- [ ] Task went through IN_REVIEW (not skipped)
+- [ ] Received APPROVED status
+- [ ] Changes merged to main (not just pushed to feature branch)
+- [ ] `git log origin/main --oneline | head -1` shows your commit
+
 ```
 0. IF ctx.dependencies → verify EACH dependency still works
 1. IF ctx.verify → RUN verify; fail → revert & block
@@ -190,3 +222,5 @@ git branch -D $BRANCH && git push origin --delete $BRANCH
 5. Pass all → send_response(COMPLETED)
 → WAIT
 ```
+
+> 🛑 **FINAL CHECK**: Did you skip IN_REVIEW? If yes, you violated the workflow. Do not mark COMPLETED.
