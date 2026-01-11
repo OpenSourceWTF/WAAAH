@@ -1,5 +1,5 @@
 import { Task, StandardCapability } from '@opensourcewtf/waaah-types';
-import type { ITaskRepository } from '../task-repository.js';
+import type { ITaskRepository } from '../persistence/task-repository.js';
 import type { QueuePersistence } from '../persistence/queue-persistence.js';
 import type { AgentMatchingService } from './agent-matching-service.js';
 import type { IEvictionService } from '../eviction-service.js';

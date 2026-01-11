@@ -3,7 +3,7 @@
  * Extracted from server.ts to reduce complexity
  */
 import { emitActivity } from '../state/events.js';
-import type { AgentRepository } from '../state/agent-repository.js';
+import type { AgentRepository } from '../state/persistence/agent-repository.js';
 import type { TaskQueue } from '../state/queue.js';
 
 export function startCleanupInterval(

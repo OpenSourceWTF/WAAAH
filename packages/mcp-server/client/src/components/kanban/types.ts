@@ -34,6 +34,7 @@ export interface Task {
   toAgentRole?: string;
   assignedTo?: string;
   context?: Record<string, unknown>;
+  dependencies?: string[];
   response?: Record<string, unknown>;
   messages?: TaskMessage[];
   history?: { timestamp: number; status: string; agentId?: string; message?: string }[];

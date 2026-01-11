@@ -184,6 +184,8 @@ export const sendResponseSchema = z.object({
   status: TaskStatus.describe("The final status of the task"),
   message: z.string().min(1).describe("A textual response or summary of the result"),
   artifacts: z.array(z.string()).optional().describe("List of file paths or artifact IDs generated"),
+  /** Raw git diff content for persistence (S17) */
+  diff: z.string().optional().describe("Raw git diff content for persistence"),
   blockedReason: z.string().optional().describe("Reason for being blocked, required if status is BLOCKED")
 });
 export type SendResponseArgs = z.infer<typeof sendResponseSchema>;

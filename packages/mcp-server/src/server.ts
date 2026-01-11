@@ -18,7 +18,8 @@ import { createToolRouter } from './routes/toolRouter.js';
 import { startCleanupInterval } from './lifecycle/cleanup.js';
 import { getOrCreateApiKey } from './utils/auth.js';
 import { applySocketAuth } from './mcp/socket-auth.js';
-import { initEventBus, emitSyncFull } from './state/eventbus.js';
+import { initEventBus } from './state/eventbus.js';
+import { SocketService } from './state/socket-service.js';
 
 dotenv.config();
 
@@ -49,22 +50,8 @@ initEventLog(ctx.db);
 const { registry, queue } = ctx;
 queue.startScheduler();
 
-// Handle socket connections - send sync:full on connect
-io.on('connection', (socket) => {
-  console.log(`[Socket] Client connected: ${socket.id}`);
-
-  // Send initial state - include active + recent completed/cancelled for all swimlanes
-  const activeTasks = queue.getAll();
-  const completedTasks = queue.getTaskHistory({ status: 'COMPLETED', limit: 50 });
-  const cancelledTasks = queue.getTaskHistory({ status: 'CANCELLED', limit: 50 });
-  const allTasks = [...activeTasks, ...completedTasks, ...cancelledTasks];
-  const agents = registry.getAll();
-  emitSyncFull(socket.id, { tasks: allTasks, agents });
-
-  socket.on('disconnect', () => {
-    console.log(`[Socket] Client disconnected: ${socket.id}`);
-  });
-});
+// Initialize Socket Service
+new SocketService(io, registry, queue);
 
 const tools = new ToolHandler(registry, queue);
 

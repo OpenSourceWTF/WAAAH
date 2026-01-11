@@ -2,7 +2,7 @@
  * Task-related tool handlers
  * Extracted from ToolHandler for better separation of concerns
  */
-import { AgentRepository } from '../../state/agent-repository.js';
+import { AgentRepository } from '../../state/persistence/agent-repository.js';
 import { TaskQueue } from '../../state/queue.js';
 import { emitDelegation } from '../../state/events.js';
 import { scanPrompt, getSecurityContext } from '../../security/prompt-scanner.js';
@@ -42,6 +42,7 @@ export class TaskHandlers {
       this.queue.updateStatus(params.taskId, params.status, {
         message: params.message,
         artifacts: params.artifacts,
+        diff: params.diff, // S17: Persist raw diff
         blockedReason: params.blockedReason
       });
       console.log(`[Tool] Response from task ${params.taskId}: ${params.status}`);
@@ -100,11 +101,30 @@ export class TaskHandlers {
       const firstLine = params.prompt.split('\n')[0].trim();
       const title = firstLine.length > 80 ? firstLine.substring(0, 77) + '...' : firstLine;
 
+      // S17: Prompt Injection for deterministic worktree naming
+      // We inject this MANDATORY instruction to prevent agent hallucinations.
+      const setupInstruction = `
+## SETUP (MANDATORY)
+Run exactly this command to start work:
+git worktree add .worktrees/feature-${taskId} -b feature-${taskId}
+`;
+      const finalPrompt = params.prompt + setupInstruction;
+
       const sourceAgentObj = this.registry.get(sourceAgent);
+      // BACKWARD COMPATIBILITY: Lift dependencies from context if not at top-level
+      // This allows 'assign_task' calls that put dependencies in context to still work with scheduler.
+      if ((!params.dependencies || params.dependencies.length === 0) && params.context?.dependencies) {
+        if (Array.isArray(params.context.dependencies)) {
+          // @ts-ignore - we know it's an array of strings if valid, or will fall back
+          params.dependencies = params.context.dependencies as string[];
+          console.log(`[Tools] Lifted ${params.dependencies.length} dependencies from context to top-level for scheduler.`);
+        }
+      }
+
       this.queue.enqueue({
         id: taskId,
         command: 'execute_prompt',
-        prompt: params.prompt,
+        prompt: finalPrompt,
         title,
         from: { type: 'agent', id: sourceAgent, name: sourceAgentObj?.displayName || sourceAgent },
         to: {

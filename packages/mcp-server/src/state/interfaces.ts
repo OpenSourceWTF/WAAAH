@@ -93,7 +93,7 @@ export interface IAgentRepository {
 // Note: ITaskRepository already exists in queue.interface.ts
 // This re-export ensures consistent imports
 
-export type { ITaskRepository } from './task-repository.js';
+export type { ITaskRepository } from './persistence/task-repository.js';
 
 // ===== Event Log Interface =====
 

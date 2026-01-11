@@ -7,8 +7,8 @@
 import type { Database } from 'better-sqlite3';
 import type { AgentIdentity, StandardCapability } from '@opensourcewtf/waaah-types';
 import { AGENT_OFFLINE_THRESHOLD_MS } from '@opensourcewtf/waaah-types';
-import type { IAgentRepository, AgentInput } from './interfaces.js';
-import { emitAgentStatus } from './eventbus.js';
+import type { IAgentRepository, AgentInput } from '../interfaces.js';
+import { emitAgentStatus } from '../eventbus.js';
 
 /**
  * SQLite implementation of IAgentRepository.

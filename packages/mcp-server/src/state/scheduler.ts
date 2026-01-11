@@ -151,7 +151,11 @@ export class HybridScheduler {
       if (!task.dependencies || task.dependencies.length === 0) return true;
       const allMet = task.dependencies.every(depId => {
         const dep = this.queue.getTask(depId) || this.queue.getTaskFromDB(depId);
-        return dep && dep.status === 'COMPLETED';
+        const met = dep && dep.status === 'COMPLETED';
+        if (!met) {
+          console.log(`[Scheduler DEBUG] Task ${task.id} dependency ${depId} unmet. Found: ${!!dep}, Status: ${dep?.status}`);
+        }
+        return met;
       });
       if (!allMet) {
         console.log(`[Scheduler] Task ${task.id} has unmet dependencies - skipping until deps complete`);

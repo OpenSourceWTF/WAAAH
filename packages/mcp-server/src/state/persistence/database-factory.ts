@@ -6,7 +6,7 @@
  * Tests MUST use createTestDatabase().
  */
 import Database from 'better-sqlite3';
-import type { DatabaseOptions } from './interfaces.js';
+import type { DatabaseOptions } from '../interfaces.js';
 import path from 'path';
 import fs from 'fs';
 

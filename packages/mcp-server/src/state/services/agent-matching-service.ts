@@ -4,7 +4,7 @@ import {
   StandardCapability
 } from '@opensourcewtf/waaah-types';
 import { QueuePersistence } from '../persistence/queue-persistence.js';
-import { ITaskRepository } from '../task-repository.js';
+import { ITaskRepository } from '../persistence/task-repository.js';
 import { isTaskForAgent } from '../agent-matcher.js';
 
 export class AgentMatchingService {

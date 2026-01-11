@@ -24,7 +24,7 @@ import {
 import type { Database } from 'better-sqlite3';
 import type { ITaskQueue, AckResult, QueueStats, HistoryOptions, WaitResult } from './queue.interface.js';
 import { TypedEventEmitter } from './queue-events.js';
-import { TaskRepository, type ITaskRepository } from './task-repository.js';
+import { TaskRepository, type ITaskRepository } from './persistence/task-repository.js';
 import { HybridScheduler, type ISchedulerQueue, SCHEDULER_INTERVAL_MS } from './scheduler.js';
 import { EvictionService, type IEvictionService, type EvictionSignal } from './eviction-service.js';
 import { QueuePersistence } from './persistence/queue-persistence.js';
@@ -177,6 +177,9 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
     replyTo?: string
   ): void {
     this.messageService.addMessage(taskId, role, content, metadata, isRead, messageType, replyTo);
+    // Emit update so UI receives the message live
+    const messages = this.messageService.getMessages(taskId);
+    emitTaskUpdated(taskId, { messages });
   }
 
   addUserComment(taskId: string, content: string, replyTo?: string, images?: { dataUrl: string; mimeType: string; name: string }[]): void {

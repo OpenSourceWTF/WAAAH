@@ -2,7 +2,7 @@
  * Agent-related tool handlers
  * Extracted from ToolHandler for better separation of concerns
  */
-import { AgentRepository } from '../../state/agent-repository.js';
+import { AgentRepository } from '../../state/persistence/agent-repository.js';
 import { TaskQueue } from '../../state/queue.js';
 import { emitActivity } from '../../state/events.js';
 import { determineAgentStatus } from '../../state/agent-status.js';

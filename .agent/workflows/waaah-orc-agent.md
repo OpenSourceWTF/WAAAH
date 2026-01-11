@@ -123,8 +123,9 @@ update_progress(phase="PLANNING", 20%)
 ## BUILD
 
 ```bash
-git worktree add .worktrees/feature-$TASK_ID -b feature-$TASK_ID
-cd .worktrees/feature-$TASK_ID && pnpm install
+# S17: FOLLOW THE SETUP INSTRUCTIONS IN YOUR PROMPT
+# The prompt will contain: "Run exactly: git worktree add ..."
+# EXECUTE IT EXACTLY.
 ```
 
 ### TDD Loop
@@ -151,6 +152,7 @@ pnpm typecheck && pnpm lint
 
 ```
 git add -A && git commit -m "feat(scope): desc" && git push
+DIFF = $(git diff origin/main...HEAD)
 ```
 
 ```markdown
@@ -160,7 +162,7 @@ git add -A && git commit -m "feat(scope): desc" && git push
 ```
 
 ```
-send_response({ status: "IN_REVIEW", artifacts: { branch, diff } })
+send_response({ status: "IN_REVIEW", diff: DIFF, artifacts: { branch } })
 → WAIT  # BLOCKED until approved
 ```
 

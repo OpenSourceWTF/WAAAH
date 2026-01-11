@@ -3,7 +3,7 @@
  * Handles all /admin/agents/* and eviction endpoints
  */
 import { Router } from 'express';
-import { AgentRepository } from '../state/agent-repository.js';
+import { AgentRepository } from '../state/persistence/agent-repository.js';
 import { TaskQueue } from '../state/queue.js';
 import { AGENT_OFFLINE_THRESHOLD_MS } from '@opensourcewtf/waaah-types';
 import { determineAgentStatus } from '../state/agent-status.js';

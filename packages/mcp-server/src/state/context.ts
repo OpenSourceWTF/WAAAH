@@ -6,14 +6,14 @@
  */
 import type { Database } from 'better-sqlite3';
 import { TaskQueue } from './queue.js';
-import { TaskRepository } from './task-repository.js';
-import { AgentRepository } from './agent-repository.js';
+import { TaskRepository } from './persistence/task-repository.js';
+import { AgentRepository } from './persistence/agent-repository.js';
 import { EventLog, SecurityLog } from './event-log.js';
 import {
   createProductionDatabase,
   createTestDatabase,
   initializeSchema
-} from './database-factory.js';
+} from './persistence/database-factory.js';
 import type {
   ITaskRepository,
   IAgentRepository,

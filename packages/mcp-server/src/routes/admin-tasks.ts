@@ -5,11 +5,8 @@
 import { Router } from 'express';
 import { TaskQueue } from '../state/queue.js';
 import { scanPrompt, getSecurityContext } from '../security/prompt-scanner.js';
-import { exec } from 'child_process';
-import util from 'util';
 import path from 'path';
-
-const execAsync = util.promisify(exec);
+import { GitService } from '../services/git-service.js';
 
 interface TaskRoutesConfig {
   queue: TaskQueue;
@@ -18,6 +15,7 @@ interface TaskRoutesConfig {
 
 export function createTaskRoutes({ queue, workspaceRoot }: TaskRoutesConfig): Router {
   const router = Router();
+  const git = new GitService(workspaceRoot);
 
   /**
    * POST /enqueue
@@ -133,17 +131,7 @@ export function createTaskRoutes({ queue, workspaceRoot }: TaskRoutesConfig): Ro
       return;
     }
 
-    // Implicit Cleanup: Remove worktree and branch
-    const branchName = `feature-${taskId}`;
-    const worktreePath = path.join(workspaceRoot, '.worktrees', branchName);
 
-    try {
-      console.log(`[Cancel] Cleaning up worktree for task ${taskId}...`);
-      await execAsync(`git worktree remove ${worktreePath} --force`, { cwd: workspaceRoot }).catch(() => { });
-      await execAsync(`git branch -D ${branchName}`, { cwd: workspaceRoot }).catch(() => { });
-    } catch (e) {
-      console.warn(`[Cancel] Cleanup warning for ${taskId}:`, e);
-    }
 
     res.json({ success: true, taskId });
   });
@@ -161,6 +149,35 @@ export function createTaskRoutes({ queue, workspaceRoot }: TaskRoutesConfig): Ro
     }
 
     res.json({ success: true, taskId });
+  });
+
+  /**
+   * GET /tasks/:taskId/diff
+   * Returns the git diff for the task's worktree
+   */
+  router.get('/tasks/:taskId/diff', async (req, res) => {
+    const { taskId } = req.params;
+
+    try {
+      // S17: Check for persisted raw diff first (supports remote agents)
+      const task = queue.getTask(taskId) || queue.getTaskFromDB(taskId);
+      if (task?.response && (task.response as any).diff) {
+        res.json({ diff: (task.response as any).diff });
+        return;
+      }
+
+      // Fallback: Use GitService to check local worktree
+      const diff = await git.getDiff(taskId);
+      if (diff === null) {
+        res.status(404).json({ error: 'Worktree not found. Agent may not have created it yet.' });
+        return;
+      }
+
+      res.json({ diff });
+    } catch (e: any) {
+      console.error(`[API] Failed to get diff for ${taskId}:`, e.message);
+      res.status(500).json({ error: 'Failed to generate diff' });
+    }
   });
 
   /**

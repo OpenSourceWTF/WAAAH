@@ -363,6 +363,19 @@ export const ExpandedCardView: React.FC<ExpandedCardViewProps> = ({
                     <pre className="whitespace-pre-wrap text-sm bg-black/30 p-4 border border-primary/20 flex-1 overflow-y-auto">{JSON.stringify(task.context, null, 2)}</pre>
                   </div>
                 )}
+                {task.dependencies && task.dependencies.length > 0 && (
+                  <div className="shrink-0 mt-3">
+                    <h3 className="text-sm font-bold text-primary/70 mb-1">DEPENDENCIES</h3>
+                    <div className="flex flex-wrap gap-2">
+                      {task.dependencies.map(depId => (
+                        <div key={depId} className="bg-black/30 px-3 py-1 border border-primary/20 flex items-center gap-2">
+                          <span className="font-mono text-sm">{depId}</span>
+                          {/* We don't have dependency status here efficiently without extra lookup, just show ID for now */}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </TabsContent>
           </div>
