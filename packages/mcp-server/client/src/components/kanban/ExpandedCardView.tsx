@@ -172,7 +172,7 @@ export const ExpandedCardView: React.FC<ExpandedCardViewProps> = ({
             </TabsTrigger>
 
             <div className="relative flex items-stretch has-[[data-state=active]]:bg-primary/10">
-              <TabsTrigger value="review" className="rounded-none border-b-2 border-transparent bg-transparent px-4 py-2 text-sm flex items-center gap-2 data-[state=active]:bg-transparent data-[state=active]:border-transparent">
+              <TabsTrigger value="review" className="peer rounded-none border-b-2 border-transparent bg-transparent px-4 py-2 text-sm flex items-center gap-2 data-[state=active]:bg-transparent data-[state=active]:border-transparent">
                 <CheckCircle className="h-4 w-4" /> REVIEW {fileStats.length > 0 && <span className="text-xs opacity-70">({fileStats.length})</span>}
               </TabsTrigger>
               {fileStats.length > 1 && (
@@ -207,7 +207,7 @@ export const ExpandedCardView: React.FC<ExpandedCardViewProps> = ({
                   )}
                 </>
               )}
-              <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-primary hidden has-[[data-state=active]]:block pointer-events-none" />
+              <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-primary hidden peer-data-[state=active]:block pointer-events-none" />
             </div>
             <TabsTrigger value="context" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-primary/10 px-4 py-2 text-sm flex items-center gap-2">
               <Settings className="h-4 w-4" /> CONTEXT
