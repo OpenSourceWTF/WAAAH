@@ -5,12 +5,13 @@ description: Interactive task refinement with custom quality gates
 
 # WAAAH Ralph
 
-**Loop: Task + Criteria → Refine until 10/10.**
+**Task + Criteria → Loop until 10/10.**
 
-## Core Behavior
-1. **Iterate** — Loop until all criteria = 10
-2. **Gate** — `notify_user` + await at each ⏸️
-3. **Log** — Every iteration to `.waaah/ralph/NNN-slug/progress.md`
+## Core Rules
+1. `notify_user` + await at every ⏸️
+2. Log every iteration to `.waaah/ralph/NNN-slug/progress.md`
+3. Max 5 iterations
+4. Code tasks: `pnpm typecheck && test && lint` must pass
 
 ## State Machine
 ```
@@ -18,11 +19,6 @@ INIT → COLLECT ⏸️→ PLAN ⏸️→ EXECUTE → SCORE ⏸️→ [LOOP | FI
          ↑                                  ↓
          └──────────────────────────────────┘
 ```
-
-## Rules
-- **Max:** 5 iterations
-- **Code:** `pnpm typecheck && test && lint` must pass
-- **Conservative:** Never auto-proceed at gates
 
 ## Default Criteria
 
@@ -35,42 +31,37 @@ INIT → COLLECT ⏸️→ PLAN ⏸️→ EXECUTE → SCORE ⏸️→ [LOOP | FI
 ## Workflow
 
 ### INIT
-Check `.waaah/ralph` for incomplete sessions. If found: `notify_user "Resume?"` ⏸️
+Check `.waaah/ralph` for incomplete sessions.
+If found: ⏸️ `notify_user "Resume [folder]?"` → await
 
 ### COLLECT
-1. `notify_user "Task?"` → await TASK
-2. `notify_user "Criteria?"` → await (or use defaults)
-3. Create session: `.waaah/ralph/NNN-slug`
-
-**⏸️** `notify_user "Start?"` → await
+1. ⏸️ `notify_user "Task?"` → await
+2. ⏸️ `notify_user "Criteria? (default: clarity, completeness, correctness)"` → await
+3. Create `.waaah/ralph/NNN-slug`
+4. ⏸️ `notify_user "Start?"` → await
 
 ### PLAN
-Draft approach, log to `progress.md`
-
-**⏸️** `notify_user` with plan → await approval
+Draft approach. Log to `progress.md`.
+⏸️ `notify_user` plan summary → await approval
 
 ### EXECUTE
-Implement task. Code: run checks, fix failures. Log to `progress.md`.
+Implement. Code: run checks, fix failures. Log to `progress.md`.
 
 ### SCORE
-Rate each criterion 1-10. Log scores.
+Rate each criterion 1-10. Log scores. Code: `git commit`.
+⏸️ `notify_user` scores table → "Continue refining?"
 
-**⏸️** `notify_user` with scores → "Continue?"
+### LOOP (if any < 10 AND iter < 5)
+Focus lowest score:
 
-### LOOP
-Focus on lowest score. Apply strategy:
+| Criterion | Strategy |
+|-----------|----------|
+| clarity | Simplify |
+| completeness | Add cases |
+| correctness | Fix bugs |
 
-| Score Type | Strategy |
-|------------|----------|
-| clarity | Simplify, add examples |
-| completeness | Add missing cases |
-| correctness | Fix errors |
-| performance | Benchmark |
-| brevity | Compress |
-
-→ Return to EXECUTE
+→ EXECUTE
 
 ### FINALIZE
-Log `✅ COMPLETE`. Code: `git commit -m "ralph: complete - [SLUG]"`
-
-**⏸️** `notify_user` final result → "1. New task  2. Add criteria  3. Exit"
+Log `✅ COMPLETE`. Code: `git commit -m "ralph: complete"`.
+⏸️ `notify_user` result → "1. New task  2. Add criteria  3. Exit"

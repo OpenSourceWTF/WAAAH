@@ -158,3 +158,36 @@ All scores ≥ 8. Continue to Iteration 3?
 | llm_optimized | 9 | Clean, structured |
 
 **All criteria ≥ 9. Ready to finalize.**
+
+---
+
+## Iteration 5 (Final)
+
+### Changes Made
+1. Tightened prose throughout
+2. Moved ⏸️ to line starts for visibility
+3. Simplified strategy table (3 core rows)
+4. Reduced from 77 → 64 lines
+5. Merged Core Behavior + Rules into single "Core Rules" section
+
+### Scores
+
+| Criterion | Score | Notes |
+|-----------|-------|-------|
+| reliability | 10 | Every gate explicit, conservative by default |
+| succinctness | 10 | 64 lines, no fluff |
+| llm_optimized | 10 | ⏸️ prefix pattern, tables, clear structure |
+
+---
+
+## ✅ COMPLETE
+
+**Journey:**
+| Iter | Focus | Lines | Scores |
+|------|-------|-------|--------|
+| 0 | Analysis | 104 | 4/6/4 |
+| 1 | State machine + gates | 113 | 7/6/7 |
+| 2 | Compression | 57 | 8/8/8 |
+| 3 | Cross-pollination | 77 | 9/7/9 |
+| 4 | Trim redundancy | 76 | 9/9/9 |
+| 5 | Final polish | 64 | 10/10/10 |
