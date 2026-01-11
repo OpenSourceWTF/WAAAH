@@ -16,6 +16,7 @@ import { CLEANUP_INTERVAL_MS } from '@opensourcewtf/waaah-types';
 import { emitActivity } from './state/events.js';
 import { createTaskRoutes, createReviewRoutes, createAgentRoutes, createSSERoutes } from './routes/index.js';
 import { getOrCreateApiKey } from './utils/auth.js';
+import { applySocketAuth } from './mcp/socket-auth.js';
 
 dotenv.config();
 
@@ -32,6 +33,9 @@ const io = new SocketIOServer(httpServer, {
     methods: ['GET', 'POST']
   }
 });
+
+// Apply Socket.io authentication
+applySocketAuth(io);
 
 // Create production context with all dependencies
 const ctx = createProductionContext();

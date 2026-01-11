@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { getSocket, connectSocket, ServerToClientEvents } from '../lib/socket';
+import { getSocket, connectSocket } from '../lib/socket';
+import type { ServerToClientEvents } from '../lib/socket';
 import { apiFetch } from '../lib/api';
 
 /**
