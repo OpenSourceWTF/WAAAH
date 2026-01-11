@@ -214,9 +214,18 @@ export const KanbanBoard = React.memo(function KanbanBoard({
                           <Badge className="bg-orange-500 text-white text-[10px] px-1.5 py-0.5 border border-orange-700">⛔ BLOCKED</Badge>
                         )}
                       </div>
-                      {unreadCount > 0 && (
-                        <Badge className="bg-amber-500 text-white text-[10px] px-1.5 py-0.5">{unreadCount} PENDING</Badge>
-                      )}
+                      <div className="flex items-center gap-1">
+                        {unreadCount > 0 && (
+                          <Badge className="bg-amber-500 text-white text-[10px] px-1.5 py-0.5">{unreadCount} PENDING</Badge>
+                        )}
+                        {task.source && (
+                          <Badge className={`text-[10px] px-1.5 py-0.5 ${task.source === 'UI' ? 'bg-blue-500 text-white border-blue-700' :
+                              task.source === 'CLI' ? 'bg-green-500 text-white border-green-700' :
+                                task.source === 'Agent' ? 'bg-purple-500 text-white border-purple-700' :
+                                  'bg-gray-500 text-white border-gray-700'
+                            }`}>{task.source}</Badge>
+                        )}
+                      </div>
                     </div>
                     {/* Row 2: Agent (if assigned) */}
                     {task.assignedTo && (
