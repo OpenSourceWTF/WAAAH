@@ -92,9 +92,8 @@ export function DiffViewer({ taskId, onAddComment }: DiffViewerProps) {
             <Badge variant="outline" className="border-red-500/50 text-red-400">−{totalDeletions}</Badge>
             {unresolvedCount > 0 && <Badge className="bg-orange-500 text-white">{unresolvedCount} unresolved</Badge>}
           </div>
+          <FileNavigator fileStats={fileStats} totalAdditions={totalAdditions} totalDeletions={totalDeletions} onJumpToFile={jumpToFile} />
         </div>
-
-        <FileNavigator fileStats={fileStats} totalAdditions={totalAdditions} totalDeletions={totalDeletions} onJumpToFile={jumpToFile} />
 
         {files.map(file => (
           <div key={file.path} className="border border-primary/30 bg-black/20" ref={el => { el && fileRefs.current.set(file.path, el); }}>
