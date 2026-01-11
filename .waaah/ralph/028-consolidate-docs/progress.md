@@ -87,4 +87,47 @@
 |-----------|------------|---------|
 | succinct | No redundancy, minimal words | One doc per concept |
 | clear | Easy to understand | Newcomer can navigate |
-| complete | All features documented | .waaah/specs incorporated |
+---
+
+## Iteration 1 — EXECUTE
+
+### Changes Made
+
+**Phase 1: Cleanup**
+- ✅ `ACCEPTANCE.md` → `docs/archive/`
+- ✅ `docs/PROPOSAL.md` → `docs/archive/`
+- ✅ `docs/ARCHITECTURE_OVERVIEW.md` → `docs/archive/`
+- ✅ `docs/specs/v7/MASTER_ARCHITECTURE.md` → `docs/archive/`
+- ✅ `waaah-spec-critique.md` → `docs/archive/`
+
+**Phase 2: ARCHITECTURE.md Updates**
+- ✅ §5 Real-Time Events (Socket.io) — from spec 003
+- ✅ §6 Agent CLI Wrapper — from spec 001
+- ✅ §7 Scheduler Scoring — from spec 004
+- ✅ §8 MCP Response Format — from spec 008
+- ✅ §9 Worktree Reliability — from spec 005
+
+**Phase 3: README.md**
+- ✅ Verified no broken links to archived files
+
+**Commit:** `fe31375`
+
+### Iteration 1 Scores
+
+| Criterion | Score | Justification |
+|-----------|-------|---------------|
+| succinct | 8/10 | Removed 5 redundant files, but docs/specs/v7 still has 20+ small specs |
+| clear | 9/10 | ARCHITECTURE.md now has logical flow with 9 sections |
+| complete | 8/10 | 5/8 .waaah/specs incorporated; 002/006/007 not added |
+
+**Total: 25/30 (8.3 avg)**
+
+---
+
+## Iteration 2 — EXECUTE (focus: completeness)
+
+Gaps to fix:
+1. Add spec 002 (waaah-doctor) to docs
+2. Add spec 006 (UI spec submission) to CLI_REFERENCE.md
+3. Consider archiving docs/specs/v7 individual files (redundant with ARCHITECTURE.md)
+

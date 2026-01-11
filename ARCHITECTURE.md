@@ -282,3 +282,35 @@ Since the server may be remote from the agent's workspace:
 1. **Agent** runs `git diff origin/main...HEAD` and includes raw diff in `send_response`
 2. **Server** stores diff in DB and serves via `/tasks/:id/diff`
 
+---
+
+## 10. Doctor Agent
+
+The `waaah-doctor` is an **autonomous QA agent** that monitors codebase health:
+
+- **Trigger:** Runs as daemon via CLI wrapper
+- **Inspection:** Polls `git log` for changes since last run
+- **Action:** Generates health reports and creates tasks for other agents
+- **Constraint:** **Read-only** — diagnoses but does not auto-fix
+
+### Detections
+
+| Issue | Generated Task |
+|-------|---------------|
+| High cyclomatic complexity | `capability: refactor` |
+| Missing test coverage | `capability: write-tests` |
+| Duplicated code patterns | `capability: refactor` |
+
+Reports stored in `.waaah/health/latest.md`.
+
+---
+
+## 11. UI Spec Submission
+
+The Dashboard includes a **spec submission form** with:
+
+- **Workspace dropdown** — routes tasks to agents in the correct repo
+- **Capability routing** — prefers `spec-writing` agents, falls back to `code-writing`
+- **Queue warning modal** — alerts if no agents match
+- **Source badge** — shows `UI` / `CLI` / `Agent` on task cards
+
