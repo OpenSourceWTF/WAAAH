@@ -25,6 +25,15 @@ STARTUP → WAIT ──→ ACK ──→ PLAN ──→ BUILD ──→ SUBMIT
 3. ALWAYS work in worktree
 4. NEVER stop loop
 
+## Anti-Patterns (NEVER DO)
+
+| ❌ Wrong | ✅ Correct |
+|----------|-----------|
+| BUILD → COMPLETED | BUILD → IN_REVIEW → (approve) → MERGE → COMPLETED |
+| Skip IN_REVIEW | Always wait for approval |
+| SMOKE before merge | SMOKE only after merge succeeds |
+| COMPLETED without merge | COMPLETED only after push to main |
+
 ## STATUS → ACTION
 
 | Status | Action |
