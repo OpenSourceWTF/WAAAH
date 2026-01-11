@@ -47,37 +47,37 @@ export class TaskLifecycleService {
 
   updateStatus(taskId: string, status: TaskStatus, response?: any): Task | null {
     const task = this.repo.getById(taskId);
-    
+
     if (task) {
       task.status = status;
       if (response) {
         task.response = response;
         task.completedAt = Date.now();
       }
-      
+
       const message = response ? 'Status updated with response' : `Status changed to ${status}`;
       addHistoryEntry(task, status, message, task.assignedTo);
       this.repo.update(task);
     }
-    
+
     return task;
   }
 
   cancelTask(taskId: string): ActionResult {
     const task = this.repo.getById(taskId);
-    
+
     if (!task) {
       return { success: false, error: 'Task not found' };
     }
-    
+
     if (TERMINAL_STATES.includes(task.status)) {
       return { success: false, error: `Task is already ${task.status}` };
     }
-    
+
     this.updateStatus(taskId, 'CANCELLED');
     this.persistence.clearPendingAck(taskId);
     console.log(`[Lifecycle] Task ${taskId} cancelled by admin`);
-    
+
     return { success: true };
   }
 
@@ -87,16 +87,20 @@ export class TaskLifecycleService {
     if (!task) {
       return { success: false, error: 'Task not found' };
     }
-    
+
     if (!RETRYABLE_STATES.includes(task.status)) {
       return { success: false, error: `Task status ${task.status} is not retryable` };
     }
-    
+
     return this.doForceRetry(task, taskId);
   }
 
   private doForceRetry(task: Task, taskId: string): ActionResult {
-    task.assignedTo = task.response = task.completedAt = undefined;
+    // Preserve any stored diff across retries
+    const preservedDiff = (task.response as any)?.artifacts?.diff;
+
+    task.assignedTo = task.completedAt = undefined;
+    task.response = preservedDiff ? { artifacts: { diff: preservedDiff } } : undefined;
     task.status = 'QUEUED';
     addHistoryEntry(task, 'QUEUED', 'Force-retried by admin');
     this.repo.update(task);
@@ -112,15 +116,15 @@ export class TaskLifecycleService {
     if (!task) {
       return { success: false, error: 'Task not found' };
     }
-    
+
     if (task.status !== 'PENDING_ACK') {
       return { success: false, error: 'Task is not in PENDING_ACK state' };
     }
-    
+
     if (pendingAck?.agentId !== agentId) {
       return { success: false, error: `ACK failed: Expected agent ${pendingAck?.agentId} but got ${agentId}` };
     }
-    
+
     return this.doAckTask(task, taskId, agentId);
   }
 
