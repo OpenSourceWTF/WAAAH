@@ -167,3 +167,21 @@ socket.on('error', (err) => toast.error(err.message));
 | Request reduction | 180/min → 0 polling |
 | Update latency | <100ms |
 | Migration effort | <1 day |
+
+---
+
+## Implementation Tasks
+
+| ID | Title | Size | Deps | Verify |
+|----|-------|------|------|--------|
+| T1 | **Server: Add Socket.io to Express** | M | — | `pnpm test -- socket.e2e` |
+| T2 | **Server: EventBus with wildcard emit** | M | T1 | `grep "emit.*task:" src/state/eventbus.ts` |
+| T3 | **Server: Auth middleware for handshake** | S | T1 | `pnpm test -- socket-auth` |
+| T4 | **Client: useWebSocket hook** | M | T1 | `pnpm test -- useWebSocket.test` |
+| T5 | **Client: Replace polling in useTaskData** | M | T4 | Network tab shows 0 polling requests |
+
+## Verification Tasks
+
+| ID | Title | Size | Deps | Verify |
+|----|-------|------|------|--------|
+| V1 | **E2E: Real-time task update** | M | T2,T4 | `pnpm test -- socket.e2e --grep "real-time"` |

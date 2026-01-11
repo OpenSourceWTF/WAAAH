@@ -59,3 +59,14 @@ Modify `TaskLifecycleService` or `assign_task` handler?
 |----|-------------|----------|
 | FR-4 | Agent MUST include raw diff in `send_response` payload. | P0 |
 | FR-5 | Server MUST serve stored diff from DB via `/diff` endpoint. | P0 |
+
+## 6. API Contract
+
+| Endpoint | Method | Response | Error |
+|----------|--------|----------|-------|
+| `GET /tasks/:id/diff` | GET | `{ diff: string, sha: string }` | `404: Task not found`, `204: No diff stored` |
+
+### Response Source Priority
+1. Return `task.response.diff` if present (agent-submitted)
+2. Fallback: Attempt local `git diff` (only works if server has repo access)
+3. Return 204 if neither available

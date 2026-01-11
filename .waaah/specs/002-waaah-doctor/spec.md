@@ -4,6 +4,8 @@
 **Date:** 2026-01-10
 **Status:** APPROVED
 **Role:** Code Health Auditor (QA)
+**Related Workflows:** `.agent/workflows/waaah-doctor-agent.md`
+**Depends On:** Spec 001 (CLI Agent Wrapper)
 
 ---
 
@@ -96,3 +98,19 @@ graph TD
 - **Auto-Fixing:** The Doctor never runs `eslint --fix` or `write_file` on source code.
 - **Pre-Merge Validation:** The Doctor only looks at `main` (or the current checkout), not active PRs (unless specifically pointed to a worktree).
 
+---
+
+## 7. Implementation Tasks
+
+| ID | Title | Size | Deps | Verify |
+|----|-------|------|------|--------|
+| T1 | **CLI: git-poller module** | M | — | `pnpm test -- git-poller.test` |
+| T2 | **CLI: health-report generator** | M | T1 | `pnpm test -- health-report.test` |
+| T3 | **Workflow: waaah-doctor-agent.md** | S | — | File exists in `.agent/workflows/` |
+| T4 | **State: .waaah/doctor/state.json** | S | T1 | `cat .waaah/doctor/state.json \| jq .last_sha` |
+
+## 8. Verification Tasks
+
+| ID | Title | Size | Deps | Verify |
+|----|-------|------|------|--------|
+| V1 | **E2E: Doctor detects coverage drop** | L | T1,T2 | Merge low-coverage PR → Doctor creates task within 2 min |

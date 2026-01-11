@@ -47,5 +47,6 @@ The current agent scheduling system has several issues:
 
 | ID | Title | Size | Deps | Verify |
 |----|-------|------|------|--------|
-| V1 | **E2E: Specialist Assignment**<br>Spin up 2 agents (Specialist, Generalist). Submit task matching specialist. Verify assignment. | M | T3 | `pnpm test -- scheduler.e2e.ts` |
-| V2 | **E2E: Long Running Task**<br>Agent takes >2m to complete task. Verify it doesn't go stale or get reassigned. | M | T1,T4 | `pnpm test -- heartbeat.e2e.ts` |
+| V1 | **E2E: Specialist Assignment**<br>Spin up 2 agents (Specialist, Generalist). Submit task matching specialist. Verify assignment. | M | T3 | `pnpm test -- packages/mcp-server/tests/scheduler.e2e.ts --grep "specialist"` |
+| V2 | **E2E: Long Running Task**<br>Agent takes >2m to complete task. Verify it doesn't go stale or get reassigned. | M | T1,T4 | `pnpm test -- packages/mcp-server/tests/heartbeat.e2e.ts --grep "stale"` |
+| V3 | **Unit: Debounce Verification** | S | T1 | `pnpm test -- packages/mcp-server/tests/heartbeat.test.ts --grep "debounce"` |

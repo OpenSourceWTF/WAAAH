@@ -156,10 +156,12 @@ A CLI wrapper (`waaah agent`) that spawns and manages external CLI coding agents
 
 ---
 
-## 7. Open Questions
+## 7. Open Questions (RESOLVED)
 
-- [ ] Exact stdout signature for loop exit detection (needs empirical testing)
-- [ ] Token parsing format for gemini vs claude (may differ)
+| Question | Resolution | Date |
+|----------|------------|------|
+| Exact stdout signature for loop exit | Monitor for `Exiting`, `Goodbye`, or 30s silence after prompt completion | 2026-01-11 |
+| Token parsing format for gemini vs claude | Gemini: parse `/\d+ tokens used/`. Claude: parse `usage:` JSON. Fallback: estimate from output length | 2026-01-11 |
 
 ---
 
