@@ -22,12 +22,16 @@ export function createTaskRoutes({ queue, workspaceRoot }: TaskRoutesConfig): Ro
    * Enqueues a new task from the Admin interface.
    */
   router.post('/enqueue', (req, res) => {
-    const { prompt, agentId, role, priority } = req.body;
+    const { prompt, agentId, role, priority, source } = req.body;
 
     if (!prompt || typeof prompt !== 'string') {
       res.status(400).json({ error: 'Missing or invalid prompt' });
       return;
     }
+
+    // Validate source if provided
+    const validSources = ['UI', 'CLI', 'Agent'] as const;
+    const taskSource = validSources.includes(source) ? source : 'CLI'; // Default to CLI for backward compat
 
     // Security: Scan prompt for attacks
     const scan = scanPrompt(prompt);
@@ -52,6 +56,7 @@ export function createTaskRoutes({ queue, workspaceRoot }: TaskRoutesConfig): Ro
       priority: priority || 'normal',
       status: 'QUEUED',
       createdAt: Date.now(),
+      source: taskSource,
       context: {
         security: getSecurityContext(workspaceRoot)
       }
