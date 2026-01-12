@@ -95,21 +95,43 @@ export interface AgentScore {
  * Calculate workspace affinity score.
  * Returns 1.0 for exact match, 0.5 if no workspace specified (neutral).
  * Returns 0.0 AND eligible:false for mismatch (HARD REJECT).
+ * 
+ * Checks task workspace from:
+ * 1. task.to.workspaceId (repoId like "OpenSourceWTF/WAAAH")
+ * 2. task.context.security.workspaceRoot (path like "/home/user/projects/WAAAH")
+ * 
+ * Matches against agent's:
+ * 1. workspaceContext.repoId
+ * 2. workspaceContext.path
  */
 function calculateWorkspaceScore(task: Task, agent: WaitingAgent): { score: number; eligible: boolean } {
-  const taskWorkspace = task.to.workspaceId;
-  const agentWorkspace = agent.workspaceContext?.repoId;
+  // Get task workspace from multiple sources
+  const taskWorkspaceId = task.to?.workspaceId; // repoId format
+  const taskWorkspacePath = (task.context as any)?.security?.workspaceRoot; // path format
 
-  if (!taskWorkspace) {
-    return { score: 0.5, eligible: true }; // No workspace requirement - neutral
+  // Get agent workspace identifiers
+  const agentRepoId = agent.workspaceContext?.repoId;
+  const agentPath = agent.workspaceContext?.path;
+
+  // If task has no workspace requirement at all, neutral
+  if (!taskWorkspaceId && !taskWorkspacePath) {
+    return { score: 0.5, eligible: true };
   }
-  if (!agentWorkspace) {
-    return { score: 0.5, eligible: true }; // Agent has no workspace - neutral (can work anywhere)
+
+  // If agent has no workspace context, neutral (can work anywhere)
+  if (!agentRepoId && !agentPath) {
+    return { score: 0.5, eligible: true };
   }
-  if (taskWorkspace === agentWorkspace) {
-    return { score: 1.0, eligible: true }; // Exact match
+
+  // Check for matches
+  const repoIdMatch = taskWorkspaceId && agentRepoId && taskWorkspaceId === agentRepoId;
+  const pathMatch = taskWorkspacePath && agentPath && taskWorkspacePath === agentPath;
+
+  if (repoIdMatch || pathMatch) {
+    return { score: 1.0, eligible: true }; // Match found
   }
-  // HARD REJECT: workspace mismatch means agent cannot work on this task
+
+  // HARD REJECT: workspace specified but no match
   return { score: 0.0, eligible: false };
 }
 
