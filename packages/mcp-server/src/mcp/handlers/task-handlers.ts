@@ -137,10 +137,22 @@ export class TaskHandlers {
 
       // S17: Prompt Injection for deterministic worktree naming
       // We inject this MANDATORY instruction to prevent agent hallucinations.
+      // S18: Handle worktree collision - resume if exists, create if not
+      const branchName = `feature-${taskId}`;
+      const worktreePath = `.worktrees/${branchName}`;
       const setupInstruction = `
 ## SETUP (MANDATORY)
-Run exactly this command to start work:
-git worktree add .worktrees/feature-${taskId} -b feature-${taskId}
+Run these commands to start work:
+\`\`\`bash
+# Check if worktree already exists
+if [ -d "${worktreePath}" ]; then
+  echo "Resuming on existing worktree: ${worktreePath}"
+  cd ${worktreePath}
+else
+  git worktree add ${worktreePath} -b ${branchName}
+  cd ${worktreePath}
+fi
+\`\`\`
 `;
       const finalPrompt = params.prompt + setupInstruction;
 

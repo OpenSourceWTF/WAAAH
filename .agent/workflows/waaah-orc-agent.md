@@ -158,9 +158,11 @@ update_progress(phase="PLANNING", 20%)
 ## BUILD
 
 ```bash
-# S17: FOLLOW THE SETUP INSTRUCTIONS IN YOUR PROMPT
-# The prompt will contain: "Run exactly: git worktree add ..."
-# EXECUTE IT EXACTLY.
+# S18: WORKTREE SETUP (Resume-Aware)
+# The prompt will contain setup instructions. Execute them.
+# If worktree already exists, you will cd into it.
+# If it doesn't exist, it will be created.
+# IMPORTANT: The server sends conditional logic, just run it.
 ```
 
 ### TDD Loop
