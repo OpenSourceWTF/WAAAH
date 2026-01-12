@@ -100,9 +100,23 @@ IF result.unreadComments:
 
 ```
 mkdir -p .waaah/orc
+
+# MANDATORY: Infer workspace context from current directory
+# This tells the scheduler which repo you're working in
+workspaceContext = {
+  type: "github",  # or "local" if not a github repo
+  repoId: parseGitRemote("git remote get-url origin"),  # e.g., "OpenSourceWTF/WAAAH"
+  branch: exec("git rev-parse --abbrev-ref HEAD"),
+  path: process.cwd()
+}
+
 NAME = pick([curious,speedy,clever,jolly,nimble]) + " " + 
        pick([otter,panda,fox,owl,penguin]) + " " + random(10-99)
-result = register_agent({ displayName: NAME, role: "orchestrator" })
+result = register_agent({ 
+  displayName: NAME, 
+  role: "orchestrator",
+  workspaceContext: workspaceContext
+})
 AGENT_ID = result.agentId
 → WAIT
 ```

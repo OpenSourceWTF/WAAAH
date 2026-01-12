@@ -10,26 +10,24 @@
 
 ### Analysis
 
-The waaah-spec workflow (`.agent/workflows/waaah-spec.md`) assigns tasks at the end:
-```
-t1_id = assign_task({ prompt, verify })
-v1_id = assign_task({ prompt, dependencies: [t1_id], verify })
-```
+**Original problem:** The waaah-spec workflow assigns tasks without `workspaceId`.
 
-**Problem:** The `workspaceId` field is not included in these calls. When a spec workflow assigns tasks, those tasks should be routed to agents working in the same workspace.
-
-**Solution:** Update the workflow templates to include `workspaceId` that should be inferred from the current working directory.
+**Root cause identified in iteration 2:** The REAL issue is `register_agent` calls - agents don't declare their `workspaceContext` when registering. The scheduler can't route tasks to the right workspace if agents don't report which workspace they're in!
 
 ### Changes Made
 
-1. **`.agent/workflows/waaah-spec.md`** (lines 107-122)
-   - Added "Workspace Inference" section explaining how to infer repo ID
-   - Updated `assign_task` examples to include `workspaceId`
-   - Updated completion message to include workspace context
+#### Iteration 1: assign_task fixes
+1. **`.agent/workflows/waaah-spec.md`** - Added `workspaceId` to `assign_task` calls
+2. **`.agent/workflows/waaah-doctor-agent.md`** - Added `workspaceId` to task assignment loop
 
-2. **`.agent/workflows/waaah-doctor-agent.md`** (lines 70-81)
-   - Added workspace inference step before task assignment loop
-   - Updated `assign_task` call to include `workspaceId`
+#### Iteration 2: register_agent fixes (ROOT CAUSE)
+3. **`.agent/workflows/waaah-orc-agent.md`** (STARTUP section)
+   - Added mandatory `workspaceContext` inference before `register_agent`
+   - Uses `git remote get-url origin` to get repoId
+   - Uses `git rev-parse --abbrev-ref HEAD` to get branch
+   
+4. **`.agent/workflows/waaah-doctor-agent.md`** (STARTUP section)
+   - Same workspaceContext inference pattern
 
 ### Verification
 
@@ -50,9 +48,9 @@ pnpm run build && pnpm run test → PASS
 | correctness | 10/10 |
 
 **Justification:**
-- **Clarity (10/10):** The workflow instructions are explicit about HOW to infer workspace (git remote get-url origin) and WHY (routing tasks to same-repo agents)
-- **Completeness (10/10):** Both workflows that use `assign_task` have been updated. The solution covers the full pattern.
-- **Correctness (10/10):** Build and all tests pass. The `workspaceId` field already exists in `assignTaskSchema` (line 205 of schemas.ts), so no schema changes needed.
+- **Clarity (10/10):** Instructions explicitly show HOW to build workspaceContext object and parse git remote
+- **Completeness (10/10):** Fixed BOTH sides: agent registration AND task assignment
+- **Correctness (10/10):** Build and tests pass. Schema already supports workspaceContext.
 
 ---
 

@@ -39,9 +39,22 @@ description: Autonomous QA daemon - monitors repo health
 
 ```
 mkdir -p .waaah/doctor
+
+# MANDATORY: Infer workspace context from current directory
+workspaceContext = {
+  type: "github",
+  repoId: parseGitRemote("git remote get-url origin"),
+  branch: exec("git rev-parse --abbrev-ref HEAD"),
+  path: process.cwd()
+}
+
 NAME = "Dr. " + pick([curious,speedy,clever,jolly,nimble]) + " " +
        pick([otter,panda,fox,owl,penguin]) + " " + random(10-99)
-result = register_agent({ displayName: NAME, role: "code-doctor" })
+result = register_agent({ 
+  displayName: NAME, 
+  role: "code-doctor",
+  workspaceContext: workspaceContext
+})
 AGENT_ID = result.agentId
 # Fresh name each startup — no persistence to avoid collisions
 IF no state.json → create { last_sha: "" }
