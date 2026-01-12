@@ -50,6 +50,37 @@ INIT → EXECUTE → SCORE → [LOOP | FINALIZE]
 | completeness | All cases covered | Edge cases handled |
 | correctness | No bugs/errors | Tests pass OR criteria met |
 
+## Anti-Shortcut Rules
+
+> [!CAUTION]  
+> **Scoring 10/10 requires EVIDENCE.** No evidence = max 8/10.
+
+### Evidence Requirements
+
+| Criterion | Required Evidence |
+|-----------|-------------------|
+| clarity | "I can point to specific code/text that shows X" |
+| completeness | "I searched for pattern Y and found 0 remaining issues" |
+| correctness | "Tests pass" OR "I verified Z manually" |
+
+### Before Scoring 10/10
+1. **State what you checked** - explicitly list searches/verifications done
+2. **State what's out of scope** - acknowledge limits
+3. **Use exhaustive searches** - enumerate ALL patterns, not just suspected ones
+4. **Assume issues exist** - until proven otherwise by evidence
+
+### Prompt Echo Pattern
+At the start of EACH iteration, re-read and echo the original task:
+
+```markdown
+## Iteration N
+
+**Original Task:** [paste original user task here]
+**Focus this iteration:** [what you're working on]
+```
+
+This prevents drift and ensures you stay aligned with the original ask.
+
 ## Circuit Breaker
 Auto-stop if:
 - Same total score 3 iterations in a row
