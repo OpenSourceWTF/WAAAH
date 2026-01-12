@@ -86,11 +86,11 @@ export function createAgentRoutes({ registry, queue }: AgentRoutesConfig): Route
   router.get('/workspaces', (req, res) => {
     const agents = registry.getAll();
 
-    // Collect workspace roots from all agents (stored in metadata or source)
+    // Collect workspace identifiers from agents using canonical workspaceContext
     const workspaceSet = new Set<string>();
     for (const agent of agents) {
-      // Agents may store workspace in metadata.workspaceRoot or other fields
-      const workspace = (agent as any).workspaceRoot || (agent as any).metadata?.workspaceRoot;
+      // Use workspaceContext.path (local path) or workspaceContext.repoId (GitHub format)
+      const workspace = agent.workspaceContext?.path || agent.workspaceContext?.repoId;
       if (workspace && typeof workspace === 'string') {
         workspaceSet.add(workspace);
       }
@@ -100,8 +100,8 @@ export function createAgentRoutes({ registry, queue }: AgentRoutesConfig): Route
     const workspaces = Array.from(workspaceSet).map(path => ({
       path,
       agentCount: agents.filter(a =>
-        (a as any).workspaceRoot === path ||
-        (a as any).metadata?.workspaceRoot === path
+        a.workspaceContext?.path === path ||
+        a.workspaceContext?.repoId === path
       ).length
     }));
 
@@ -118,10 +118,10 @@ export function createAgentRoutes({ registry, queue }: AgentRoutesConfig): Route
 
     const agents = registry.getAll();
 
-    // Find agents in this workspace
+    // Find agents in this workspace using canonical workspaceContext
     const workspaceAgents = agents.filter(agent =>
-      (agent as any).workspaceRoot === decodedPath ||
-      (agent as any).metadata?.workspaceRoot === decodedPath
+      agent.workspaceContext?.path === decodedPath ||
+      agent.workspaceContext?.repoId === decodedPath
     );
 
     if (workspaceAgents.length === 0) {
