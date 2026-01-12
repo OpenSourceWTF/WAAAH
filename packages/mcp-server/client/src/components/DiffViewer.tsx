@@ -8,6 +8,11 @@ import { CommentThread } from './diff/CommentThread';
 import { CommentInput } from './diff/CommentInput';
 import { apiFetch } from '@/lib/api';
 
+// Fix #6: Extract inline styles
+const MONOSPACE_STYLE: React.CSSProperties = {
+  fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", monospace'
+};
+
 interface DiffViewerProps {
   taskId: string;
   onAddComment: (filePath: string, lineNumber: number | null, content: string) => void;
@@ -38,106 +43,171 @@ export function DiffViewer({ taskId, onAddComment, onDiffLoaded }: DiffViewerPro
       if (res.ok) {
         const parsed = parseDiff((await res.json()).diff || '');
         setFiles(parsed);
-        setExpandedFiles(new Set(parsed.map(f => f.path)));  // Use parsed directly to start expanded
+        setExpandedFiles(new Set(parsed.map(f => f.path)));
         diffLoaded.current = true;
       } else {
         setError('No diff available');
       }
-    } catch (e: any) { setError(e.message); }
+    } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Unknown error'); }
     setLoading(false);
   }, [taskId]);
 
   useEffect(() => { !diffLoaded.current && fetchDiff().then(fetchComments); }, [fetchDiff, fetchComments]);
 
-  const handleAddComment = async () => {
-    commentingLine && newComment.trim() && (
-      onAddComment(commentingLine.file, commentingLine.line, newComment.trim()),
-      setNewComment(''), setCommentingLine(null), setTimeout(fetchComments, 500)
-    );
-  };
+  // Fix #5: Stable callback references
+  const handleAddComment = useCallback(async () => {
+    if (commentingLine && newComment.trim()) {
+      onAddComment(commentingLine.file, commentingLine.line, newComment.trim());
+      setNewComment('');
+      setCommentingLine(null);
+      setTimeout(fetchComments, 500);
+    }
+  }, [commentingLine, newComment, onAddComment, fetchComments]);
 
-  const toggleFile = (path: string) => setExpandedFiles(prev => {
+  const toggleFile = useCallback((path: string) => setExpandedFiles(prev => {
     const next = new Set(prev);
     next.has(path) ? next.delete(path) : next.add(path);
     return next;
-  });
+  }), []);
 
-  const jumpToFile = (path: string) => {
+  const jumpToFile = useCallback((path: string) => {
     setExpandedFiles(prev => new Set([...prev, path]));
     setTimeout(() => fileRefs.current.get(path)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
-  };
+  }, []);
 
-  const getCommentsForLine = (filePath: string, lineNumber: number | null) =>
-    comments.filter(c => c.filePath === filePath && c.lineNumber === lineNumber && !c.threadId);
+  // Fix #5: Stable callback reference for starting comments
+  const handleStartComment = useCallback((f: string, l: number) => {
+    setCommentingLine({ file: f, line: l });
+  }, []);
 
-  const getReplies = (commentId: string) => comments.filter(c => c.threadId === commentId);
+  const handleCancelComment = useCallback(() => {
+    setCommentingLine(null);
+    setNewComment('');
+  }, []);
 
-  const unresolvedCount = comments.filter(c => !c.resolved && !c.threadId).length;
+  // Fix #4: Pre-index comments by line for O(1) lookup
+  const commentsByLine = useMemo(() => {
+    const map = new Map<string, ReviewComment[]>();
+    comments.forEach(c => {
+      if (!c.threadId) {
+        const key = `${c.filePath}:${c.lineNumber}`;
+        if (!map.has(key)) map.set(key, []);
+        map.get(key)!.push(c);
+      }
+    });
+    return map;
+  }, [comments]);
+
+  const repliesByThreadId = useMemo(() => {
+    const map = new Map<string, ReviewComment[]>();
+    comments.forEach(c => {
+      if (c.threadId) {
+        if (!map.has(c.threadId)) map.set(c.threadId, []);
+        map.get(c.threadId)!.push(c);
+      }
+    });
+    return map;
+  }, [comments]);
+
+  // O(1) lookups instead of O(n)
+  const getCommentsForLine = useCallback((filePath: string, lineNumber: number | null) => {
+    return commentsByLine.get(`${filePath}:${lineNumber}`) || [];
+  }, [commentsByLine]);
+
+  const getReplies = useCallback((commentId: string) => {
+    return repliesByThreadId.get(commentId) || [];
+  }, [repliesByThreadId]);
+
+  const unresolvedCount = useMemo(() => comments.filter(c => !c.resolved && !c.threadId).length, [comments]);
   const fileStats = useMemo(() => getFileStats(files), [files]);
-  const totalAdditions = fileStats.reduce((sum, f) => sum + f.additions, 0);
-  const totalDeletions = fileStats.reduce((sum, f) => sum + f.deletions, 0);
+  const totalAdditions = useMemo(() => fileStats.reduce((sum, f) => sum + f.additions, 0), [fileStats]);
+  const totalDeletions = useMemo(() => fileStats.reduce((sum, f) => sum + f.deletions, 0), [fileStats]);
 
   useEffect(() => {
     if (files.length > 0 && !loading) {
       onDiffLoaded?.(fileStats, jumpToFile);
     }
-  }, [files, loading, fileStats, onDiffLoaded, jumpToFile]); // Dependencies for notifying parent
+  }, [files, loading, fileStats, onDiffLoaded, jumpToFile]);
 
-  return loading ? <div className="flex items-center justify-center p-8 text-primary/50">Loading diff...</div>
-    : error || files.length === 0 ? (
+  if (loading) {
+    return <div className="flex items-center justify-center p-8 text-primary/50">Loading diff...</div>;
+  }
+
+  if (error || files.length === 0) {
+    return (
       <div className="text-center p-8 border-2 border-dashed border-primary/30 text-primary/40">
         <p>{error || 'No changes detected'}</p>
         <p className="text-xs mt-2">Diff will appear here when the agent makes changes</p>
       </div>
-    ) : (
-      <div className="relative space-y-4">
-        <div className="flex items-center gap-2">
-          <Badge variant="outline" className="border-primary/50">{files.length} file{files.length !== 1 && 's'} changed</Badge>
-          <Badge variant="outline" className="border-green-500/50 text-green-400">+{totalAdditions}</Badge>
-          <Badge variant="outline" className="border-red-500/50 text-red-400">−{totalDeletions}</Badge>
-          {unresolvedCount > 0 && <Badge className="bg-orange-500 text-white">{unresolvedCount} unresolved</Badge>}
-        </div>
-
-        {files.map(file => (
-          <div key={file.path} className="border border-primary/30 bg-black/20" ref={el => { el && fileRefs.current.set(file.path, el); }}>
-            <div className="flex items-center gap-2 p-2 bg-primary/10 border-b border-primary/20 cursor-pointer hover:bg-primary/20" onClick={() => toggleFile(file.path)}>
-              {expandedFiles.has(file.path) ? <ChevronDown className="h-4 w-4 text-primary" /> : <ChevronRight className="h-4 w-4 text-primary" />}
-              <span className="font-mono text-sm text-primary">{file.path}</span>
-              {getCommentsForLine(file.path, null).length > 0 && (
-                <Badge variant="outline" className="text-xs"><MessageSquare className="h-3 w-3 mr-1" />{getCommentsForLine(file.path, null).length}</Badge>
-              )}
-              {(() => {
-                const stats = fileStats.find(s => s.path === file.path);
-                if (!stats) return null;
-                return (
-                  <div className="ml-auto flex items-center gap-2">
-                    <span className="text-xs text-green-400">+{stats.additions}</span>
-                    <span className="text-xs text-red-400">−{stats.deletions}</span>
-                  </div>
-                );
-              })()}
-            </div>
-
-
-            {expandedFiles.has(file.path) && (
-              <div className="text-xs overflow-x-auto normal-case" style={{ fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", monospace' }}>
-                {file.lines.map((line, idx) => {
-                  const lineNum = line.lineNumber?.new || line.lineNumber?.old;
-                  const lineComments = lineNum ? getCommentsForLine(file.path, lineNum) : [];
-                  const isCommenting = commentingLine?.file === file.path && commentingLine?.line === lineNum;
-
-                  return (
-                    <React.Fragment key={idx}>
-                      <DiffLine line={line} lineNum={lineNum} lineComments={lineComments} filePath={file.path} onStartComment={(f, l) => setCommentingLine({ file: f, line: l })} />
-                      {lineComments.map(comment => <CommentThread key={comment.id} comment={comment} replies={getReplies(comment.id)} />)}
-                      {isCommenting && <CommentInput value={newComment} onChange={setNewComment} onSubmit={handleAddComment} onCancel={() => (setCommentingLine(null), setNewComment(''))} />}
-                    </React.Fragment>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
     );
+  }
+
+  return (
+    <div className="relative space-y-4">
+      <div className="flex items-center gap-2">
+        <Badge variant="outline" className="border-primary/50">{files.length} file{files.length !== 1 && 's'} changed</Badge>
+        <Badge variant="outline" className="border-green-500/50 text-green-400">+{totalAdditions}</Badge>
+        <Badge variant="outline" className="border-red-500/50 text-red-400">−{totalDeletions}</Badge>
+        {unresolvedCount > 0 && <Badge className="bg-orange-500 text-white">{unresolvedCount} unresolved</Badge>}
+      </div>
+
+      {files.map(file => (
+        <div key={file.path} className="border border-primary/30 bg-black/20" ref={el => { el && fileRefs.current.set(file.path, el); }}>
+          <div
+            className="flex items-center gap-2 p-2 bg-primary/10 border-b border-primary/20 cursor-pointer hover:bg-primary/20"
+            onClick={() => toggleFile(file.path)}
+          >
+            {expandedFiles.has(file.path) ? <ChevronDown className="h-4 w-4 text-primary" /> : <ChevronRight className="h-4 w-4 text-primary" />}
+            <span className="font-mono text-sm text-primary">{file.path}</span>
+            {getCommentsForLine(file.path, null).length > 0 && (
+              <Badge variant="outline" className="text-xs"><MessageSquare className="h-3 w-3 mr-1" />{getCommentsForLine(file.path, null).length}</Badge>
+            )}
+            {(() => {
+              const stats = fileStats.find(s => s.path === file.path);
+              if (!stats) return null;
+              return (
+                <div className="ml-auto flex items-center gap-2">
+                  <span className="text-xs text-green-400">+{stats.additions}</span>
+                  <span className="text-xs text-red-400">−{stats.deletions}</span>
+                </div>
+              );
+            })()}
+          </div>
+
+          {expandedFiles.has(file.path) && (
+            <div className="text-xs overflow-x-auto normal-case" style={MONOSPACE_STYLE}>
+              {file.lines.map((line, idx) => {
+                const lineNum = line.lineNumber?.new || line.lineNumber?.old;
+                const lineComments = lineNum ? getCommentsForLine(file.path, lineNum) : [];
+                const isCommenting = commentingLine?.file === file.path && commentingLine?.line === lineNum;
+
+                return (
+                  <React.Fragment key={idx}>
+                    <DiffLine
+                      line={line}
+                      lineNum={lineNum}
+                      lineComments={lineComments}
+                      filePath={file.path}
+                      onStartComment={handleStartComment}
+                    />
+                    {lineComments.map(comment => (
+                      <CommentThread key={comment.id} comment={comment} replies={getReplies(comment.id)} />
+                    ))}
+                    {isCommenting && (
+                      <CommentInput
+                        value={newComment}
+                        onChange={setNewComment}
+                        onSubmit={handleAddComment}
+                        onCancel={handleCancelComment}
+                      />
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
 }

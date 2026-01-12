@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { MessageSquare, Plus } from "lucide-react";
@@ -13,13 +13,16 @@ interface DiffLineProps {
   onStartComment: (file: string, line: number) => void;
 }
 
-export function DiffLine({ line, lineNum, lineComments, filePath, onStartComment }: DiffLineProps) {
+export const DiffLine = React.memo(function DiffLine({ line, lineNum, lineComments, filePath, onStartComment }: DiffLineProps) {
   const bgClass = line.type === 'add' ? 'bg-green-500/10' :
     line.type === 'remove' ? 'bg-red-500/10' :
       line.type === 'header' ? 'bg-blue-500/10 text-blue-400' : '';
 
   const textClass = line.type === 'add' ? 'text-green-400' :
     line.type === 'remove' ? 'text-red-400' : 'text-foreground/70';
+
+  // Fix #2: Cache tokenization
+  const tokens = useMemo(() => tokenize(line.content), [line.content]);
 
   return (
     <div className={`flex group hover:bg-primary/5 ${bgClass}`}>
@@ -51,7 +54,7 @@ export function DiffLine({ line, lineNum, lineComments, filePath, onStartComment
         {line.type === 'remove' && <span className="text-red-500">-</span>}
         {line.type === 'context' && <span className="text-primary/20"> </span>}
         {line.type !== 'header' ? (
-          tokenize(line.content).map((token, ti) => (
+          tokens.map((token, ti) => (
             <span key={ti} className={TOKEN_CLASSES[token.type]}>{token.value}</span>
           ))
         ) : line.content}
@@ -68,4 +71,4 @@ export function DiffLine({ line, lineNum, lineComments, filePath, onStartComment
       )}
     </div>
   );
-}
+});
