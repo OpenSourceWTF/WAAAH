@@ -48,15 +48,13 @@ workspaceContext = {
   path: process.cwd()
 }
 
-NAME = "Dr. " + pick([curious,speedy,clever,jolly,nimble]) + " " +
-       pick([otter,panda,fox,owl,penguin]) + " " + random(10-99)
 result = register_agent({ 
-  displayName: NAME, 
   role: "code-doctor",
+  capabilities: ["code-doctor"],
   workspaceContext: workspaceContext
 })
 AGENT_ID = result.agentId
-# Fresh name each startup — no persistence to avoid collisions
+NAME = result.displayName  # Server auto-generates adjective-noun-NN format
 IF no state.json → create { last_sha: "" }
 → LOOP
 ```
