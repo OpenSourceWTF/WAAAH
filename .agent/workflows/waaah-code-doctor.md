@@ -51,6 +51,7 @@ SCAN → REPORT → FEEDBACK → [REFINE | IMPLEMENT → VERIFY → DONE]
 | PATTERN | Missing error handling, no types, hardcoded values | LOW |
 | DOCS | Missing JSDoc, outdated comments, no README | MEDIUM |
 | COVERAGE | Uncovered files, low branch coverage, missing tests | HIGH |
+| SPEC | Spec scenarios not implemented, edge cases missing | HIGH |
 
 ## Severity Weights
 
@@ -93,6 +94,7 @@ SCAN → REPORT → FEEDBACK → [REFINE | IMPLEMENT → VERIFY → DONE]
 | PATTERN | `grep -rE "TODO|FIXME|any|as any|catch\s*\(\s*\)"`, config hardcodes |
 | DOCS | `grep -rL "@param\|@returns" "*.ts"`, missing README in packages, stale comments |
 | COVERAGE | `pnpm test --coverage`, parse statement/branch percentages |
+| SPEC | Scan `.waaah/specs/`, compare scenarios to codebase, find missing implementations |
 
 ### REPORT
 
