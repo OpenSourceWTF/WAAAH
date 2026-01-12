@@ -8,13 +8,18 @@
  */
 import type { Database } from 'better-sqlite3';
 import type { EventEmitter } from 'events';
+import { EvictionSignal as SharedEvictionSignal } from '@opensourcewtf/waaah-types';
 
 export type EvictionAction = 'RESTART' | 'SHUTDOWN';
 
-export interface EvictionSignal {
+// Local interface for internal use (database mapping)
+interface LocalEvictionSignal {
   reason: string;
   action: EvictionAction;
 }
+
+// Re-export specific parts if needed, or just use the shared one
+export type EvictionSignal = SharedEvictionSignal;
 
 /**
  * Interface for eviction service to allow mocking in tests.
@@ -69,15 +74,19 @@ export class EvictionService implements IEvictionService {
       'SELECT eviction_reason, eviction_action FROM agents WHERE id = ? AND eviction_requested = 1'
     ).get(agentId) as { eviction_reason?: string; eviction_action?: string } | undefined;
 
+    // console.log(`[Eviction] popEviction(${agentId}) found:`, row);
+
     if (row) {
       // Clear the eviction
       this.db.prepare(
         'UPDATE agents SET eviction_requested = 0, eviction_reason = NULL, eviction_action = NULL WHERE id = ?'
       ).run(agentId);
 
+      const action = (row.eviction_action || 'RESTART') as EvictionAction;
       return {
+        controlSignal: 'EVICT',
         reason: row.eviction_reason || 'Unknown reason',
-        action: (row.eviction_action || 'RESTART') as EvictionAction
+        action: action
       };
     }
     return null;

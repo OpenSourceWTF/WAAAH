@@ -23,7 +23,7 @@ export function createTaskRoutes({ queue, workspaceRoot }: TaskRoutesConfig): Ro
    * REQUIRES workspaceId - no server-side defaults.
    */
   router.post('/enqueue', (req, res) => {
-    const { prompt, agentId, role, priority, source, workspaceId } = req.body;
+    const { prompt, agentId, role, priority, source, workspaceId, requiredCapabilities, images } = req.body;
 
     if (!prompt || typeof prompt !== 'string') {
       res.status(400).json({ error: 'Missing or invalid prompt' });
@@ -39,6 +39,12 @@ export function createTaskRoutes({ queue, workspaceRoot }: TaskRoutesConfig): Ro
     // Validate source if provided
     const validSources = ['UI', 'CLI', 'Agent'] as const;
     const taskSource = validSources.includes(source) ? source : 'CLI'; // Default to CLI for backward compat
+
+    // Determine sender identity based on source
+    // S17: Explicitly track Dashboard UI as source
+    const from = source === 'UI'
+      ? { type: 'user', id: 'dashboard', name: 'Dashboard UI' }
+      : { type: 'user', id: 'admin', name: 'AdminUser' };
 
     // Security: Scan prompt for attacks
     const scan = scanPrompt(prompt);
@@ -58,12 +64,14 @@ export function createTaskRoutes({ queue, workspaceRoot }: TaskRoutesConfig): Ro
       id: taskId,
       command: 'execute_prompt',
       prompt,
-      from: { type: 'user', id: 'admin', name: 'AdminUser' },
-      to: { agentId, workspaceId },
+      // @ts-ignore - 'from' type might need update in shared types if strict
+      from,
+      to: { agentId, workspaceId, requiredCapabilities },
       priority: priority || 'normal',
       status: 'QUEUED',
       createdAt: Date.now(),
       source: taskSource,
+      images, // Pass images to queue
       context: {
         // Security context derived from client's workspaceId, not server's cwd
         workspaceId
@@ -162,6 +170,36 @@ export function createTaskRoutes({ queue, workspaceRoot }: TaskRoutesConfig): Ro
     }
 
     res.json({ success: true, taskId });
+  });
+
+  /**
+   * PATCH /tasks/:taskId
+   * Update task fields (e.g., workspaceContext, capabilities)
+   */
+  router.patch('/tasks/:taskId', (req, res) => {
+    const { taskId } = req.params;
+    const updates = req.body;
+
+    // Map 'requiredCapabilities' to 'to.requiredCapabilities' if present
+    if (updates.requiredCapabilities) {
+      updates.to = updates.to || {};
+      updates.to.requiredCapabilities = updates.requiredCapabilities;
+      delete updates.requiredCapabilities;
+    }
+
+    // Map top-level updates to Task structure
+    // (validation should be done by queue/repo or schema)
+
+    // Ensure we don't overwrite ID or crucial system fields accidentally if not intended
+    // For now, trust the queue's updateTask to merge safely
+    const updatedTask = queue.updateTask(taskId, updates);
+
+    if (!updatedTask) {
+      res.status(404).json({ error: 'Task not found or update failed' });
+      return;
+    }
+
+    res.json(updatedTask);
   });
 
   /**

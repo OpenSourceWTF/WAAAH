@@ -5,7 +5,7 @@
 import { AgentRepository } from '../../state/persistence/agent-repository.js';
 import { TaskQueue } from '../../state/queue.js';
 import { emitDelegation } from '../../state/events.js';
-import { scanPrompt, getSecurityContext } from '../../security/prompt-scanner.js';
+import { scanPrompt } from '../../security/prompt-scanner.js';
 import { inferCapabilities } from '../../scheduling/capability-inference.js';
 import {
   sendResponseSchema,
@@ -39,6 +39,26 @@ export class TaskHandlers {
       if (task?.to.agentId) {
         this.registry.heartbeat(task.to.agentId);
       }
+
+      // S17: Validate diff for IN_REVIEW status (code/test tasks only)
+      if (params.status === 'IN_REVIEW') {
+        const caps = task?.to?.requiredCapabilities || [];
+        const isCodeTask = caps.some(c => c.includes('code') || c.includes('test'));
+
+        if (isCodeTask && (!params.diff || params.diff.length < 20)) {
+          console.warn(`[Tool] ⚠️ IN_REVIEW without valid diff (taskId: ${params.taskId}, length: ${params.diff?.length || 0})`);
+          return {
+            content: [{
+              type: 'text', text: JSON.stringify({
+                success: false,
+                error: 'Code/test tasks require a valid diff. Your diff appears empty or too short.'
+              })
+            }],
+            isError: true
+          };
+        }
+      }
+
       this.queue.updateStatus(params.taskId, params.status, {
         message: params.message,
         artifacts: params.artifacts,
@@ -117,10 +137,22 @@ export class TaskHandlers {
 
       // S17: Prompt Injection for deterministic worktree naming
       // We inject this MANDATORY instruction to prevent agent hallucinations.
+      // S18: Handle worktree collision - resume if exists, create if not
+      const branchName = `feature-${taskId}`;
+      const worktreePath = `.worktrees/${branchName}`;
       const setupInstruction = `
 ## SETUP (MANDATORY)
-Run exactly this command to start work:
-git worktree add .worktrees/feature-${taskId} -b feature-${taskId}
+Run these commands to start work:
+\`\`\`bash
+# Check if worktree already exists
+if [ -d "${worktreePath}" ]; then
+  echo "Resuming on existing worktree: ${worktreePath}"
+  cd ${worktreePath}
+else
+  git worktree add ${worktreePath} -b ${branchName}
+  cd ${worktreePath}
+fi
+\`\`\`
 `;
       const finalPrompt = params.prompt + setupInstruction;
 
@@ -151,8 +183,9 @@ git worktree add .worktrees/feature-${taskId} -b feature-${taskId}
         createdAt: Date.now(),
         context: {
           ...params.context,
-          isDelegation: true,
-          security: getSecurityContext(process.env.WORKSPACE_ROOT || process.cwd())
+          isDelegation: true
+          // NOTE: security context is derived from task.to.workspaceId when needed,
+          // not stored redundantly here. See agent-matcher.ts for workspace routing.
         },
         dependencies: params.dependencies
       });

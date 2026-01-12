@@ -1,7 +1,11 @@
 import { Router } from 'express';
 import { TaskQueue } from '../state/queue.js';
 import { eventBus as appEventBus } from '../state/events.js'; // The EventEmitter one
-import { IAgentRegistry } from '../state/registry.js';
+
+// Minimal interface for agent registry - only what we need for SSE
+interface IAgentRegistry {
+  getAll(): unknown[];
+}
 
 interface SSERoutesConfig {
   queue: TaskQueue;

@@ -75,11 +75,12 @@ describe('PollingService', () => {
   describe('waitForTask', () => {
     it('returns eviction if pending', async () => {
       mockEvictionService.popEviction.mockReturnValue({
+        controlSignal: 'EVICT',
         reason: 'Test eviction',
         action: 'RESTART'
       });
 
-      const result = await service.waitForTask('agent-1', ['code-writing'], 100);
+      const result = await service.waitForTask('agent-1', ['code-writing'], undefined, 100);
 
       expect(result).toEqual({
         controlSignal: 'EVICT',
@@ -92,7 +93,7 @@ describe('PollingService', () => {
       const task = createTask('task-1', 'QUEUED');
       mockMatchingService.findPendingTaskForAgent.mockReturnValue(task);
 
-      const result = await service.waitForTask('agent-1', ['code-writing'], 100);
+      const result = await service.waitForTask('agent-1', ['code-writing'], undefined, 100);
 
       expect(result).toBe(task);
       expect(mockRepo.updateStatus).toHaveBeenCalledWith('task-1', 'PENDING_ACK');
@@ -100,17 +101,17 @@ describe('PollingService', () => {
     });
 
     it('sets agent as waiting in persistence', async () => {
-      const promise = service.waitForTask('agent-1', ['code-writing'], 50);
+      const promise = service.waitForTask('agent-1', ['code-writing'], undefined, 50);
 
       // Let it timeout
       const result = await promise;
 
-      expect(mockPersistence.setAgentWaiting).toHaveBeenCalledWith('agent-1', ['code-writing']);
+      expect(mockPersistence.setAgentWaiting).toHaveBeenCalledWith('agent-1', ['code-writing'], undefined);
       expect(result).toBeNull();
     });
 
     it('times out and clears waiting state', async () => {
-      const result = await service.waitForTask('agent-1', ['code-writing'], 10);
+      const result = await service.waitForTask('agent-1', ['code-writing'], undefined, 10);
 
       expect(result).toBeNull();
       expect(mockPersistence.clearAgentWaiting).toHaveBeenCalledWith('agent-1');
@@ -120,7 +121,7 @@ describe('PollingService', () => {
       // Use longer timeout to let setImmediate fire
       vi.useFakeTimers();
 
-      const promise = service.waitForTask('agent-1', ['code-writing'], 100);
+      const promise = service.waitForTask('agent-1', ['code-writing'], undefined, 100);
 
       // Fast forward past setImmediate
       await vi.runAllTimersAsync();

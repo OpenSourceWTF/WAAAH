@@ -63,6 +63,14 @@ export type AgentConnectionStatus = 'OFFLINE' | 'WAITING' | 'PROCESSING';
 export const TaskPriority = z.enum(['normal', 'high', 'critical']);
 export type TaskPriority = z.infer<typeof TaskPriority>;
 
+/**
+ * Agent source - how the agent was launched.
+ * cli: Launched via waaah agent CLI wrapper
+ * ide: Launched from IDE (Cursor, Claude Desktop, etc.)
+ */
+export const AgentSource = z.enum(['cli', 'ide']);
+export type AgentSource = z.infer<typeof AgentSource>;
+
 // ===== Timing Constants =====
 
 /**

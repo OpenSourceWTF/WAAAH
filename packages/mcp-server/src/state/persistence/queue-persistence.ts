@@ -1,11 +1,11 @@
 import type { Database } from 'better-sqlite3';
-import { StandardCapability } from '@opensourcewtf/waaah-types';
+import { StandardCapability, WorkspaceContext } from '@opensourcewtf/waaah-types';
 
 /**
  * Handles direct database operations for queue state (pending ACKs, waiting agents).
  */
 export class QueuePersistence {
-  constructor(private readonly db: Database) {}
+  constructor(private readonly db: Database) { }
 
   /**
    * Get pending ACKs from database.
@@ -28,17 +28,25 @@ export class QueuePersistence {
 
   /**
    * Get waiting agents from database.
-   * Returns agent ID -> capabilities mapping.
+   * Returns agent ID -> details mapping.
    */
-  getWaitingAgents(): Map<string, StandardCapability[]> {
+  getWaitingAgents(): Map<string, { capabilities: StandardCapability[]; workspaceContext?: WorkspaceContext }> {
     const rows = this.db.prepare(
-      'SELECT id, capabilities FROM agents WHERE waitingSince IS NOT NULL'
+      'SELECT id, capabilities, workspaceContext FROM agents WHERE waitingSince IS NOT NULL'
     ).all() as any[];
 
-    const map = new Map<string, StandardCapability[]>();
+    const map = new Map<string, { capabilities: StandardCapability[]; workspaceContext?: WorkspaceContext }>();
     for (const row of rows) {
       const caps = row.capabilities ? JSON.parse(row.capabilities) : [];
-      map.set(row.id, caps);
+      let workspaceContext;
+      try {
+        if (row.workspaceContext) {
+          workspaceContext = JSON.parse(row.workspaceContext);
+        }
+      } catch (e) {
+        // Ignore invalid JSON
+      }
+      map.set(row.id, { capabilities: caps, workspaceContext });
     }
     return map;
   }
@@ -78,16 +86,31 @@ export class QueuePersistence {
    * Set agent waiting state in database.
    * Creates the agent row if it doesn't exist (for tests and edge cases).
    */
-  setAgentWaiting(agentId: string, capabilities: StandardCapability[]): void {
+  setAgentWaiting(
+    agentId: string,
+    capabilities: StandardCapability[],
+    workspaceContext?: WorkspaceContext
+  ): void {
     try {
       // Ensure agent exists (upsert pattern)
       this.db.prepare(
-        'INSERT OR IGNORE INTO agents (id, displayName, capabilities) VALUES (?, ?, ?)'
-      ).run(agentId, agentId, JSON.stringify(capabilities));
+        'INSERT OR IGNORE INTO agents (id, displayName, capabilities, workspaceContext) VALUES (?, ?, ?, ?)'
+      ).run(agentId, agentId, JSON.stringify(capabilities), workspaceContext ? JSON.stringify(workspaceContext) : null);
+
+      // Only update mutable fields
+      const updates = ['waitingSince = ?, capabilities = ?'];
+      const params: any[] = [Date.now(), JSON.stringify(capabilities)];
+
+      if (workspaceContext) {
+        updates.push('workspaceContext = ?');
+        params.push(JSON.stringify(workspaceContext));
+      }
+
+      params.push(agentId);
 
       this.db.prepare(
-        'UPDATE agents SET waitingSince = ?, capabilities = ? WHERE id = ?'
-      ).run(Date.now(), JSON.stringify(capabilities), agentId);
+        `UPDATE agents SET ${updates.join(', ')} WHERE id = ?`
+      ).run(...params);
     } catch (e: any) {
       console.error(`[QueuePersistence] Failed to set agent waiting: ${e.message}`);
     }

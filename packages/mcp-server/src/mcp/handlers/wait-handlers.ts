@@ -37,9 +37,10 @@ export class WaitHandlers {
 
       const agent = this.registry.get(params.agentId);
       const capabilities = agent?.capabilities || ['code-writing' as const];
+      const workspaceContext = agent?.workspaceContext; // Extract stored workspace info
 
       this.registry.heartbeat(params.agentId);
-      const result = await this.queue.waitForTask(params.agentId, capabilities, timeoutMs);
+      const result = await this.queue.waitForTask(params.agentId, capabilities, workspaceContext, timeoutMs);
       this.registry.heartbeat(params.agentId);
 
       if (!result) {

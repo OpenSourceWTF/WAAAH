@@ -79,6 +79,33 @@ describe('Admin Tasks Routes', () => {
 
       expect(res.ok).toBe(true);
     });
+
+    it('handles UI source and extended fields', async () => {
+      const res = await fetch(`${baseUrl}/admin/enqueue`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: 'Test with images',
+          workspaceId: 'OpenSourceWTF/WAAAH',
+          source: 'UI',
+          requiredCapabilities: ['code-writing'],
+          images: [{ dataUrl: 'data:image/png;base64,123', mimeType: 'image/png', name: 'test.png' }]
+        })
+      });
+
+      expect(res.ok).toBe(true);
+      const { taskId } = await res.json();
+
+      // Verify task details via GET
+      const getRes = await fetch(`${baseUrl}/admin/tasks/${taskId}`);
+      const task = await getRes.json();
+
+      expect(task.from.id).toBe('dashboard');
+      expect(task.from.name).toBe('Dashboard UI');
+      expect(task.to.requiredCapabilities).toContain('code-writing');
+      expect(task.images).toHaveLength(1);
+      expect(task.images[0].name).toBe('test.png');
+    });
   });
 
   describe('GET /admin/tasks', () => {

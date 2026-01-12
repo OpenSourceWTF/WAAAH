@@ -38,6 +38,7 @@
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
+    "@opensourcewtf/waaah-types": "workspace:*",
     "@slack/bolt": "^3.18.0",
     "axios": "^1.6.2",
     "discord.js": "^14.14.1",

@@ -74,6 +74,78 @@ describe('TaskHandlers', () => {
       const result = await handlers.send_response({});
       expect(result.isError).toBe(true);
     });
+
+    it('rejects IN_REVIEW without diff for code-writing tasks', async () => {
+      const taskId = `task-${Date.now()}`;
+      ctx.queue.enqueue({
+        id: taskId,
+        command: 'execute_prompt',
+        prompt: 'Test',
+        from: { type: 'user', id: 'u1', name: 'User' },
+        to: { requiredCapabilities: ['code-writing'] },
+        priority: 'normal',
+        status: 'ASSIGNED',
+        createdAt: Date.now()
+      });
+
+      const result = await handlers.send_response({
+        taskId,
+        status: 'IN_REVIEW',
+        message: 'Ready for review'
+        // No diff provided
+      });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('require a valid diff');
+    });
+
+    it('rejects IN_REVIEW with too-short diff for test-writing tasks', async () => {
+      const taskId = `task-${Date.now()}`;
+      ctx.queue.enqueue({
+        id: taskId,
+        command: 'execute_prompt',
+        prompt: 'Test',
+        from: { type: 'user', id: 'u1', name: 'User' },
+        to: { requiredCapabilities: ['test-writing'] },
+        priority: 'normal',
+        status: 'ASSIGNED',
+        createdAt: Date.now()
+      });
+
+      const result = await handlers.send_response({
+        taskId,
+        status: 'IN_REVIEW',
+        message: 'Ready for review',
+        diff: 'short' // Less than 20 chars
+      });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('too short');
+    });
+
+    it('accepts IN_REVIEW without diff for non-code tasks', async () => {
+      const taskId = `task-${Date.now()}`;
+      ctx.queue.enqueue({
+        id: taskId,
+        command: 'execute_prompt',
+        prompt: 'Test',
+        from: { type: 'user', id: 'u1', name: 'User' },
+        to: { requiredCapabilities: ['doc-writing'] }, // Non-code capability
+        priority: 'normal',
+        status: 'ASSIGNED',
+        createdAt: Date.now()
+      });
+
+      const result = await handlers.send_response({
+        taskId,
+        status: 'IN_REVIEW',
+        message: 'Ready for review'
+        // No diff required for doc-writing
+      });
+
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0].text).toContain('Response recorded');
+    });
   });
 
   describe('ack_task', () => {
@@ -352,6 +424,19 @@ describe('AgentHandlers', () => {
 
       const data = JSON.parse(result.content[0].text);
       expect(data.registered).toBe(true);
+    });
+
+    it('rejects agent without workspace due to schema validation', async () => {
+      const result = await handlers.register_agent({
+        agentId: `bad-agent-${Date.now()}`,
+        capabilities: ['code-writing']
+        // missing workspaceContext
+      });
+
+      expect(result.isError).toBe(true);
+      // Check for Zod error details
+      expect(result.content[0].text).toContain('Required');
+      expect(result.content[0].text).toContain('workspaceContext');
     });
 
     it('returns error for invalid input', async () => {

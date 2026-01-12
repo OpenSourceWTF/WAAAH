@@ -14,9 +14,18 @@
  * @module state/agent-matcher
  */
 
-import type { Task, TaskStatus, StandardCapability, AgentIdentity } from '@opensourcewtf/waaah-types';
+import type { Task, TaskStatus, StandardCapability, AgentIdentity, WorkspaceContext } from '@opensourcewtf/waaah-types';
 import type { TypedEventEmitter } from './queue-events.js';
 import { areDependenciesMet } from './services/task-lifecycle-service.js';
+import * as fs from 'fs';
+
+const DEBUG_LOG_PATH = '/home/dtai/.gemini/antigravity/brain/aa449a4d-0305-4535-b102-cf765aa4cee1/debug_scheduler.log';
+
+function logDebug(message: string) {
+  try {
+    fs.appendFileSync(DEBUG_LOG_PATH, `[${new Date().toISOString()}] ${message}\n`);
+  } catch (e) { /* ignore */ }
+}
 
 // ===== Configuration =====
 
@@ -39,12 +48,7 @@ export const SCHEDULER_CONFIG = {
 export interface WaitingAgent {
   agentId: string;
   capabilities: StandardCapability[];
-  workspaceContext?: {
-    type: 'local' | 'github';
-    repoId: string;
-    branch?: string;
-    path?: string;
-  };
+  workspaceContext?: WorkspaceContext;
   waitingSince: number;
 }
 
@@ -93,19 +97,46 @@ export interface AgentScore {
 
 /**
  * Calculate workspace affinity score.
- * Returns 1.0 for exact match, 0.5 if no workspace specified (neutral), 0.0 for mismatch.
+ * Returns 1.0 for exact match, 0.5 if no workspace specified (neutral).
+ * Returns 0.0 AND eligible:false for mismatch (HARD REJECT).
+ * 
+ * SINGLE SOURCE OF TRUTH: task.to.workspaceId (repoId like "OpenSourceWTF/WAAAH")
+ * Matches against agent's workspaceContext.repoId
+ * 
+ * NOTE: context.security.workspaceRoot was removed in Session 043 schema consolidation.
+ * All workspace routing now flows through task.to.workspaceId only.
  */
-function calculateWorkspaceScore(task: Task, agent: WaitingAgent): number {
-  const taskWorkspace = task.to.workspaceId;
-  const agentWorkspace = agent.workspaceContext?.repoId;
+function calculateWorkspaceScore(task: Task, agent: WaitingAgent): { score: number; eligible: boolean } {
+  // Single source: task.to.workspaceId
+  const taskWorkspaceId = task.to?.workspaceId;
 
-  if (!taskWorkspace) {
-    return 0.5; // No workspace requirement - neutral
+  // Agent workspace
+  const agentRepoId = agent.workspaceContext?.repoId;
+
+  // If task has no workspace requirement, neutral
+  if (!taskWorkspaceId) {
+    logDebug(`NEUTRAL: Task ${task.id} (No WS requirement) vs Agent ${agent.agentId}`);
+    return { score: 0.5, eligible: true };
   }
-  if (!agentWorkspace) {
-    return 0.5; // Agent has no workspace - neutral
+
+  // If agent has no workspace context, they CANNOT work on workspace-specific tasks.
+  // This enforces strict affinity: Bound tasks require bound agents.
+  if (!agentRepoId) {
+    logDebug(`HARD REJECT: Task ${task.id} (WS=${taskWorkspaceId}) vs Agent ${agent.agentId} (No Context)`);
+    return { score: 0.0, eligible: false }; // HARD REJECT
   }
-  return taskWorkspace === agentWorkspace ? 1.0 : 0.0;
+
+  // Exact repoId match required
+  if (taskWorkspaceId === agentRepoId) {
+    logDebug(`MATCH: Task ${task.id} (WS=${taskWorkspaceId}) vs Agent ${agent.agentId} (WS=${agentRepoId})`);
+    return { score: 1.0, eligible: true };
+  }
+
+  // Debug log for production diagnostics of affinity mismatches
+  logDebug(`HARD REJECT: Task ${task.id} (WS=${taskWorkspaceId}) vs Agent ${agent.agentId} (WS=${agentRepoId})`);
+
+  // HARD REJECT: workspace specified but no match
+  return { score: 0.0, eligible: false };
 }
 
 /**
@@ -149,9 +180,12 @@ function calculateHintScore(task: Task, agent: WaitingAgent): number {
  * Score an agent against a task.
  */
 export function scoreAgent(task: Task, agent: WaitingAgent): AgentScore {
-  const workspaceScore = calculateWorkspaceScore(task, agent);
-  const { score: capabilityScore, eligible } = calculateCapabilityScore(task, agent);
+  const { score: workspaceScore, eligible: workspaceEligible } = calculateWorkspaceScore(task, agent);
+  const { score: capabilityScore, eligible: capabilityEligible } = calculateCapabilityScore(task, agent);
   const hintScore = calculateHintScore(task, agent);
+
+  // BOTH workspace AND capabilities must be eligible
+  const eligible = workspaceEligible && capabilityEligible;
 
   // Weighted combination
   const { weights } = SCHEDULER_CONFIG;

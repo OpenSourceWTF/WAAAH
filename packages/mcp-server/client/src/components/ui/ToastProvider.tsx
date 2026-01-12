@@ -4,9 +4,8 @@
  * Provides toast notifications for task events via EventBus/Socket.io.
  * Subscribes to task:created and error events to show contextual toasts.
  */
-import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
-
-// import { getSocket, connectSocket } from '../../lib/socket'; // Switch to SSE
+import { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import type { ReactNode } from 'react';
 
 // Toast types with corresponding colors
 type ToastType = 'success' | 'warning' | 'error' | 'info';
@@ -24,6 +23,8 @@ interface ToastContextValue {
   removeToast: (id: string) => void;
   config: ToastConfig;
   setConfig: (config: Partial<ToastConfig>) => void;
+  // Alias for compatibility
+  showToast: (message: string, type?: ToastType) => void;
 }
 
 interface ToastConfig {
@@ -194,7 +195,7 @@ export function ToastProvider({ children }: ToastProviderProps) {
       if (!config.enabledEvents.taskCreated) return;
       try {
         const task = JSON.parse(event.data);
-        addToast(`Task queued: ${task.id}`, 'success');
+        addToast(`Task queued: ${task.id || task.taskId}`, 'success');
       } catch (e) {
         console.error('Failed to parse task:created', e);
       }
@@ -214,8 +215,7 @@ export function ToastProvider({ children }: ToastProviderProps) {
     });
 
     // Handle connection errors
-    eventSource.onerror = (err) => {
-      // console.error('SSE Error:', err);
+    eventSource.onerror = () => {
       // Don't toast on connection error to avoid spam, just logging
     };
 
@@ -232,6 +232,7 @@ export function ToastProvider({ children }: ToastProviderProps) {
     removeToast,
     config,
     setConfig,
+    showToast: addToast, // Alias for compatibility
   };
 
   return (

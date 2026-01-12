@@ -70,6 +70,32 @@ Process response → update spec → INTERVIEW
 Generate spec.md using TEMPLATE. Save to `.waaah/specs/NNN-slug/spec.md`.
 ⏸️ `notify_user` spec summary → await approval
 
+### CAPABILITY INFERENCE
+
+**Standard Capabilities:**
+- `spec-writing`: Planning, specifications, technical design
+- `code-writing`: Code development, implementation
+- `test-writing`: Testing, QA, verification
+- `doc-writing`: Documentation, technical writing
+- `code-doctor`: Read-only analysis, linting, quality checks (NO code changes)
+
+**Inference Rules:**
+1. **Implementation Tasks:**
+   - ALWAYS include `code-writing`
+   - Include `test-writing` if unit tests are involved
+   - **NEVER** include `code-doctor` (implies read-only)
+
+2. **Verification Tasks:**
+   - ALWAYS include `test-writing`
+   - Include `code-writing` if creating new E2E test files
+   - **NEVER** include `code-doctor`
+
+3. **Documentation Tasks:**
+   - ALWAYS include `doc-writing`
+
+4. **Analysis/Audit Tasks:**
+   - ONLY then include `code-doctor`
+
 ### TASKS
 Generate two types of tasks:
 
@@ -114,8 +140,12 @@ On confirm:
 # Infer workspace from current directory (repoId format: "Owner/Repo")
 workspaceId = inferWorkspaceFromGitRemote()
 
-t1_id = assign_task({ prompt, verify, workspaceId })
-v1_id = assign_task({ prompt, dependencies: [t1_id], verify, workspaceId })
+# Infer capabilities based on task type (Implementation vs Verify)
+t1_caps = inferCapabilities(t1)
+v1_caps = inferCapabilities(v1)
+
+t1_id = assign_task({ prompt, capabilities: t1_caps, verify, workspaceId })
+v1_id = assign_task({ prompt, dependencies: [t1_id], capabilities: v1_caps, verify, workspaceId })
 ```
 
 Report: `✅ Spec saved. [N] implementation + [M] verification tasks queued in workspace [workspaceId].`

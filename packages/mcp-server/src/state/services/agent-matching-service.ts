@@ -1,11 +1,12 @@
 import {
   Task,
   TaskStatus,
-  StandardCapability
+  StandardCapability,
+  WorkspaceContext
 } from '@opensourcewtf/waaah-types';
 import { QueuePersistence } from '../persistence/queue-persistence.js';
 import { ITaskRepository } from '../persistence/task-repository.js';
-import { isTaskForAgent, findBestAgent, WaitingAgent } from '../agent-matcher.js';
+import { isTaskForAgent, findBestAgent, WaitingAgent, scoreAgent } from '../agent-matcher.js';
 import { areDependenciesMet } from './task-lifecycle-service.js';
 
 export class AgentMatchingService {
@@ -19,7 +20,11 @@ export class AgentMatchingService {
    * Skips tasks with unsatisfied dependencies.
    * Prioritizes tasks that were previously assigned to this agent (affinity on feedback).
    */
-  findPendingTaskForAgent(agentId: string, capabilities: StandardCapability[]): Task | undefined {
+  findPendingTaskForAgent(
+    agentId: string,
+    capabilities: StandardCapability[],
+    workspaceContext?: WorkspaceContext
+  ): Task | undefined {
     const candidates = this.repo.getByStatuses(['QUEUED', 'APPROVED_QUEUED']);
 
     // Filter out tasks with unsatisfied dependencies
@@ -40,11 +45,19 @@ export class AgentMatchingService {
       return a.createdAt - b.createdAt;
     });
 
+    // Create temporary agent object for scoring
+    const agent: WaitingAgent = {
+      agentId,
+      capabilities,
+      workspaceContext,
+      waitingSince: Date.now()
+    };
+
+    // Find first task this agent is eligible for (using shared scorer)
     for (const task of eligibleCandidates) {
-      if (task.to.agentId === agentId) return task;
-      // Check if agent has required capabilities (exact match)
-      const required = task.to.requiredCapabilities || [];
-      if (required.length === 0 || required.every(cap => capabilities.includes(cap))) {
+      // Use the centralized scorer which handles capabilities AND workspace affinity
+      const score = scoreAgent(task, agent);
+      if (score.eligible) {
         return task;
       }
     }
@@ -62,9 +75,10 @@ export class AgentMatchingService {
     if (waitingAgentsMap.size === 0) return null;
 
     // Convert to WaitingAgent[] format for findBestAgent
-    const waitingAgents: WaitingAgent[] = Array.from(waitingAgentsMap.entries()).map(([agentId, capabilities]) => ({
+    const waitingAgents: WaitingAgent[] = Array.from(waitingAgentsMap.entries()).map(([agentId, data]) => ({
       agentId,
-      capabilities: capabilities || [],
+      capabilities: data.capabilities || [],
+      workspaceContext: data.workspaceContext,
       waitingSince: Date.now() // TODO: Track actual wait start time in persistence
     }));
 

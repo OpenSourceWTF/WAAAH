@@ -96,7 +96,7 @@ describe('EvictionService', () => {
 
       const eviction = service.popEviction('agent-6');
 
-      expect(eviction).toEqual({ reason: 'Pop me', action: 'RESTART' });
+      expect(eviction).toEqual({ controlSignal: 'EVICT', reason: 'Pop me', action: 'RESTART' });
 
       // Eviction should be cleared
       const agent = db.prepare('SELECT * FROM agents WHERE id = ?').get('agent-6') as any;

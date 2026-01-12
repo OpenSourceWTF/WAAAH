@@ -103,7 +103,8 @@ describe('Server E2E', () => {
               taskId,
               status: 'IN_REVIEW',
               message: 'E2E Test: Implementation complete',
-              artifacts: ['file1.ts', 'file2.ts']
+              artifacts: ['file1.ts', 'file2.ts'],
+              diff: 'diff --git a/file1.ts b/file1.ts\n+// E2E test diff content'
             }
           },
           id: 2

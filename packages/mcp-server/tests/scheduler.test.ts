@@ -156,7 +156,10 @@ describe('HybridScheduler', () => {
   describe('assignPendingTasks', () => {
     it('assigns QUEUED tasks to waiting agents', () => {
       const task = createTask('task-1', 'QUEUED');
-      const waitingAgents = new Map([['agent-1', ['code-writing']]]);
+      const waitingAgents = new Map([['agent-1', {
+        capabilities: ['code-writing'],
+        workspaceContext: { type: 'github', repoId: 'test-repo' }
+      }]]);
 
       (mockQueue.getByStatuses as any).mockReturnValue([task]);
       (mockQueue.getWaitingAgents as any).mockReturnValue(waitingAgents);
@@ -185,7 +188,10 @@ describe('HybridScheduler', () => {
       const highTask = createTask('high', 'QUEUED', { priority: 'high' });
 
       (mockQueue.getByStatuses as any).mockReturnValue([normalTask, criticalTask, highTask]);
-      (mockQueue.getWaitingAgents as any).mockReturnValue(new Map([['agent-1', []]]));
+      (mockQueue.getWaitingAgents as any).mockReturnValue(new Map([['agent-1', {
+        capabilities: [],
+        workspaceContext: { type: 'github', repoId: 'test-repo' }
+      }]]));
       (mockQueue.findAndReserveAgent as any).mockReturnValue('agent-1');
 
       scheduler.runCycle();

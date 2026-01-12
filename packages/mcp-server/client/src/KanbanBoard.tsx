@@ -21,6 +21,7 @@ interface KanbanBoardProps {
   onUnblockTask?: (taskId: string, reason: string) => void;
   onViewHistory?: () => void;
   onTaskClick?: (task: Task) => void;
+  onUpdateTask?: (taskId: string, updates: Record<string, any>) => Promise<void>;
   // Infinite scroll props
   onLoadMoreCompleted?: () => void;
   onLoadMoreCancelled?: () => void;
@@ -61,7 +62,8 @@ export const KanbanBoard = React.memo(function KanbanBoard({
   onLoadMoreCancelled,
   hasMoreCompleted,
   hasMoreCancelled,
-  loadingMore
+  loadingMore,
+  onUpdateTask
 }: KanbanBoardProps) {
   // Expanded card state
   const [expandedTask, setExpandedTask] = useState<Task | null>(null);
@@ -159,6 +161,7 @@ export const KanbanBoard = React.memo(function KanbanBoard({
           onCancelTask={onCancelTask}
           onAddReviewComment={onAddReviewComment}
           onUnblockTask={onUnblockTask}
+          onUpdateTask={onUpdateTask}
         />
       )}
 
@@ -221,8 +224,8 @@ export const KanbanBoard = React.memo(function KanbanBoard({
                         {/* Source badge */}
                         {task.source && (
                           <Badge className={`text-[10px] px-1.5 py-0.5 ${task.source === 'UI' ? 'bg-blue-500 text-white border border-blue-700' :
-                              task.source === 'CLI' ? 'bg-green-500 text-white border border-green-700' :
-                                'bg-purple-500 text-white border border-purple-700'
+                            task.source === 'CLI' ? 'bg-green-500 text-white border border-green-700' :
+                              'bg-purple-500 text-white border border-purple-700'
                             }`}>{task.source}</Badge>
                         )}
                       </div>

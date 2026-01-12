@@ -58,9 +58,9 @@ export class TaskRepository implements ITaskRepository {
   insert(task: Task): void {
     const stmt = this.database.prepare(`
       INSERT INTO tasks (id, status, prompt, title, priority, fromAgentId, fromAgentName, toAgentId, toRequiredCapabilities, toWorkspaceId,
-        assignedTo, context, response, dependencies, history, createdAt, completedAt)
+        assignedTo, context, workspaceContext, response, dependencies, history, images, createdAt, completedAt)
       VALUES (@id, @status, @prompt, @title, @priority, @fromAgentId, @fromAgentName, @toAgentId, @toRequiredCapabilities, @toWorkspaceId,
-        @assignedTo, @context, @response, @dependencies, @history, @createdAt, @completedAt)
+        @assignedTo, @context, @workspaceContext, @response, @dependencies, @history, @images, @createdAt, @completedAt)
     `);
     stmt.run({
       id: task.id,
@@ -75,9 +75,11 @@ export class TaskRepository implements ITaskRepository {
       toWorkspaceId: task.to?.workspaceId || null,
       assignedTo: task.assignedTo || null,
       context: task.context ? JSON.stringify(task.context) : null,
+      workspaceContext: task.workspaceContext ? JSON.stringify(task.workspaceContext) : null,
       response: task.response ? JSON.stringify(task.response) : null,
       dependencies: task.dependencies ? JSON.stringify(task.dependencies) : '[]',
       history: task.history ? JSON.stringify(task.history) : '[]',
+      images: task.images ? JSON.stringify(task.images) : null,
       createdAt: task.createdAt || Date.now(),
       completedAt: task.completedAt || null
     });
@@ -91,24 +93,34 @@ export class TaskRepository implements ITaskRepository {
     const stmt = this.database.prepare(`
       UPDATE tasks SET 
         status = @status, 
+        prompt = @prompt,
         title = @title,
+        priority = @priority,
         assignedTo = @assignedTo,
+        toRequiredCapabilities = @toRequiredCapabilities,
         context = @context, 
+        workspaceContext = @workspaceContext,
         response = @response, 
         dependencies = @dependencies, 
         history = @history,
+        images = @images,
         completedAt = @completedAt
       WHERE id = @id
     `);
     stmt.run({
       id: task.id,
       status: task.status,
+      prompt: task.prompt,
       title: task.title || null,
+      priority: task.priority || 'normal',
       assignedTo: task.assignedTo || null,
+      toRequiredCapabilities: task.to?.requiredCapabilities ? JSON.stringify(task.to.requiredCapabilities) : null,
       context: task.context ? JSON.stringify(task.context) : null,
+      workspaceContext: task.workspaceContext ? JSON.stringify(task.workspaceContext) : null,
       response: task.response ? JSON.stringify(task.response) : null,
       dependencies: task.dependencies ? JSON.stringify(task.dependencies) : '[]',
       history: task.history ? JSON.stringify(task.history) : '[]',
+      images: task.images ? JSON.stringify(task.images) : null,
       completedAt: task.completedAt || null
     });
 
@@ -295,10 +307,12 @@ export class TaskRepository implements ITaskRepository {
       },
       assignedTo: row.assignedTo,
       context: row.context ? JSON.parse(row.context) : undefined,
+      workspaceContext: row.workspaceContext ? JSON.parse(row.workspaceContext) : undefined,
       response: row.response ? JSON.parse(row.response) : undefined,
       messages: row.messages ? JSON.parse(row.messages) : [],
       dependencies: row.dependencies ? JSON.parse(row.dependencies) : [],
       history: row.history ? JSON.parse(row.history) : [],
+      images: row.images ? JSON.parse(row.images) : [],
       createdAt: row.createdAt,
       completedAt: row.completedAt
     };
