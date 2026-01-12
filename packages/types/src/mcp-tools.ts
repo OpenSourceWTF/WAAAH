@@ -28,7 +28,8 @@ export const MCP_TOOL_DEFINITIONS = [
             path: { type: 'string', description: 'Local filesystem path' }
           },
           required: ['type', 'repoId']
-        }
+        },
+        source: { type: 'string', enum: ['CLI', 'IDE'], description: 'Source of the agent: CLI (waaah-agent wrapper) or IDE (Cursor/Claude/etc)' }
       },
       required: ['agentId', 'role', 'capabilities', 'workspaceContext']
     }
@@ -59,6 +60,7 @@ export const MCP_TOOL_DEFINITIONS = [
         },
         message: { type: 'string', description: 'A textual response or summary of the result' },
         artifacts: { type: 'array', items: { type: 'string' }, description: 'List of file paths or artifact IDs generated' },
+        diff: { type: 'string', description: 'Raw git diff content for code review (REQUIRED for code/test tasks submitting to IN_REVIEW)' },
         blockedReason: { type: 'string', description: 'Reason for being blocked, required if status is BLOCKED' }
       },
       required: ['taskId', 'status', 'message']
@@ -70,12 +72,16 @@ export const MCP_TOOL_DEFINITIONS = [
     inputSchema: {
       type: 'object',
       properties: {
-        targetAgentId: { type: 'string', description: 'The ID of the agent to assign the task to' },
-        sourceAgentId: { type: 'string', description: 'The ID of the agent assigning the task' },
+        targetAgentId: { type: 'string', description: 'HINT: Preferred agent ID (adds score, not required)' },
+        sourceAgentId: { type: 'string', description: 'The ID of the agent assigning the task (defaults to Da Boss)' },
         prompt: { type: 'string', description: 'The task description/prompt' },
         workspaceId: { type: 'string', description: 'REQUIRED: Repository ID for task routing (e.g., Owner/Repo)' },
+        requiredCapabilities: { type: 'array', items: { type: 'string' }, description: 'Capabilities required to execute this task' },
         context: { type: 'object', description: 'Additional context data for the task' },
-        priority: { type: 'string', enum: ['normal', 'high', 'critical'], description: 'Task priority' }
+        spec: { type: 'string', description: 'Raw text of specification document (e.g., spec.md contents)' },
+        tasks: { type: 'string', description: 'Raw text of task checklist (e.g., tasks.md contents)' },
+        priority: { type: 'string', enum: ['normal', 'high', 'critical'], description: 'Task priority' },
+        dependencies: { type: 'array', items: { type: 'string' }, description: 'List of Task IDs that must complete before this task starts' }
       },
       required: ['prompt', 'workspaceId']
     }
@@ -86,7 +92,7 @@ export const MCP_TOOL_DEFINITIONS = [
     inputSchema: {
       type: 'object',
       properties: {
-        role: { type: 'string', description: 'Filter agents by role' }
+        capability: { type: 'string', description: 'Filter agents by capability' }
       }
     }
   },
@@ -190,6 +196,76 @@ export const MCP_TOOL_DEFINITIONS = [
         percentage: { type: 'number', description: 'Optional completion percentage (0-100)' }
       },
       required: ['taskId', 'agentId', 'message']
+    }
+  },
+  {
+    name: 'scaffold_plan',
+    description: 'Create an implementation plan scaffold for a task',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        taskId: { type: 'string', description: 'The Task ID context for the plan' }
+      },
+      required: ['taskId']
+    }
+  },
+  {
+    name: 'submit_review',
+    description: 'Submit task for review with commit message',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        taskId: { type: 'string', description: 'The Task ID being submitted' },
+        message: { type: 'string', description: 'Commit message and review description' },
+        runTests: { type: 'boolean', description: 'Whether to enforce test execution (default: true)' }
+      },
+      required: ['taskId', 'message']
+    }
+  },
+  {
+    name: 'broadcast_system_prompt',
+    description: 'Send system-level prompts to agents (workflow updates, config changes, etc.)',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        targetAgentId: { type: 'string', description: 'Specific agent ID to target' },
+        targetCapability: { type: 'string', description: 'Target agents with this capability' },
+        broadcast: { type: 'boolean', description: 'If true, send to ALL agents' },
+        promptType: {
+          type: 'string',
+          enum: ['WORKFLOW_UPDATE', 'EVICTION_NOTICE', 'CONFIG_UPDATE', 'SYSTEM_MESSAGE'],
+          description: 'Type of system prompt'
+        },
+        message: { type: 'string', description: 'Human-readable message' },
+        payload: { type: 'object', description: 'Optional payload data' },
+        priority: { type: 'string', enum: ['normal', 'high', 'critical'], description: 'Urgency level' }
+      },
+      required: ['promptType', 'message']
+    }
+  },
+  {
+    name: 'get_review_comments',
+    description: 'Get unresolved review comments for a task',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        taskId: { type: 'string', description: 'ID of the task to get review comments for' },
+        unresolvedOnly: { type: 'boolean', description: 'Only return unresolved comments (default: true)' }
+      },
+      required: ['taskId']
+    }
+  },
+  {
+    name: 'resolve_review_comment',
+    description: 'Acknowledge and resolve review feedback',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        taskId: { type: 'string', description: 'ID of the task' },
+        commentId: { type: 'string', description: 'ID of the review comment to resolve' },
+        response: { type: 'string', description: 'Optional response explaining the fix' }
+      },
+      required: ['taskId', 'commentId']
     }
   }
 ] as const;
