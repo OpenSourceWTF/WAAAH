@@ -7,7 +7,8 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useTaskData, useAgentData } from './hooks';
 import { AgentSidebar } from './components/dashboard/AgentSidebar';
 import { apiFetch } from './lib/api';
-import { TaskCreationForm, TaskFormData } from './components/TaskCreationForm';
+import { TaskCreationForm } from './components/TaskCreationForm';
+import type { TaskFormData } from './components/TaskCreationForm';
 
 
 
@@ -168,10 +169,10 @@ export function Dashboard() {
       // Prepare images for API (if any)
       const images = data.images.length > 0
         ? data.images.map(img => ({
-            dataUrl: img.dataUrl,
-            mimeType: img.file.type,
-            name: img.file.name
-          }))
+          dataUrl: img.dataUrl,
+          mimeType: img.file.type,
+          name: img.file.name
+        }))
         : undefined;
 
       const res = await apiFetch('/admin/enqueue', {
