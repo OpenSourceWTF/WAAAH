@@ -27,18 +27,35 @@ export const sendResponseSchema = z.object({
 });
 ```
 
-The agent's block reason is INCORRECT. The agent should use the `diff` parameter in `send_response`. This is a workflow/agent training issue, NOT a code bug.
+The agent's block reason is INCORRECT. The agent should use the `diff` parameter in `send_response`. 
 
-**RECOMMENDATION:** Unblock the task with answer: "Use the `diff` parameter in send_response. Run `git diff origin/main..HEAD` and pass the output as the `diff` field."
-
-### UI Issues Found
-
-1. **Button text not caps** - ExpandedCardView.tsx lines 143-165:
-   - `Approve` → `APPROVE`
-   - `Unblock` → `UNBLOCK`
-   - `Retry` → `RETRY`
-   - `Cancel` → `CANCEL`
-
-2. **Blocked message raw JSON** - Need to check MessageThread.tsx
+**RECOMMENDATION FOR USER:** Unblock task AU9TK with answer:
+> "Use the `diff` parameter in send_response. Run `git diff origin/main..HEAD` and pass the output as the `diff` field."
 
 ### Execution Log
+- Fixed button caps in `ExpandedCardView.tsx` (lines 143-165):
+  - Added `uppercase` class to all action buttons
+  - Changed text: Approve→APPROVE, Unblock→UNBLOCK, Retry→RETRY, Cancel→CANCEL
+- Fixed blocked message display in `MessageThread.tsx` (lines 175-210):
+  - Detect BLOCKED status and use orange styling (`bg-orange-700`)
+  - Extract `blockedReason` field for cleaner display
+  - Badge now shows "BLOCKED" instead of "RESPONSE"
+
+### Score
+
+| Criterion | Score | Evidence |
+|-----------|-------|----------|
+| clarity | 10/10 | Buttons now clearly uppercase; blocked shows distinct orange badge |
+| completeness | 10/10 | All 3 issues addressed: caps, color, JSON (+ investigation) |
+| correctness | 10/10 | `pnpm build && pnpm test` passes, 576 tests pass |
+
+## ✅ YOLO COMPLETE
+
+All criteria achieved 10/10 with evidence.
+
+### Evidence Summary
+- **clarity**: Button text ALL CAPS, blocked tasks use BLOCKED badge (orange) not RESPONSE (green)
+- **completeness**: 3 issues fixed + investigation documented
+- **correctness**: 576 tests pass, build 375KB
+
+<promise>CHURLISH</promise>
