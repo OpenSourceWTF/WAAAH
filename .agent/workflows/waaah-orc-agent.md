@@ -29,6 +29,17 @@ STARTUP → WAIT ──→ ACK ──→ PLAN ──→ BUILD ──→ SUBMIT
 
 > ⚠️ **HARD STOP**: If you find yourself thinking "this is simple, I can skip review" - STOP. That thought is the #1 cause of workflow violations. ALWAYS use IN_REVIEW.
 
+## MUST NOT Rules (Systematic Failure)
+
+> [!CAUTION]
+> Violating these rules is an AUTOMATIC FAILURE.
+
+1. **MUST NOT** skip IN_REVIEW step (Anti-Shortcut Rule #1)
+2. **MUST NOT** assume work is complete without verification
+3. **MUST NOT** hardcode paths (use `workspaceContext`)
+4. **MUST NOT** commit to main directly (use feature branches)
+5. **MUST NOT** ignore "unreadComments" in `update_progress`
+
 ## Anti-Patterns (NEVER DO)
 
 | ❌ Wrong | ✅ Correct |
@@ -41,22 +52,6 @@ STARTUP → WAIT ──→ ACK ──→ PLAN ──→ BUILD ──→ SUBMIT
 | "No changes needed" → COMPLETED | Document findings → IN_REVIEW → approval → COMPLETED |
 | Push directly to main | ALWAYS push to feature branch first |
 | `git push origin main` | Only after IN_REVIEW → APPROVED → MERGE |
-
-### ⛔ Common Rationalizations That Lead to Violations
-
-**These are NEVER valid excuses to skip IN_REVIEW:**
-- "It's a simple change" → IN_REVIEW anyway
-- "It's just a one-liner" → IN_REVIEW anyway  
-- "Tests pass, so it's fine" → IN_REVIEW anyway
-- "Feature already exists" → IN_REVIEW with proof
-- "I'm confident in this" → IN_REVIEW anyway
-- "Time pressure" → IN_REVIEW anyway
-
-**⚠️ NO-OP TASKS:** Even if work is already complete or no changes are needed:
-1. Document what you found/verified
-2. Commit any documentation or cleanup
-3. Submit to IN_REVIEW with your findings
-4. Wait for approval before COMPLETED
 
 ## STATUS → ACTION
 
@@ -176,13 +171,17 @@ pnpm typecheck && pnpm lint
 
 → SUBMIT
 
-## SUBMIT
+## SUBMIT (Anti-Shortcut Gate)
 
-### Pre-Submit Checklist (ALL MUST BE TRUE)
-- [ ] Working in feature branch (NOT main)
-- [ ] Changes committed to feature branch
-- [ ] Pushed to origin/feature-branch (NOT origin/main)
-- [ ] Tests passing
+> [!CAUTION]
+> **PRE_SUBMIT CHECKLIST (MANDATORY)**
+
+- [ ] Working in feature branch (NOT main)?
+- [ ] Changes committed to feature branch?
+- [ ] Tests passing locally?
+- [ ] Did I verify matching criteria?
+
+If ANY answer is NO → Go back to BUILD.
 
 ```bash
 # Verify you're on feature branch, NOT main
@@ -220,11 +219,14 @@ git branch -D $BRANCH && git push origin --delete $BRANCH
 
 ## SMOKE (post-merge verification)
 
-### Pre-COMPLETED Checklist (ALL MUST BE TRUE)
-- [ ] Task went through IN_REVIEW (not skipped)
-- [ ] Received APPROVED status
-- [ ] Changes merged to main (not just pushed to feature branch)
-- [ ] `git log origin/main --oneline | head -1` shows your commit
+> [!CAUTION]
+> **PRE_COMPLETE CHECKLIST (MANDATORY)**
+
+- [ ] Task went through IN_REVIEW (not skipped)?
+- [ ] Received APPROVED status?
+- [ ] Changes merged to main?
+- [ ] `git log origin/main --oneline | head -1` shows your commit?
+- [ ] Did you verify dependencies still work?
 
 ```
 0. IF ctx.dependencies → verify EACH dependency still works
