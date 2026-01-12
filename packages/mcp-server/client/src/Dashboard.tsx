@@ -18,8 +18,8 @@ export function Dashboard() {
   // Search state for server-side filtering
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Task creation form visibility
-  const [showTaskForm, setShowTaskForm] = useState(false);
+  // View mode state
+  const [viewMode, setViewMode] = useState<'KANBAN' | 'CREATE'>('KANBAN');
 
   // Use custom hooks for data fetching with deduplication (prevents animation interruption)
   const {
@@ -194,7 +194,7 @@ export function Dashboard() {
       }
 
       console.log('Task created successfully');
-      setShowTaskForm(false);
+      setViewMode('KANBAN');
       fetchData(); // Refresh to show new task
     } catch (error) {
       console.error("Failed to create task", error);
@@ -277,13 +277,20 @@ export function Dashboard() {
 
         <div className="flex items-center gap-4">
           {/* New Task Button */}
-          <Button
-            onClick={() => setShowTaskForm(true)}
-            className="gap-2 bg-green-600 hover:bg-green-700 text-white border border-green-800"
-          >
-            <Plus className="h-4 w-4" />
-            New Task
-          </Button>
+          <div className="mr-4">
+            <Button
+              onClick={() => setViewMode(viewMode === 'KANBAN' ? 'CREATE' : 'KANBAN')}
+              variant={viewMode === 'CREATE' ? "destructive" : "default"}
+              className={viewMode === 'CREATE' ? "" : "bg-primary text-primary-foreground hover:bg-primary/90"}
+            >
+              {viewMode === 'CREATE' ? "Cancel" : (
+                <>
+                  <Plus className="mr-2 h-4 w-4" />
+                  New Task
+                </>
+              )}
+            </Button>
+          </div>
           <div className="flex bg-primary/10 border border-primary/20 rounded-md p-1 gap-1">
             <Button variant="ghost" size="icon" className={`h-8 w-8 ${theme === 'LIGHT' ? 'bg-primary text-primary-foreground' : 'text-primary'}`} onClick={() => setTheme('LIGHT')} title="Light Mode"><Sun className="h-4 w-4" /></Button>
             <Button variant="ghost" size="icon" className={`h-8 w-8 ${theme === 'DARK' ? 'bg-primary text-primary-foreground' : 'text-primary'}`} onClick={() => setTheme('DARK')} title="Dark Mode"><Moon className="h-4 w-4" /></Button>
@@ -303,26 +310,36 @@ export function Dashboard() {
         {/* Left: Main Tabs Area (Scrollable within tabs) */}
         <div className="flex-1 overflow-hidden p-4 flex flex-col bg-background min-w-0">
 
-          {/* KanbanBoard - Primary View (tabs removed) */}
-          <div className="flex-1 min-h-0 overflow-hidden pt-4">
-            <KanbanBoard
-              tasks={activeTasks}
-              completedTasks={recentCompleted}
-              cancelledTasks={recentCancelled}
-              onCancelTask={handleCancelTask}
-              onRetryTask={handleRetryTask}
-              onApproveTask={handleApproveTask}
-              onRejectTask={handleRejectTask}
-              onSendComment={handleSendComment}
-              onAddReviewComment={handleAddReviewComment}
-              onUnblockTask={handleUnblockTask}
-              onLoadMoreCompleted={loadMoreCompleted}
-              onLoadMoreCancelled={loadMoreCancelled}
-              hasMoreCompleted={hasMoreCompleted}
-              hasMoreCancelled={hasMoreCancelled}
-              loadingMore={loadingMore}
-            />
-          </div>
+          {viewMode === 'KANBAN' ? (
+            <div className="flex-1 min-h-0 overflow-hidden pt-4">
+              <KanbanBoard
+                tasks={activeTasks}
+                completedTasks={recentCompleted}
+                cancelledTasks={recentCancelled}
+                onCancelTask={handleCancelTask}
+                onRetryTask={handleRetryTask}
+                onApproveTask={handleApproveTask}
+                onRejectTask={handleRejectTask}
+                onSendComment={handleSendComment}
+                onAddReviewComment={handleAddReviewComment}
+                onUnblockTask={handleUnblockTask}
+                onLoadMoreCompleted={loadMoreCompleted}
+                onLoadMoreCancelled={loadMoreCancelled}
+                hasMoreCompleted={hasMoreCompleted}
+                hasMoreCancelled={hasMoreCancelled}
+                loadingMore={loadingMore}
+              />
+            </div>
+          ) : (
+            <div className="flex-1 overflow-auto pt-4 flex justify-center">
+              <div className="w-full max-w-4xl">
+                <TaskCreationForm
+                  onSubmit={handleCreateTask}
+                  onCancel={() => setViewMode('KANBAN')}
+                />
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Right: Agent Sidebar */}
@@ -335,25 +352,6 @@ export function Dashboard() {
         />
 
       </div>
-
-      {/* Task expansion is now handled by KanbanBoard component */}
-
-      {/* Task Creation Form Modal */}
-      {showTaskForm && (
-        <div
-          className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setShowTaskForm(false);
-          }}
-        >
-          <div className="max-h-[90vh] overflow-y-auto">
-            <TaskCreationForm
-              onSubmit={handleCreateTask}
-              onCancel={() => setShowTaskForm(false)}
-            />
-          </div>
-        </div>
-      )}
     </div>
   );
 }
