@@ -32,8 +32,8 @@
     "public"
   ],
   "scripts": {
-    "build": "pnpm run build:client && tsc",
-    "build:client": "cd client && pnpm run build",
+    "build": "pnpm run build:dashboard && tsc",
+    "build:dashboard": "cd ../admin-dashboard && pnpm run build",
     "start": "node dist/server.js",
     "dev": "tsc -w",
     "test": "vitest run",

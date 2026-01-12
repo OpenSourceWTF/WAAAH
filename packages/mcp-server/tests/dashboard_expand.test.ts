@@ -3,8 +3,8 @@ import fs from 'fs';
 import path from 'path';
 
 // Read relevant component files
-const kanbanPath = path.resolve(__dirname, '../client/src/KanbanBoard.tsx');
-const expandedCardPath = path.resolve(__dirname, '../client/src/components/kanban/ExpandedCardView.tsx');
+const kanbanPath = path.resolve(__dirname, '../../admin-dashboard/src/KanbanBoard.tsx');
+const expandedCardPath = path.resolve(__dirname, '../../admin-dashboard/src/components/kanban/ExpandedCardView.tsx');
 
 const kanbanContent = fs.readFileSync(kanbanPath, 'utf-8');
 const expandedCardContent = fs.readFileSync(expandedCardPath, 'utf-8');

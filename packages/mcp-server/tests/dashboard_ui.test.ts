@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 
 // Read the Dashboard component file
-const dashboardPath = path.resolve(__dirname, '../client/src/Dashboard.tsx');
+const dashboardPath = path.resolve(__dirname, '../../admin-dashboard/src/Dashboard.tsx');
 const dashboardContent = fs.readFileSync(dashboardPath, 'utf-8');
 
 describe('Dashboard UI Refinements (Static Analysis)', () => {

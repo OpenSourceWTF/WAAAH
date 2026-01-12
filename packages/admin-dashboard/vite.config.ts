@@ -25,7 +25,7 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: '../public',
+    outDir: '../mcp-server/public',
     emptyOutDir: true,
   },
 })

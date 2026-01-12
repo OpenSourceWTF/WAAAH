@@ -3,8 +3,8 @@ import fs from 'fs';
 import path from 'path';
 
 // Read the MessageThread component file where message display logic lives
-const messageThreadPath = path.resolve(__dirname, '../client/src/components/kanban/MessageThread.tsx');
-const expandedCardPath = path.resolve(__dirname, '../client/src/components/kanban/ExpandedCardView.tsx');
+const messageThreadPath = path.resolve(__dirname, '../../admin-dashboard/src/components/kanban/MessageThread.tsx');
+const expandedCardPath = path.resolve(__dirname, '../../admin-dashboard/src/components/kanban/ExpandedCardView.tsx');
 
 const messageThreadContent = fs.readFileSync(messageThreadPath, 'utf-8');
 const expandedCardContent = fs.readFileSync(expandedCardPath, 'utf-8');
