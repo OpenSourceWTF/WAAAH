@@ -1,8 +1,11 @@
 /**
  * sync-skills command - Bidirectional symlink sync between workflows and skills
  * 
- * Detects real files in either .agent/workflows/ or .claude/skills/
- * and creates symlinks in the other location. Ignores existing symlinks.
+ * Syncs .agent/workflows/ to BOTH:
+ *   - .claude/skills/[skillname]/SKILL.md (for Claude Code)
+ *   - .gemini/skills/[skillname]/SKILL.md (for Gemini CLI)
+ * 
+ * Also syncs back from skills dirs to workflows if real files exist there.
  * 
  * @packageDocumentation
  */
@@ -19,8 +22,14 @@ interface SyncResult {
   errors: string[];
 }
 
+// Skill directory configurations
+const SKILL_DIRS = [
+  { name: 'claude', dir: '.claude/skills' },
+  { name: 'gemini', dir: '.gemini/skills' }
+];
+
 export const syncSkillsCommand = new Command('sync-skills')
-  .description('Sync workflows ↔ Claude skills (bidirectional symlinks)')
+  .description('Sync workflows ↔ Claude + Gemini skills (bidirectional symlinks)')
   .option('--no-clean', 'Do NOT remove orphaned symlinks')
   .option('--regenerate', 'Remove all symlinks and recreate them fresh')
   .action(async (options: { clean?: boolean; regenerate?: boolean }) => {
@@ -37,13 +46,17 @@ export const syncSkillsCommand = new Command('sync-skills')
     }
 
     const workflowsDir = path.join(workspaceRoot, '.agent', 'workflows');
-    const skillsDir = path.join(workspaceRoot, '.claude', 'skills');
 
     console.log(`📂 Workspace: ${workspaceRoot}\n`);
 
-    // Ensure both directories exist
+    // Ensure workflows directory exists
     await fs.mkdir(workflowsDir, { recursive: true });
-    await fs.mkdir(skillsDir, { recursive: true });
+
+    // Ensure all skills directories exist
+    for (const skillConfig of SKILL_DIRS) {
+      const skillsDir = path.join(workspaceRoot, skillConfig.dir);
+      await fs.mkdir(skillsDir, { recursive: true });
+    }
 
     const result: SyncResult = { created: [], skipped: [], removed: [], errors: [] };
 
@@ -71,6 +84,132 @@ export const syncSkillsCommand = new Command('sync-skills')
       }
     }
 
+    /**
+     * Clean symlinks in a skills directory
+     */
+    async function cleanSkillsDir(skillsDir: string, skillName: string): Promise<void> {
+      try {
+        const skillEntries = await fs.readdir(skillsDir, { withFileTypes: true });
+        for (const entry of skillEntries) {
+          if (entry.isDirectory()) {
+            const skillPath = path.join(skillsDir, entry.name, 'SKILL.md');
+            try {
+              const stat = await fs.lstat(skillPath);
+              if (stat.isSymbolicLink()) {
+                if (options.regenerate || (shouldClean && await isOrphaned(skillPath))) {
+                  await fs.unlink(skillPath);
+                  result.removed.push(`${skillName}: ${path.relative(workspaceRoot, skillPath)}`);
+                }
+              }
+            } catch { /* SKILL.md might not exist */ }
+          }
+        }
+      } catch { /* ignore readdir errors */ }
+    }
+
+    /**
+     * Create skill symlinks from workflows for a specific skills directory
+     */
+    async function syncWorkflowsToSkills(skillsDir: string, skillName: string): Promise<void> {
+      try {
+        const files = await fs.readdir(workflowsDir);
+        for (const file of files.filter(f => f.endsWith('.md'))) {
+          const name = file.replace('.md', '');
+          const workflowPath = path.join(workflowsDir, file);
+          const skillDir = path.join(skillsDir, name);
+          const skillPath = path.join(skillDir, 'SKILL.md');
+
+          // Skip if workflow is itself a symlink
+          const stat = await fs.lstat(workflowPath);
+          if (stat.isSymbolicLink()) {
+            // Only record once (for first skill dir)
+            if (skillName === 'claude') {
+              result.skipped.push(`${name} (workflow is symlink)`);
+            }
+            continue;
+          }
+
+          // Check if skill already exists
+          try {
+            await fs.access(skillPath);
+            const skillStat = await fs.lstat(skillPath);
+            if (skillStat.isSymbolicLink()) {
+              result.skipped.push(`${skillName}/${name} (skill symlink exists)`);
+            } else {
+              result.skipped.push(`${skillName}/${name} (skill is real file)`);
+            }
+            continue;
+          } catch {
+            // Skill doesn't exist, create symlink
+          }
+
+          try {
+            await fs.mkdir(skillDir, { recursive: true });
+            const relPath = path.relative(skillDir, workflowPath);
+            await fs.symlink(relPath, skillPath);
+            result.created.push(`${skillName}/${name} (workflow → skill)`);
+          } catch (err) {
+            result.errors.push(`${skillName}/${name}: ${err instanceof Error ? err.message : String(err)}`);
+          }
+        }
+      } catch {
+        // Workflows dir doesn't exist or is empty
+      }
+    }
+
+    /**
+     * Scan skills → create workflow symlinks (for a specific skills directory)
+     */
+    async function syncSkillsToWorkflows(skillsDir: string, skillName: string): Promise<void> {
+      try {
+        const entries = await fs.readdir(skillsDir, { withFileTypes: true });
+        for (const entry of entries.filter(e => e.isDirectory())) {
+          const name = entry.name;
+          const skillPath = path.join(skillsDir, name, 'SKILL.md');
+          const workflowPath = path.join(workflowsDir, `${name}.md`);
+
+          // Check if skill file exists
+          try {
+            await fs.access(skillPath);
+          } catch {
+            result.skipped.push(`${skillName}/${name} (no SKILL.md)`);
+            continue;
+          }
+
+          // Skip if skill is a symlink (already synced from workflow)
+          const skillStat = await fs.lstat(skillPath);
+          if (skillStat.isSymbolicLink()) {
+            // Already handled above
+            continue;
+          }
+
+          // Check if workflow already exists
+          try {
+            await fs.access(workflowPath);
+            const wfStat = await fs.lstat(workflowPath);
+            if (wfStat.isSymbolicLink()) {
+              result.skipped.push(`${skillName}/${name} (workflow symlink exists)`);
+            } else {
+              result.skipped.push(`${skillName}/${name} (workflow is real file)`);
+            }
+            continue;
+          } catch {
+            // Workflow doesn't exist, create symlink
+          }
+
+          try {
+            const relPath = path.relative(workflowsDir, skillPath);
+            await fs.symlink(relPath, workflowPath);
+            result.created.push(`${skillName}/${name} (skill → workflow)`);
+          } catch (err) {
+            result.errors.push(`${skillName}/${name}: ${err instanceof Error ? err.message : String(err)}`);
+          }
+        }
+      } catch {
+        // Skills dir doesn't exist or is empty
+      }
+    }
+
     // 0. Cleanup / Regenerate Phase
     if (options.regenerate || shouldClean) {
       // 0a. Clean workflows dir (*.md)
@@ -82,122 +221,29 @@ export const syncSkillsCommand = new Command('sync-skills')
           if (stat.isSymbolicLink()) {
             if (options.regenerate || (shouldClean && await isOrphaned(fullPath))) {
               await fs.unlink(fullPath);
-              result.removed.push(path.relative(workspaceRoot, fullPath));
+              result.removed.push(`workflows: ${path.relative(workspaceRoot, fullPath)}`);
             }
           }
         }
-      } catch (err) { /* ignore readdir errors */ }
+      } catch { /* ignore readdir errors */ }
 
-      // 0b. Clean skills dir (*/SKILL.md)
-      try {
-        const skillEntries = await fs.readdir(skillsDir, { withFileTypes: true });
-        for (const entry of skillEntries) {
-          if (entry.isDirectory()) {
-            const skillPath = path.join(skillsDir, entry.name, 'SKILL.md');
-            try {
-              const stat = await fs.lstat(skillPath);
-              if (stat.isSymbolicLink()) {
-                if (options.regenerate || (shouldClean && await isOrphaned(skillPath))) {
-                  await fs.unlink(skillPath);
-                  result.removed.push(path.relative(workspaceRoot, skillPath));
-                }
-              }
-            } catch { /* SKILL.md might not exist */ }
-          }
-        }
-      } catch (err) { /* ignore readdir errors */ }
+      // 0b. Clean all skill directories
+      for (const skillConfig of SKILL_DIRS) {
+        const skillsDir = path.join(workspaceRoot, skillConfig.dir);
+        await cleanSkillsDir(skillsDir, skillConfig.name);
+      }
     }
 
-    // 1. Scan workflows → create skill symlinks
-    try {
-      const files = await fs.readdir(workflowsDir);
-      for (const file of files.filter(f => f.endsWith('.md'))) {
-        const name = file.replace('.md', '');
-        const workflowPath = path.join(workflowsDir, file);
-        const skillDir = path.join(skillsDir, name);
-        const skillPath = path.join(skillDir, 'SKILL.md');
-
-        // Skip if workflow is itself a symlink
-        const stat = await fs.lstat(workflowPath);
-        if (stat.isSymbolicLink()) {
-          result.skipped.push(`${name} (workflow is symlink)`);
-          continue;
-        }
-
-        // Check if skill already exists
-        try {
-          await fs.access(skillPath);
-          const skillStat = await fs.lstat(skillPath);
-          if (skillStat.isSymbolicLink()) {
-            result.skipped.push(`${name} (skill symlink exists)`);
-          } else {
-            result.skipped.push(`${name} (skill is real file)`);
-          }
-          continue;
-        } catch {
-          // Skill doesn't exist, create symlink
-        }
-
-        try {
-          await fs.mkdir(skillDir, { recursive: true });
-          const relPath = path.relative(skillDir, workflowPath);
-          await fs.symlink(relPath, skillPath);
-          result.created.push(`${name} (workflow → skill)`);
-        } catch (err) {
-          result.errors.push(`${name}: ${err instanceof Error ? err.message : String(err)}`);
-        }
-      }
-    } catch {
-      // Workflows dir doesn't exist or is empty
+    // 1. Scan workflows → create skill symlinks (for all skill dirs)
+    for (const skillConfig of SKILL_DIRS) {
+      const skillsDir = path.join(workspaceRoot, skillConfig.dir);
+      await syncWorkflowsToSkills(skillsDir, skillConfig.name);
     }
 
-    // 2. Scan skills → create workflow symlinks
-    try {
-      const entries = await fs.readdir(skillsDir, { withFileTypes: true });
-      for (const entry of entries.filter(e => e.isDirectory())) {
-        const name = entry.name;
-        const skillPath = path.join(skillsDir, name, 'SKILL.md');
-        const workflowPath = path.join(workflowsDir, `${name}.md`);
-
-        // Check if skill file exists
-        try {
-          await fs.access(skillPath);
-        } catch {
-          result.skipped.push(`${name} (no SKILL.md)`);
-          continue;
-        }
-
-        // Skip if skill is a symlink (already synced from workflow)
-        const skillStat = await fs.lstat(skillPath);
-        if (skillStat.isSymbolicLink()) {
-          // Already handled above
-          continue;
-        }
-
-        // Check if workflow already exists
-        try {
-          await fs.access(workflowPath);
-          const wfStat = await fs.lstat(workflowPath);
-          if (wfStat.isSymbolicLink()) {
-            result.skipped.push(`${name} (workflow symlink exists)`);
-          } else {
-            result.skipped.push(`${name} (workflow is real file)`);
-          }
-          continue;
-        } catch {
-          // Workflow doesn't exist, create symlink
-        }
-
-        try {
-          const relPath = path.relative(workflowsDir, skillPath);
-          await fs.symlink(relPath, workflowPath);
-          result.created.push(`${name} (skill → workflow)`);
-        } catch (err) {
-          result.errors.push(`${name}: ${err instanceof Error ? err.message : String(err)}`);
-        }
-      }
-    } catch {
-      // Skills dir doesn't exist or is empty
+    // 2. Scan skills → create workflow symlinks (from all skill dirs)
+    for (const skillConfig of SKILL_DIRS) {
+      const skillsDir = path.join(workspaceRoot, skillConfig.dir);
+      await syncSkillsToWorkflows(skillsDir, skillConfig.name);
     }
 
     // Report

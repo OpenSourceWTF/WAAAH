@@ -1,38 +1,55 @@
-# Ralph YOLO: Workflow/Skill Injection Debug
+# Ralph YOLO: Workflow/Skill Injection & Format Verification
 
-**Task:** Fix workflow and skill injections for Gemini and Claude  
-**Type:** Code  
+**Task:** Fix workflow and skill injections for Gemini and Claude; verify format compliance  
+**Type:** Code + Research  
 **Criteria:** clarity, completeness, correctness
 
 ---
 
 ## YOLO Mode — Iteration 1
 
-### Root Cause Analysis
+### Problem 1: Directory Injection Missing
 
-The adapters were telling agents to "follow the workflow" but **NOT injecting the workflow directories** into the CLI's context.
+The CLI adapters were telling agents to "follow the workflow" but NOT injecting the workflow directories.
 
-**Gemini** (`gemini.ts`):
-- Missing: `--include-directories .agent/workflows`
+**Fix:**
+- `gemini.ts`: Added `--include-directories .agent/workflows`
+- `claude.ts`: Added `--add-dir .claude/skills`
 
-**Claude** (`claude.ts`):
-- Missing: `--add-dir .claude/skills`
+### Problem 2: Gemini Skills Not Synced
 
-### Fixes Applied
+Research revealed:
+| CLI | Expected Dir | Format |
+|-----|-------------|--------|
+| Claude | `.claude/skills/*/SKILL.md` | YAML frontmatter: `name` + `description` |
+| Gemini | `.gemini/skills/*/SKILL.md` | YAML frontmatter: `name` + `description` |
 
-#### packages/cli/src/adapters/gemini.ts
-Added `--include-directories .agent/workflows` to buildArgs
+Our `sync-skills` only synced to `.claude/skills`, NOT `.gemini/skills`.
 
-#### packages/cli/src/adapters/claude.ts
-Added `--add-dir .claude/skills` to buildArgs for both resume and new session paths
+**Fix:** Rewrote `sync-skills.ts` to sync workflows to BOTH directories.
 
 ### Verification
 
+```bash
+waaah sync-skills --regenerate
+# ✅ Created symlinks:
+#    claude/waaah-orc-agent (workflow → skill)
+#    gemini/waaah-orc-agent (workflow → skill)
+#    ... 6 skills each
+
+# Verified structure:
+.gemini/skills/waaah-orc-agent/SKILL.md → ../../../.agent/workflows/waaah-orc-agent.md
 ```
-pnpm build → PASS (packages/cli)
-sync-skills --regenerate → Created 6 symlinks correctly
-Symlink test: SKILL.md → ../../../.agent/workflows/*.md ✅
+
+YAML frontmatter verified:
+```yaml
+---
+name: waaah-orc-agent
+description: Orchestrator - plan/build/verify/merge loop
+---
 ```
+
+✅ Matches official Claude/Gemini skill format.
 
 ---
 
@@ -44,15 +61,10 @@ Symlink test: SKILL.md → ../../../.agent/workflows/*.md ✅
 | completeness | 10/10 |
 | correctness | 10/10 |
 
-**Justification:**
-- **Clarity (10/10):** Root cause identified and documented
-- **Completeness (10/10):** Fixed both Gemini and Claude adapters, verified sync-skills
-- **Correctness (10/10):** Build passes, symlinks work correctly
-
 ---
 
 ## ✅ YOLO COMPLETE
 
-Fixed workflow/skill injection by adding directory inclusion flags to both CLI adapters.
+Fixed all injection and format issues.
 
 <promise>CHURLISH</promise>
