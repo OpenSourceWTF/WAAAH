@@ -184,6 +184,16 @@ SCAN → REPORT → FEEDBACK → [REFINE | IMPLEMENT → VERIFY → DONE]
 - **Proposal:** {add tests for uncovered lines}
 - **Status:** [ ] PENDING
 
+### SPEC (N issues)
+
+#### SPEC-001: {short description}
+- **Spec:** `{spec_path}`
+- **Scenario:** {scenario name/ID}
+- **Severity:** HIGH
+- **Description:** {scenario not implemented or edge case missing}
+- **Proposal:** {implement handler, add test case, update logic}
+- **Status:** [ ] PENDING
+
 ## Implementation Plan
 
 Proposed order (highest severity first):

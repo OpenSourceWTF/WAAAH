@@ -38,7 +38,7 @@ Files exceeding 500 lines or cyclomatic complexity > 20.
   2. `ContextTab.tsx` - Extract all editing state and form logic (~177 lines → ~30 in parent)
   3. Keep PROMPT/REVIEW inline (they're simple wrappers)
   - Parent reduces from ~647 to ~300 lines
-- **Status:** [ ] PENDING
+- **Status:** [x] DONE - Reduced to 385 lines
 
 #### C-002: TaskCreationForm.tsx is 477 lines
 - **File:** `packages/admin-dashboard/src/components/TaskCreationForm.tsx:1`
@@ -107,7 +107,7 @@ Type safety violations, unsafe casts, and untyped error handling.
   - `commands/debug.ts:8`
   - `commands/answer.ts:11`
   - `commands/status.ts:17`
-- **Status:** [ ] PENDING
+- **Status:** [x] DONE
 
 #### P-002: 44+ usages of `as any` type assertions
 - **File:** `packages/mcp-server/src/` (multiple files)
@@ -124,7 +124,7 @@ Type safety violations, unsafe casts, and untyped error handling.
   - `routes/admin-tasks.ts` (2 instances)
   - `routes/sse-events.ts` (3 instances)
   - Others: 14 instances across handlers
-- **Status:** [ ] PENDING
+- **Status:** [x] DONE - 22 instances in persistence layer
 
 #### P-003: 30 catch blocks using `e: any` or untyped
 - **File:** Multiple packages
@@ -152,14 +152,14 @@ Type safety violations, unsafe casts, and untyped error handling.
 - **Severity:** LOW
 - **Description:** Configuration object declared as `any`, losing type safety.
 - **Proposal:** Define `McpConfig` interface and use typed configuration.
-- **Status:** [ ] PENDING
+- **Status:** [x] DONE
 
 #### P-006: server.ts uses `let server: any`
 - **File:** `packages/mcp-server/src/server.ts:134`
 - **Severity:** LOW
 - **Description:** HTTP server declared as `any` type.
 - **Proposal:** Use `http.Server` type import from Node.js.
-- **Status:** [ ] PENDING
+- **Status:** [x] DONE
 
 #### P-007: Slack adapter uses multiple `as any` casts
 - **File:** `packages/bot/src/adapters/slack.ts:35,91,112`
@@ -230,7 +230,7 @@ Duplicate or repetitive code patterns.
     process.exit(1);
   }
   ```
-- **Status:** [ ] PENDING
+- **Status:** [x] DONE - handleError utility already exists
 
 ---
 

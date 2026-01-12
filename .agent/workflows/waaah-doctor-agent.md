@@ -146,6 +146,19 @@ FOR file IN changed:
   IF no JSDoc on exports → violation(DOCS)
 FOR package IN packages/:
   IF no README.md → violation(DOCS)
+
+# SPEC (gap detection)
+specs = ls .waaah/specs/*.md | sort
+last_reviewed = state.json.last_spec_reviewed || 0
+FOR spec IN specs[last_reviewed:]:
+  scenarios = PARSE scenarios from spec
+  FOR scenario IN scenarios:
+    implementation = SEARCH codebase for scenario handler
+    tests = SEARCH tests for scenario coverage
+    IF implementation NOT FOUND → violation(SPEC, "Not implemented: {scenario}")
+    IF tests NOT FOUND → violation(SPEC, "No test coverage: {scenario}")
+    IF edge_cases MISSING → violation(SPEC, "Edge case missing: {scenario}")
+  state.json.last_spec_reviewed = spec.index
 ```
 
 ---
@@ -162,17 +175,40 @@ FOR package IN packages/:
 **Context:** {sha} by {author}
 ```
 
+### SPEC-specific template
+
+```markdown
+## [SPEC] Gap in {spec_file}
+
+**Scenario:** {scenario_id}: {scenario_name}
+**Expected:** {expected_behavior}
+**Found:** {NOT_IMPLEMENTED | NO_TEST | EDGE_CASE_MISSING}
+**Proposal:** {implement_steps}
+**Verify:** {test_command}
+```
+
 ---
 
 ## STATE
 
 `.waaah/doctor/state.json`:
 ```json
-{ "last_sha": "<commit-hash>" }
+{
+  "last_sha": "<commit-hash>",
+  "last_spec_reviewed": <spec-index>,
+  "reviewed_specs": ["spec-001.md", "spec-002.md"]
+}
 ```
+
+**State tracking:**
+1. On STARTUP: LOAD state.json or CREATE with defaults
+2. After git analysis: UPDATE `last_sha`
+3. After spec review: UPDATE `last_spec_reviewed` and `reviewed_specs`
+4. On each iteration: PERSIST state.json
 
 ---
 
 ## SEE ALSO
 
 - `/code-doctor` - Interactive analysis with report → approve → implement flow
+
