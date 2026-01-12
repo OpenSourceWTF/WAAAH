@@ -60,6 +60,9 @@ describe('TaskHandlers: Orc Reliability', () => {
       diff: 'diff --git a/file.ts b/file.ts\n+ changed'
     };
 
+    // Mock getTask to return a task in ASSIGNED state (required for send_response validation)
+    (mockQueue.getTask as any).mockReturnValue({ id: 'task-123', status: 'ASSIGNED', to: {} });
+
     // Act
     await handlers.send_response(args);
 

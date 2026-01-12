@@ -36,6 +36,31 @@ export class TaskHandlers {
     try {
       const params = sendResponseSchema.parse(args);
       const task = this.queue.getTask(params.taskId);
+
+      // S19: Validate task exists and is in a valid state for updates
+      if (!task) {
+        return {
+          content: [{ type: 'text', text: JSON.stringify({ success: false, error: 'Task not found' }) }],
+          isError: true
+        };
+      }
+
+      // S19: Reject updates from tasks that haven't been properly ACKed
+      // Valid states for send_response: ASSIGNED, IN_PROGRESS, IN_REVIEW, APPROVED_QUEUED, APPROVED_PENDING_ACK
+      const validStates = ['ASSIGNED', 'IN_PROGRESS', 'IN_REVIEW', 'APPROVED_QUEUED', 'APPROVED_PENDING_ACK', 'REJECTED'];
+      if (!validStates.includes(task.status)) {
+        console.warn(`[Tool] ⚠️ send_response rejected: Task ${params.taskId} is ${task.status}, not properly ACKed`);
+        return {
+          content: [{
+            type: 'text', text: JSON.stringify({
+              success: false,
+              error: `Task is in ${task.status} state. You must call ack_task first to transition the task to ASSIGNED before calling send_response.`
+            })
+          }],
+          isError: true
+        };
+      }
+
       if (task?.to.agentId) {
         this.registry.heartbeat(task.to.agentId);
       }

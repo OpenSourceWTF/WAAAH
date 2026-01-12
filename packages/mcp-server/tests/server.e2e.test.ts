@@ -67,7 +67,7 @@ describe('Server E2E', () => {
       expect(tasks.some((t: any) => t.id === taskId)).toBe(true);
     });
 
-    it('should update task status via send_response', async () => {
+    it('should reject send_response on task that was not ACKed', async () => {
       // Create task
       const assignRes = await fetch(`${BASE_URL}/mcp`, {
         method: 'POST',
@@ -90,7 +90,7 @@ describe('Server E2E', () => {
       const assignData = await assignRes.json();
       const taskId = assignData.result?.content?.[0]?.text?.match(/task-\S+/)?.[0];
 
-      // Send response
+      // Try to send response WITHOUT acking first (should be rejected)
       const responseRes = await fetch(`${BASE_URL}/mcp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -112,12 +112,18 @@ describe('Server E2E', () => {
       });
 
       expect(responseRes.ok).toBe(true);
+      const responseData = await responseRes.json();
 
-      // Verify status update
+      // S19: Verify the response contains an error about needing to ACK first
+      const responseText = responseData.result?.content?.[0]?.text;
+      expect(responseText).toContain('ack_task');
+      expect(responseText).toContain('ASSIGNED');
+
+      // Verify task status is still QUEUED (unchanged)
       const taskRes = await fetch(`${BASE_URL}/admin/tasks/${taskId}`);
       expect(taskRes.ok).toBe(true);
       const task = await taskRes.json();
-      expect(task.status).toBe('IN_REVIEW');
+      expect(task.status).toBe('QUEUED');
     });
   });
 
