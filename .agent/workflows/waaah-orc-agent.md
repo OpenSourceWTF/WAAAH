@@ -63,6 +63,8 @@ STARTUP → WAIT ──→ ACK ──→ PLAN ──→ BUILD ──→ SUBMIT
 | BLOCKED | WAIT → loop |
 | CANCELLED | cleanup → loop |
 
+> **Note:** When user clicks REJECT, task transitions to QUEUED with feedback. Check for `[REJECT]` prefix in unreadComments.
+
 ## TOOLS
 
 | Tool | When |
@@ -75,7 +77,7 @@ STARTUP → WAIT ──→ ACK ──→ PLAN ──→ BUILD ──→ SUBMIT
 | `send_response(IN_REVIEW)` | After BUILD |
 | `send_response(COMPLETED)` | After MERGE + SMOKE |
 
-## MAILBOX (User Comments)
+## MAILBOX (User & Review Comments)
 
 **CRITICAL:** Check `update_progress` response for `unreadComments` array.
 
@@ -85,11 +87,39 @@ IF result.unreadComments:
   FOR comment IN result.unreadComments:
     - Log: "📬 User: {comment.content}"
     - IF [UNBLOCK] prefix → task was just unblocked, acknowledge context
+    - IF [REJECT] prefix → task was rejected, check reviewComments
     - Address or incorporate feedback into current work
     - Acknowledge in next progress update
 ```
 
 **Never ignore user comments.** They may contain clarifications, corrections, or answers to blocked questions.
+
+## REVIEW COMMENTS (Code-Level Feedback)
+
+When status is `REJECTED`, you MUST check for review comments:
+
+```
+IF task.status == 'REJECTED':
+  result = get_review_comments({ taskId: CURRENT_TASK_ID })
+  FOR comment IN result.comments:
+    - Log: "🔍 Review: {comment.filePath}:{comment.lineNumber}"
+    - Log: "   {comment.content}"
+    - FIX the issue in the specified file/line
+  
+  # After fixing all review comments:
+  FOR comment IN result.comments:
+    resolve_review_comment({ taskId: CURRENT_TASK_ID, commentId: comment.id })
+  
+  # Re-submit for review
+  → SUBMIT
+```
+
+**REJECTION WORKFLOW:**
+1. Read rejection feedback from task context
+2. Fetch review comments with `get_review_comments`
+3. Address EACH comment (they point to specific code issues)
+4. Resolve comments with `resolve_review_comment`
+5. Re-run tests, re-submit with `send_response(IN_REVIEW)`
 
 ## STARTUP
 
@@ -228,7 +258,7 @@ send_response({
   taskId: CURRENT_TASK_ID,
   status: "IN_REVIEW",
   message: "## Summary: [1-2 sentences]\n## Changes: [file]: [what]\n## Testing: [x] Tests pass",
-  diff: DIFF_CONTENT  // ← THIS IS MANDATORY! Pass the output of `git diff origin/main...HEAD`
+  diff: DIFF_CONTENT  // ← THIS IS MANDATORY FOR CODE/TEST TASKS! Pass the output of `git diff origin/main...HEAD`
 })
 ```
 

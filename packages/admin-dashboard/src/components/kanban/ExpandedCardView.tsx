@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { X, Clock, User, FileText, Settings, CheckCircle, RefreshCw, XCircle, ChevronDown, Edit, Plus, Save } from "lucide-react";
+import { X, Clock, User, FileText, Settings, CheckCircle, RefreshCw, XCircle, ChevronDown, Edit, Plus, Save, RotateCcw } from "lucide-react";
 import { DiffViewer } from "@/components/DiffViewer";
 import type { Task } from './types';
 import { getStatusBadgeClass, formatDate, getTaskDuration, formatTaskTitle, getProgressUpdates } from './utils';
@@ -30,6 +30,7 @@ export const ExpandedCardView: React.FC<ExpandedCardViewProps> = ({
   onRetryTask,
   onCancelTask,
   onAddReviewComment,
+  onRejectTask,
   onUnblockTask,
   onUpdateTask
 }) => {
@@ -46,6 +47,10 @@ export const ExpandedCardView: React.FC<ExpandedCardViewProps> = ({
   // Unblock modal state
   const [showUnblockModal, setShowUnblockModal] = useState(false);
   const [unblockReason, setUnblockReason] = useState('');
+
+  // Reject modal state
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [rejectFeedback, setRejectFeedback] = useState('');
 
   // Context Editing State
   const [isEditingContext, setIsEditingContext] = useState(false);
@@ -143,6 +148,12 @@ export const ExpandedCardView: React.FC<ExpandedCardViewProps> = ({
             <Button variant="default" size="sm" className="h-8 gap-1 text-xs bg-green-600 hover:bg-green-700 text-white uppercase"
               onClick={(e) => { onApproveTask(e, task.id); onClose(); }}>
               <CheckCircle className="h-3 w-3" /> APPROVE
+            </Button>
+          )}
+          {canApprove && (
+            <Button variant="default" size="sm" className="h-8 gap-1 text-xs bg-purple-600 hover:bg-purple-700 text-white uppercase"
+              onClick={() => setShowRejectModal(true)}>
+              <RotateCcw className="h-3 w-3" /> REJECT
             </Button>
           )}
           {canUnblock && onUnblockTask && (
@@ -588,6 +599,44 @@ export const ExpandedCardView: React.FC<ExpandedCardViewProps> = ({
                 className="px-4 py-2 text-sm bg-orange-600 text-white hover:bg-orange-700 disabled:opacity-50"
               >
                 Unblock Task
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reject Modal (Request Changes) */}
+      {showRejectModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="bg-card border-2 border-purple-500 p-6 rounded-lg shadow-lg max-w-md w-full">
+            <h3 className="text-lg font-bold text-purple-500 mb-4">REQUEST CHANGES</h3>
+            <p className="text-sm text-primary/70 mb-4">
+              Provide feedback on what needs to be fixed (optional if review comments exist).
+            </p>
+            <textarea
+              value={rejectFeedback}
+              onChange={(e) => setRejectFeedback(e.target.value)}
+              placeholder="What's wrong? What needs to be fixed? (optional)..."
+              className="w-full h-32 p-3 text-sm bg-black/30 border border-primary/30 text-foreground placeholder:text-primary/40 focus:outline-none focus:border-purple-500 resize-none"
+              autoFocus
+            />
+            <div className="flex gap-3 mt-4 justify-end">
+              <button
+                onClick={() => { setShowRejectModal(false); setRejectFeedback(''); }}
+                className="px-4 py-2 text-sm border border-primary/30 text-primary/70 hover:bg-primary/10 uppercase"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  onRejectTask(task.id, rejectFeedback.trim() || 'Changes requested');
+                  setShowRejectModal(false);
+                  setRejectFeedback('');
+                  onClose();
+                }}
+                className="px-4 py-2 text-sm bg-purple-600 text-white hover:bg-purple-700 uppercase"
+              >
+                REQUEST CHANGES
               </button>
             </div>
           </div>
