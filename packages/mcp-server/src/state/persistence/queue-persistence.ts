@@ -1,6 +1,31 @@
 import type { Database } from 'better-sqlite3';
 import { StandardCapability, WorkspaceContext } from '@opensourcewtf/waaah-types';
 
+/** DB row for pending ACK query */
+interface PendingAckTaskRow {
+  id: string;
+  pendingAckAgentId: string | null;
+  ackSentAt: number | null;
+}
+
+/** DB row for waiting agents query */
+interface WaitingAgentRow {
+  id: string;
+  capabilities: string | null;
+  workspaceContext: string | null;
+}
+
+/** DB row for pending ACK fields */
+interface PendingAckRow {
+  pendingAckAgentId: string | null;
+  ackSentAt: number | null;
+}
+
+/** DB row for waitingSince check */
+interface WaitingSinceRow {
+  waitingSince: number | null;
+}
+
 /**
  * Handles direct database operations for queue state (pending ACKs, waiting agents).
  */
@@ -13,15 +38,18 @@ export class QueuePersistence {
   getPendingAcks(): Map<string, { taskId: string; agentId: string; sentAt: number }> {
     const rows = this.db.prepare(
       'SELECT id, pendingAckAgentId, ackSentAt FROM tasks WHERE status = ? AND pendingAckAgentId IS NOT NULL'
-    ).all('PENDING_ACK') as any[];
+    ).all('PENDING_ACK') as PendingAckTaskRow[];
 
     const map = new Map<string, { taskId: string; agentId: string; sentAt: number }>();
     for (const row of rows) {
-      map.set(row.id, {
-        taskId: row.id,
-        agentId: row.pendingAckAgentId,
-        sentAt: row.ackSentAt
-      });
+      // SQL WHERE clause ensures pendingAckAgentId IS NOT NULL
+      if (row.pendingAckAgentId && row.ackSentAt) {
+        map.set(row.id, {
+          taskId: row.id,
+          agentId: row.pendingAckAgentId,
+          sentAt: row.ackSentAt
+        });
+      }
     }
     return map;
   }
@@ -33,7 +61,7 @@ export class QueuePersistence {
   getWaitingAgents(): Map<string, { capabilities: StandardCapability[]; workspaceContext?: WorkspaceContext }> {
     const rows = this.db.prepare(
       'SELECT id, capabilities, workspaceContext FROM agents WHERE waitingSince IS NOT NULL'
-    ).all() as any[];
+    ).all() as WaitingAgentRow[];
 
     const map = new Map<string, { capabilities: StandardCapability[]; workspaceContext?: WorkspaceContext }>();
     for (const row of rows) {
@@ -66,8 +94,8 @@ export class QueuePersistence {
   getPendingAck(taskId: string): { agentId: string; sentAt: number } | null {
     const row = this.db.prepare(
       'SELECT pendingAckAgentId, ackSentAt FROM tasks WHERE id = ?'
-    ).get(taskId) as any;
-    if (row && row.pendingAckAgentId) {
+    ).get(taskId) as PendingAckRow | undefined;
+    if (row && row.pendingAckAgentId && row.ackSentAt) {
       return { agentId: row.pendingAckAgentId, sentAt: row.ackSentAt };
     }
     return null;
@@ -133,7 +161,7 @@ export class QueuePersistence {
    * Check if a specific agent is currently waiting (from DB)
    */
   isAgentWaiting(agentId: string): boolean {
-    const row = this.db.prepare('SELECT waitingSince FROM agents WHERE id = ?').get(agentId) as any;
+    const row = this.db.prepare('SELECT waitingSince FROM agents WHERE id = ?').get(agentId) as WaitingSinceRow | undefined;
     return row?.waitingSince != null;
   }
 
