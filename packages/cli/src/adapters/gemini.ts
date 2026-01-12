@@ -69,14 +69,10 @@ export const geminiAdapter: CLIAdapter = {
   },
 
   buildArgs(workflow: string, resume: boolean): string[] {
+    // Gemini uses .agent/workflows/*.md directly (no extra include needed)
     const prompt = resume
       ? `Resume the /${workflow} workflow. Continue from where you left off.`
       : `Follow the /${workflow} workflow exactly.`;
-    return [
-      '-i', prompt,
-      '--yolo',
-      '--output-format', 'text',
-      '--include-directories', '.agent/workflows'
-    ];
+    return ['-i', prompt, '--yolo', '--output-format', 'text'];
   }
 };
