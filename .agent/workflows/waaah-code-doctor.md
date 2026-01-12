@@ -1,18 +1,18 @@
 ---
 name: waaah-code-doctor
-description: Analyze, report, refine, and fix code quality issues with user feedback loop
+description: Analyze, report, refine, and fix code quality issues - autonomous after approval
 ---
 
 # Code Doctor 🩺
 
-**Diagnose → Report → Refine → Implement. User-in-loop until happy.**
+**Diagnose → Report → Approve → Autonomous Implement.**
 
 ## State Machine
 
 ```
-SCAN → REPORT → FEEDBACK → [REFINE | IMPLEMENT] → VERIFY → [LOOP | DONE]
-  ↑                              ↓
-  └──────────────────────────────┘
+SCAN → REPORT → FEEDBACK → [REFINE | IMPLEMENT → VERIFY → DONE]
+  ↑               ↓                    ↓ (autonomous)
+  └───────────────┘                    └──────────────┘
 ```
 
 ## Phases
@@ -49,6 +49,8 @@ SCAN → REPORT → FEEDBACK → [REFINE | IMPLEMENT] → VERIFY → [LOOP | DON
 | COMPLEX | Cyclomatic > 20, nested depth > 4, file > 500 lines | MEDIUM |
 | DEAD | Unreachable code, unused exports, orphan files | HIGH |
 | PATTERN | Missing error handling, no types, hardcoded values | LOW |
+| DOCS | Missing JSDoc, outdated comments, no README | MEDIUM |
+| COVERAGE | Uncovered files, low branch coverage, missing tests | HIGH |
 
 ## Severity Weights
 
@@ -89,6 +91,8 @@ SCAN → REPORT → FEEDBACK → [REFINE | IMPLEMENT] → VERIFY → [LOOP | DON
 | COMPLEX | `grep -cE "(if|for|while|switch|case|\?\.|&&|\|\|)"`, nesting depth via AST |
 | DEAD | `tsc --noEmit` unused exports, `grep -rL "import.*from.*FILE"` |
 | PATTERN | `grep -rE "TODO|FIXME|any|as any|catch\s*\(\s*\)"`, config hardcodes |
+| DOCS | `grep -rL "@param\|@returns" "*.ts"`, missing README in packages, stale comments |
+| COVERAGE | `pnpm test --coverage`, parse statement/branch percentages |
 
 ### REPORT
 
@@ -159,6 +163,25 @@ SCAN → REPORT → FEEDBACK → [REFINE | IMPLEMENT] → VERIFY → [LOOP | DON
 - **Proposal:** {best practice fix}
 - **Status:** [ ] PENDING
 
+### DOCS (N issues)
+
+#### DOC-001: {short description}
+- **File:** `{path}:{line}`
+- **Severity:** MEDIUM
+- **Description:** {missing documentation or outdated comment}
+- **Proposal:** {add JSDoc, update comment, create README}
+- **Status:** [ ] PENDING
+
+### COVERAGE (N issues)
+
+#### COV-001: {short description}
+- **File:** `{path}`
+- **Severity:** HIGH
+- **Metric:** {stmt% / branch%}
+- **Description:** {file below 90% stmt or 85% branch}
+- **Proposal:** {add tests for uncovered lines}
+- **Status:** [ ] PENDING
+
 ## Implementation Plan
 
 Proposed order (highest severity first):
@@ -205,6 +228,10 @@ Proposed order (highest severity first):
 
 ### IMPLEMENT
 
+> [!IMPORTANT]
+> **AUTONOMOUS MODE** - Once user approves, run to completion without pausing.
+> DO NOT call `notify_user` until ALL issues are fixed and verified.
+
 ```
 1. SORT approved issues BY:
    - severity DESC
@@ -216,8 +243,9 @@ Proposed order (highest severity first):
    c. RUN `pnpm build`
    d. IF build fails → FIX error → retry (max 3)
    e. git commit -m "code-doctor: {issue_id} - {short}"
+   f. LOG progress to console (no notify_user)
 
-3. → VERIFY
+3. → VERIFY (immediately, no pause)
 ```
 
 ### VERIFY
@@ -268,12 +296,27 @@ Proposed order (highest severity first):
 
 | Gate | Criteria | On Fail |
 |------|----------|---------|
-| SCAN_COMPLETE | All 4 categories analyzed | Re-scan missed categories |
+| SCAN_COMPLETE | All 6 categories analyzed | Re-scan missed categories |
 | REPORT_VALID | All issues have: file, line, category, severity, proposal | Fill missing fields |
 | USER_APPROVED | User explicitly approves | Loop FEEDBACK → REFINE |
 | BUILD_PASSES | `pnpm build` exits 0 | Fix errors |
 | TESTS_PASS | `pnpm test` exits 0 | Fix tests |
+| COVERAGE_STMT | Statement coverage ≥ 90% | Add tests for uncovered lines |
+| COVERAGE_BRANCH | Branch coverage ≥ 85% | Add tests for untested branches |
 | ALL_FIXED | No [PENDING] issues remain | Continue IMPLEMENT |
+
+## Coverage Thresholds
+
+| Metric | Threshold | Command |
+|--------|-----------|---------|
+| Statement | ≥ 90% | `pnpm test --coverage` |
+| Branch | ≥ 85% | Parse coverage output |
+| Function | ≥ 85% | Optional, report only |
+
+**IF coverage below threshold:**
+1. IDENTIFY uncovered files
+2. GENERATE COV-NNN issues for each
+3. INCLUDE in report with proposal
 
 ---
 

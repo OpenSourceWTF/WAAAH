@@ -23,7 +23,7 @@ const sendCommand: CommandHandler = async (args) => {
 };
 
 const listCommand: CommandHandler = async () => {
-  const response = await apiCall<any>('post', '/mcp/tools/list_agents', {});
+  const response = await apiCall<{ content?: { text?: string }[] }>('post', '/mcp/tools/list_agents', {});
   const agents = parseMCPResponse<AgentInfo[]>(response);
   agents?.forEach(agent => console.log(formatAgentListItem(agent)));
 };
@@ -31,7 +31,7 @@ const listCommand: CommandHandler = async () => {
 const statusCommand: CommandHandler = async (args) => {
   const agentId = args[1];
   const result = agentId
-    ? await apiCall<any>('post', '/mcp/tools/get_agent_status', { agentId })
+    ? await apiCall<{ content?: { text?: string }[] }>('post', '/mcp/tools/get_agent_status', { agentId })
     : null;
 
   const parsed = agentId ? parseMCPResponse<AgentInfo>(result) : null;
@@ -48,7 +48,7 @@ const showAllAgentStatus = async () => {
 };
 
 const debugCommand: CommandHandler = async () => {
-  const data = await apiCall<any>('get', '/debug/state');
+  const data = await apiCall<{ agents: unknown[]; tasks: unknown[] }>('get', '/debug/state');
   console.log(JSON.stringify(data, null, 2));
 };
 

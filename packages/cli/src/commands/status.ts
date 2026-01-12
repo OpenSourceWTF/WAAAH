@@ -14,7 +14,7 @@ export const statusCommand = new Command('status')
   .action(async (agentId?: string) => {
     try {
       if (agentId) {
-        const response = await apiCall<any>('post', '/mcp/tools/get_agent_status', { agentId });
+        const response = await apiCall<{ content?: { text?: string }[] }>('post', '/mcp/tools/get_agent_status', { agentId });
         const status = parseMCPResponse<AgentInfo>(response);
         if (status) {
           console.log(formatSingleAgentStatus(status));

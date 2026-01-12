@@ -5,7 +5,7 @@ export const debugCommand = new Command('debug')
   .description('Show server debug state')
   .action(async () => {
     try {
-      const data = await apiCall<any>('get', '/debug/state');
+      const data = await apiCall<{ agents: unknown[]; tasks: unknown[] }>('get', '/debug/state');
       console.log(JSON.stringify(data, null, 2));
     } catch (error) {
       handleError(error);

@@ -11,6 +11,12 @@ export interface AgentInfo {
   currentTasks?: string[];
 }
 
+/** Standard MCP tool response wrapper */
+export interface MCPToolResponse<T> {
+  content?: Array<{ text?: string }>;
+  _parsed?: T;
+}
+
 /**
  * Get status icon for agent connection status
  */

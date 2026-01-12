@@ -29,7 +29,7 @@ async function pollTaskResponse(taskId: string) {
   const timeout = 60000;
   while (Date.now() - start < timeout) {
     try {
-      const task = await apiCall<any>('get', `/admin/tasks/${taskId}`);
+      const task = await apiCall<{ status: string; response?: { message?: string } }>('get', `/admin/tasks/${taskId}`);
       if (['COMPLETED', 'FAILED', 'BLOCKED'].includes(task.status)) {
         console.log(`\nResult for ${taskId}: ${task.status}`);
         console.log(`   ${task.response?.message}`);

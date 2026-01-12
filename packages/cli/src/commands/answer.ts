@@ -8,7 +8,7 @@ export const answerCommand = new Command('answer')
   .action(async (taskId: string, answerParts: string[]) => {
     const answer = answerParts.join(' ');
     try {
-      const response = await apiCall<any>('post', '/mcp/tools/answer_task', {
+      const response = await apiCall<{ content?: { text?: string }[] }>('post', '/mcp/tools/answer_task', {
         taskId,
         answer
       });
