@@ -71,11 +71,13 @@ export const claudeAdapter: CLIAdapter = {
   buildArgs(workflow: string, resume: boolean): string[] {
     // Claude: uses --resume for resume, or positional prompt for new session
     // NOTE: -p flag is "print mode" (non-interactive) - DO NOT use for interactive agents
+    // --add-dir includes .claude/skills for skill discovery
     if (resume) {
       return [
         '--resume',
         '--dangerously-skip-permissions',
-        '--mcp-config', this.configPath
+        '--mcp-config', this.configPath,
+        '--add-dir', '.claude/skills'
       ];
     } else {
       // Pass prompt as FIRST positional argument for interactive mode
@@ -84,7 +86,8 @@ export const claudeAdapter: CLIAdapter = {
       return [
         prompt,  // Prompt MUST be first
         '--dangerously-skip-permissions',
-        '--mcp-config', this.configPath
+        '--mcp-config', this.configPath,
+        '--add-dir', '.claude/skills'
       ];
     }
   }

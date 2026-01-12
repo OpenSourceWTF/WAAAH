@@ -72,6 +72,11 @@ export const geminiAdapter: CLIAdapter = {
     const prompt = resume
       ? `Resume the /${workflow} workflow. Continue from where you left off.`
       : `Follow the /${workflow} workflow exactly.`;
-    return ['-i', prompt, '--yolo', '--output-format', 'text'];
+    return [
+      '-i', prompt,
+      '--yolo',
+      '--output-format', 'text',
+      '--include-directories', '.agent/workflows'
+    ];
   }
 };
