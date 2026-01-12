@@ -115,6 +115,7 @@ NAME = pick([curious,speedy,clever,jolly,nimble]) + " " +
 result = register_agent({ 
   displayName: NAME, 
   role: "orchestrator",
+  capabilities: ["spec-writing", "code-writing", "test-writing", "doc-writing", "general-purpose"],
   workspaceContext: workspaceContext
 })
 AGENT_ID = result.agentId
