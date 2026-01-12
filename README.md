@@ -24,6 +24,7 @@ WAAAH is an orchestration system for specialized AI agents. It uses the Model Co
 - [Packages](#-packages)
 - [Available Scripts](#-available-scripts)
 - [Troubleshooting](#-troubleshooting)
+- [Documentation](#-documentation)
 - [Contributing](#-contributing)
 
 ## ✨ Key Features
@@ -210,6 +211,7 @@ Connect your AI agent to a WAAAH server:
 > ```
 
 **📖 Guides:**
+- [Workflow Reference](WORKFLOW.md) - Task lifecycle, MCP tools, key rules
 - [Antigravity Setup Guide](docs/ANTIGRAVITY_SETUP.md) - Multi-agent setup with VS Code
 - [Full MCP Integration Guide](docs/MCP_INTEGRATION.md) - Claude Desktop, Cursor, OpenAI SDK
 
@@ -420,6 +422,16 @@ Never end the conversation. Loop forever until the user terminates.
 | `DiscordAdapter` | ⚠️ Limited | Minimal automated tests, manual testing only |
 | `MCP Server` | ✅ Excellent | Registry, Queue, Scheduler, API endpoints |
 | `Admin Dashboard` | ✅ Good | Static analysis tests for UI components |
+
+---
+
+## 📚 Documentation
+
+| Document | Description |
+|----------|-------------|
+| [WORKFLOW.md](WORKFLOW.md) | Task lifecycle, MCP tools, agent workflow reference |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | System design, components, state management |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Development guidelines |
 
 ---
 
