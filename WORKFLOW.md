@@ -157,6 +157,48 @@ User answers via dashboard → task transitions to `IN_PROGRESS`.
 
 ---
 
+## User Comments (Mailbox)
+
+**Live comments** from users during task execution are delivered via `update_progress`.
+
+### Flow
+
+1. User posts comment via dashboard while agent is working
+2. Comment stored as **unread** (`isRead = false`)
+3. Agent calls `update_progress()` periodically
+4. Response includes `unreadComments` array if any exist
+5. Comments automatically marked as **read** after delivery
+
+### Agent Response Example
+
+```json
+{
+  "recorded": true,
+  "unreadComments": [
+    {
+      "id": "msg-abc",
+      "content": "Please also handle the edge case for empty arrays",
+      "timestamp": 1736700000000,
+      "metadata": { "messageType": "comment" }
+    }
+  ]
+}
+```
+
+### Agent Handling
+
+```
+1. Call update_progress({ phase, message })
+2. Check response.unreadComments
+3. If comments exist:
+   a. Read each comment
+   b. Address the feedback
+   c. Call update_progress() with response
+4. Continue work
+```
+
+**Key Point**: Agents should call `update_progress` regularly to receive user feedback.
+
 ## Diff Submission
 
 **REQUIRED** for code tasks:
