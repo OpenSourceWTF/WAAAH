@@ -274,6 +274,7 @@ git worktree add .worktrees/feature-${taskId} -b feature-${taskId}
             taskId: task.id,
             prompt: task.prompt,
             status: task.status,
+            to: task.to, // Include routing info (capabilities, workspaceId)
             messages,
             context: task.context,
             dependencyOutputs

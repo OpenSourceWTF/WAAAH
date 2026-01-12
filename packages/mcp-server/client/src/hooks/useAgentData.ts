@@ -64,11 +64,31 @@ export function useAgentData() {
 
     // Handle individual agent status updates
     const handleAgentStatus: ServerToClientEvents['agent:status'] = (data) => {
-      setAgents(prev => prev.map(agent =>
-        agent.id === data.id
-          ? { ...agent, status: data.status as Agent['status'], lastSeen: data.lastSeen }
-          : agent
-      ));
+      // If 'registered', refetch to get new agent with full details
+      if (data.status === 'registered') {
+        fetchAgentData();
+        return;
+      }
+
+      // For heartbeat/status updates, update existing agent
+      setAgents(prev => {
+        const agentIndex = prev.findIndex(a => a.id === data.id);
+        if (agentIndex >= 0) {
+          // Update existing agent with new lastSeen (recalculate status)
+          const updated = [...prev];
+          const agent = updated[agentIndex];
+          updated[agentIndex] = {
+            ...agent,
+            lastSeen: data.lastSeen,
+            // For heartbeat, agent is active so at least WAITING
+            status: agent.status === 'OFFLINE' ? 'WAITING' : agent.status
+          };
+          return updated;
+        }
+        // Agent not found, refetch to get it
+        fetchAgentData();
+        return prev;
+      });
     };
 
     socket.on('sync:full', handleSync);
