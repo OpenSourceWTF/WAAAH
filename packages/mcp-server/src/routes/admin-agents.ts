@@ -41,7 +41,8 @@ export function createAgentRoutes({ registry, queue }: AgentRoutesConfig): Route
         createdAt: agent.createdAt,
         currentTasks: assignedTasks.map(t => t.id),
         capabilities: agent.capabilities || [],
-        color: agent.color
+        color: agent.color,
+        workspaceContext: agent.workspaceContext
       };
     });
 
