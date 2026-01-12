@@ -17,6 +17,10 @@ export interface Agent {
   createdAt?: number;
   source?: 'cli' | 'ide';
   color?: string;
+  workspaceContext?: {
+    root?: string;
+    workspaceId?: string;
+  };
 }
 
 /**

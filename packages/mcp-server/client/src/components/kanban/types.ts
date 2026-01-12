@@ -40,6 +40,13 @@ export interface Task {
   history?: { timestamp: number; status: string; agentId?: string; message?: string }[];
   createdAt?: number;
   completedAt?: number;
+  /** Routing information (target agent, capabilities, workspace) */
+  to?: {
+    workspaceId?: string;
+    requiredCapabilities?: string[];
+    agentId?: string;
+    agentRole?: string;
+  };
   /** Source of task creation: UI (dashboard), CLI (command line), or Agent (delegation) */
   source?: 'UI' | 'CLI' | 'Agent';
 }

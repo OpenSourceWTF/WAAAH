@@ -357,6 +357,32 @@ export const ExpandedCardView: React.FC<ExpandedCardViewProps> = ({
                     </div>
                   </div>
                 </div>
+
+                {/* Routing Info: Workspace + Capabilities */}
+                {task.to && (task.to.workspaceId || (task.to.requiredCapabilities && task.to.requiredCapabilities.length > 0)) && (
+                  <div className="shrink-0">
+                    <h3 className="text-sm font-bold text-primary/70 mb-1">ROUTING</h3>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      {task.to.workspaceId && (
+                        <div className="bg-black/30 p-2 border border-primary/20">
+                          <span className="text-primary/50 text-xs">Workspace:</span>
+                          <p className="font-mono text-sm break-all">{task.to.workspaceId}</p>
+                        </div>
+                      )}
+                      {task.to.requiredCapabilities && task.to.requiredCapabilities.length > 0 && (
+                        <div className={`bg-black/30 p-2 border border-primary/20 ${!task.to.workspaceId ? 'col-span-2' : ''}`}>
+                          <span className="text-primary/50 text-xs">Required Capabilities:</span>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {task.to.requiredCapabilities.map(cap => (
+                              <Badge key={cap} variant="outline" className="text-xs border-primary/40">{cap}</Badge>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {task.context && (
                   <div className="flex-1 flex flex-col min-h-0">
                     <h3 className="text-sm font-bold text-primary/70 mb-1 shrink-0">CONTEXT OBJECT</h3>

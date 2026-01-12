@@ -12,6 +12,10 @@ export interface Agent {
   createdAt?: number;
   capabilities?: string[];
   source?: 'cli' | 'ide';
+  workspaceContext?: {
+    root?: string;
+    workspaceId?: string;
+  };
 }
 
 interface AgentCardProps {
@@ -109,6 +113,16 @@ export function AgentCard({
               <span className="text-[10px] text-primary/40 italic">None listed</span>
             )}
           </div>
+
+          {/* Workspace */}
+          {(agent.workspaceContext?.workspaceId || agent.workspaceContext?.root) && (
+            <div>
+              <div className="text-[10px] text-primary/50 uppercase mb-1">Workspace:</div>
+              <div className="text-[9px] font-mono text-primary/70 bg-black/20 px-1.5 py-1 border border-primary/20 truncate">
+                {agent.workspaceContext.workspaceId || agent.workspaceContext.root}
+              </div>
+            </div>
+          )}
 
           {/* Current Task */}
           {currentTask && (
