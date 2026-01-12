@@ -139,9 +139,12 @@ export async function configureMcp(agentType: AgentType, serverUrl: string): Pro
 
   // Build config
   const configPath = getConfigPath(agentType);
-  let config: any = {};
+  interface McpConfig {
+    mcpServers?: Record<string, { command: string; args: string[]; env?: Record<string, string> }>;
+  }
+  let config: McpConfig = {};
   try {
-    config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    config = JSON.parse(fs.readFileSync(configPath, 'utf-8')) as McpConfig;
   } catch { /* new file */ }
 
   config.mcpServers = config.mcpServers || {};

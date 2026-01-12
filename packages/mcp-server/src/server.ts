@@ -131,7 +131,7 @@ app.use('/admin', adminApiRouter);
 const toolRouter = createToolRouter(tools, ctx);
 app.use('/mcp/tools', requireApiKey, toolRouter);
 
-let server: any;
+let server: ReturnType<typeof httpServer.listen> | undefined;
 
 if (process.env.NODE_ENV !== 'test') {
   server = httpServer.listen(PORT, () => {
@@ -153,7 +153,7 @@ process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
 
 if (server) {
-  server.on('error', (e: any) => {
+  server.on('error', (e: NodeJS.ErrnoException) => {
     if (e.code === 'EADDRINUSE') {
       console.error(`❌ Port ${PORT} is already in use.`);
       console.error('   Hint: Another WAAAH server might be running in the background.');
