@@ -117,11 +117,11 @@ export function AgentCard({
           </div>
 
           {/* Workspace */}
-          {agent.workspaceContext && (agent.workspaceContext.workspaceId || agent.workspaceContext.root || agent.workspaceContext.path) && (
+          {agent.workspaceContext && (agent.workspaceContext.repoId || agent.workspaceContext.workspaceId || agent.workspaceContext.root || agent.workspaceContext.path) && (
             <div>
               <div className="text-[10px] text-primary/50 uppercase mb-1">Workspace:</div>
               <div className="text-[9px] font-mono text-primary/70 bg-black/20 px-1.5 py-1 border border-primary/20 truncate">
-                {agent.workspaceContext.workspaceId || agent.workspaceContext.root || agent.workspaceContext.path}
+                {agent.workspaceContext.repoId || agent.workspaceContext.workspaceId || agent.workspaceContext.root || agent.workspaceContext.path}
               </div>
             </div>
           )}
