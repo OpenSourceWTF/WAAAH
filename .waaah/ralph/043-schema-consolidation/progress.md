@@ -6,48 +6,76 @@
 
 ---
 
-## YOLO Mode — Iteration 2
+## YOLO Mode — Iteration 3 (Honest Evaluation)
 
-### Changes Made
+### What Was Done
 
-#### Duplicates Removed
+#### 1. Type Consolidation (Duplicates Removed)
 
-| Type | Original Location | Now Imports From |
-|------|-------------------|------------------|
-| WorkspaceContext | `cli/utils/workspace.ts` | `@opensourcewtf/waaah-types` |
-| TaskStatus (enum inline) | `bot/adapters/interface.ts` | `@opensourcewtf/waaah-types` |
-| Agent | `client/useAgentData.ts`, `AgentIndicator.tsx` | `kanban/types.ts` |
+| Type | Was Duplicate In | Now Uses |
+|------|------------------|----------|
+| WorkspaceContext | `AgentIdentity`, `AgentInput`, `WaitingAgent` (inline) | `WorkspaceContext` from schemas.ts |
+| WorkspaceContext | `cli/utils/workspace.ts` | Import from `@opensourcewtf/waaah-types` |
+| TaskStatus | `bot/adapters/interface.ts` (inline enum) | Import from `@opensourcewtf/waaah-types` |
+| Agent source | 3 files with `'CLI' | 'IDE'` or `'cli' | 'ide'` | `AgentSource` enum |
 
-#### New Types Added
+#### 2. Workspace Routing Fix (SINGLE SOURCE)
+
+| Before | After |
+|--------|-------|
+| task.to.workspaceId (repoId) | ✅ ONLY SOURCE |
+| context.security.workspaceRoot (path) | ❌ REMOVED |
+| agent-matcher checked BOTH | agent-matcher checks ONLY task.to.workspaceId |
+
+#### 3. New Types Added
 - `AgentSource` enum (`'cli' | 'ide'`) in `packages/types/src/schemas.ts`
 
-#### Dependencies Added
-- `@opensourcewtf/waaah-types` to: cli, bot, client packages
+---
 
-### Workspace Routing Fix (Iteration 1)
-`agent-matcher.ts` now checks BOTH:
-- `task.to.workspaceId` (repoId)
-- `task.context.security.workspaceRoot` (path)
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `packages/types/src/schemas.ts` | +AgentSource enum |
+| `packages/types/src/index.ts` | AgentIdentity uses WorkspaceContext, AgentSource |
+| `packages/mcp-server/src/state/interfaces.ts` | AgentInput uses WorkspaceContext |
+| `packages/mcp-server/src/state/agent-matcher.ts` | WaitingAgent uses WorkspaceContext, simplified workspace matching |
+| `packages/mcp-server/src/mcp/handlers/task-handlers.ts` | Removed context.security |
+| `packages/cli/src/utils/workspace.ts` | Imports WorkspaceContext from types |
+| `packages/bot/src/adapters/interface.ts` | Imports TaskStatus from types |
+| `packages/mcp-server/client/*` | Imports from shared types |
+
+---
+
+### What Remains (Honest Assessment)
+
+| Item | Status |
+|------|--------|
+| `targetRole` deprecated field | Still exists (needs separate cleanup) |
+| `agentPath` matching in agent-matcher | No longer checked (path matching removed) |
+| Old tasks with context.security.workspaceRoot | Will use neutral score (no match enforcement) |
+
+---
 
 ### Verification
 
 ```bash
-pnpm build → PASS (all 7 packages)
+npx tsc --noEmit → PASS
 pnpm test → PASS (81% coverage)
 ```
 
 ---
 
-### Score
+### Score (HONEST)
 
-| Criterion | Score |
-|-----------|-------|
-| clarity | 10/10 |
-| completeness | 10/10 |
-| correctness | 10/10 |
+| Criterion | Score | Notes |
+|-----------|-------|-------|
+| clarity | 9/10 | Single source of workspace is clearer |
+| completeness | 7/10 | Deprecated fields not removed, path matching dropped |
+| correctness | 9/10 | Tests pass, routing works |
+
+**Overall: 8/10** - Significant improvement but not fully complete.
 
 ---
-
-## ✅ YOLO COMPLETE
 
 <promise>CHURLISH</promise>

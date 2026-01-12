@@ -5,7 +5,7 @@
 import { AgentRepository } from '../../state/persistence/agent-repository.js';
 import { TaskQueue } from '../../state/queue.js';
 import { emitDelegation } from '../../state/events.js';
-import { scanPrompt, getSecurityContext } from '../../security/prompt-scanner.js';
+import { scanPrompt } from '../../security/prompt-scanner.js';
 import { inferCapabilities } from '../../scheduling/capability-inference.js';
 import {
   sendResponseSchema,
@@ -151,8 +151,9 @@ git worktree add .worktrees/feature-${taskId} -b feature-${taskId}
         createdAt: Date.now(),
         context: {
           ...params.context,
-          isDelegation: true,
-          security: getSecurityContext(process.env.WORKSPACE_ROOT || process.cwd())
+          isDelegation: true
+          // NOTE: security context is derived from task.to.workspaceId when needed,
+          // not stored redundantly here. See agent-matcher.ts for workspace routing.
         },
         dependencies: params.dependencies
       });

@@ -2,7 +2,7 @@ export * from './schemas.js';
 export * from './mcp-tools.js';
 export * from './errors.js';
 
-import { StandardCapability, TaskStatus, AgentConnectionStatus } from './schemas.js';
+import { StandardCapability, TaskStatus, AgentConnectionStatus, AgentSource, WorkspaceContext } from './schemas.js';
 
 // ===== Entity Interfaces =====
 
@@ -22,14 +22,9 @@ export interface AgentIdentity {
   color?: string; // For UI visualization
   currentTask?: string;
   /** Source of the agent: CLI (waaah-agent wrapper) or IDE (Cursor/Claude/etc) */
-  source?: 'CLI' | 'IDE';
+  source?: AgentSource;
   /** Workspace context for affinity matching */
-  workspaceContext?: {
-    type: 'local' | 'github';
-    repoId: string;
-    branch?: string;
-    path?: string;
-  };
+  workspaceContext?: WorkspaceContext;
 }
 
 /**

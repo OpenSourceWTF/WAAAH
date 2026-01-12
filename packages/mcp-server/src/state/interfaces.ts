@@ -8,7 +8,8 @@ import type {
   StandardCapability,
   Task,
   TaskStatus,
-  TaskMessage
+  TaskMessage,
+  WorkspaceContext
 } from '@opensourcewtf/waaah-types';
 
 // ===== Database Interfaces =====
@@ -39,12 +40,7 @@ export interface AgentInput {
   role?: string;
   capabilities: StandardCapability[];
   color?: string;
-  workspaceContext?: {
-    type: 'local' | 'github';
-    repoId: string;
-    branch?: string;
-    path?: string;
-  };
+  workspaceContext?: WorkspaceContext;
 }
 
 /**

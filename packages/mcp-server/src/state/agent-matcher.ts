@@ -14,7 +14,7 @@
  * @module state/agent-matcher
  */
 
-import type { Task, TaskStatus, StandardCapability, AgentIdentity } from '@opensourcewtf/waaah-types';
+import type { Task, TaskStatus, StandardCapability, AgentIdentity, WorkspaceContext } from '@opensourcewtf/waaah-types';
 import type { TypedEventEmitter } from './queue-events.js';
 import { areDependenciesMet } from './services/task-lifecycle-service.js';
 
@@ -39,12 +39,7 @@ export const SCHEDULER_CONFIG = {
 export interface WaitingAgent {
   agentId: string;
   capabilities: StandardCapability[];
-  workspaceContext?: {
-    type: 'local' | 'github';
-    repoId: string;
-    branch?: string;
-    path?: string;
-  };
+  workspaceContext?: WorkspaceContext;
   waitingSince: number;
 }
 
@@ -96,39 +91,32 @@ export interface AgentScore {
  * Returns 1.0 for exact match, 0.5 if no workspace specified (neutral).
  * Returns 0.0 AND eligible:false for mismatch (HARD REJECT).
  * 
- * Checks task workspace from:
- * 1. task.to.workspaceId (repoId like "OpenSourceWTF/WAAAH")
- * 2. task.context.security.workspaceRoot (path like "/home/user/projects/WAAAH")
+ * SINGLE SOURCE OF TRUTH: task.to.workspaceId (repoId like "OpenSourceWTF/WAAAH")
+ * Matches against agent's workspaceContext.repoId
  * 
- * Matches against agent's:
- * 1. workspaceContext.repoId
- * 2. workspaceContext.path
+ * NOTE: context.security.workspaceRoot was removed in Session 043 schema consolidation.
+ * All workspace routing now flows through task.to.workspaceId only.
  */
 function calculateWorkspaceScore(task: Task, agent: WaitingAgent): { score: number; eligible: boolean } {
-  // Get task workspace from multiple sources
-  const taskWorkspaceId = task.to?.workspaceId; // repoId format
-  const taskWorkspacePath = (task.context as any)?.security?.workspaceRoot; // path format
+  // Single source: task.to.workspaceId
+  const taskWorkspaceId = task.to?.workspaceId;
 
-  // Get agent workspace identifiers
+  // Agent workspace
   const agentRepoId = agent.workspaceContext?.repoId;
-  const agentPath = agent.workspaceContext?.path;
 
-  // If task has no workspace requirement at all, neutral
-  if (!taskWorkspaceId && !taskWorkspacePath) {
+  // If task has no workspace requirement, neutral
+  if (!taskWorkspaceId) {
     return { score: 0.5, eligible: true };
   }
 
   // If agent has no workspace context, neutral (can work anywhere)
-  if (!agentRepoId && !agentPath) {
+  if (!agentRepoId) {
     return { score: 0.5, eligible: true };
   }
 
-  // Check for matches
-  const repoIdMatch = taskWorkspaceId && agentRepoId && taskWorkspaceId === agentRepoId;
-  const pathMatch = taskWorkspacePath && agentPath && taskWorkspacePath === agentPath;
-
-  if (repoIdMatch || pathMatch) {
-    return { score: 1.0, eligible: true }; // Match found
+  // Exact repoId match required
+  if (taskWorkspaceId === agentRepoId) {
+    return { score: 1.0, eligible: true };
   }
 
   // HARD REJECT: workspace specified but no match
