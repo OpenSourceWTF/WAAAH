@@ -51,9 +51,11 @@ export function createToolRouter(tools: ToolHandler, ctx: ServerContext) {
       return;
     }
 
+    // Type-safe method invocation using Function.prototype.call
+    const fn = method as (args: unknown, db?: unknown) => Promise<unknown>;
     const result = DB_DEPENDENT_TOOLS.includes(toolName)
-      ? await (method as any).call(tools, args, ctx.db)
-      : await (method as any).call(tools, args);
+      ? await fn.call(tools, args, ctx.db)
+      : await fn.call(tools, args);
     res.json(result);
   });
 

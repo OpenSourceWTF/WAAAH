@@ -32,7 +32,9 @@ export class SlackAdapter extends BaseAdapter {
 
       // Remove the bot mention from the text
       const content = event.text.replace(/<@[A-Z0-9]+>/g, '').trim();
-      const eventAny = event as any;
+
+      // Slack types don't include thread_ts on MessageEvent, but it exists at runtime
+      const threadTs = 'thread_ts' in event ? (event as { thread_ts?: string }).thread_ts : undefined;
 
       const context: MessageContext = {
         messageId: event.ts,
@@ -42,8 +44,8 @@ export class SlackAdapter extends BaseAdapter {
         authorName: userId, // Slack doesn't include name in event
         platform: 'slack',
         raw: { event, say, client },
-        isThread: !!eventAny.thread_ts,
-        threadId: eventAny.thread_ts
+        isThread: !!threadTs,
+        threadId: threadTs
       };
 
       await this.processMessage(content, context);
@@ -88,7 +90,8 @@ export class SlackAdapter extends BaseAdapter {
     const { say } = context.raw as { say: SayFn };
 
     // If this is a slash command, we don't have a message TS to thread on
-    const isSlashCommand = !!(context.raw as any).command;
+    const rawObj = context.raw as Record<string, unknown>;
+    const isSlashCommand = 'command' in rawObj;
 
     // Use centralized logic
     const useThread = this.shouldReplyInThread(context, 'SLACK_FORCE_THREADING');
@@ -109,16 +112,16 @@ export class SlackAdapter extends BaseAdapter {
       thread_ts: threadTs
     });
 
-    const ts = (result as any).ts;
+    const resultTs = result && typeof result === 'object' && 'ts' in result ? (result as { ts: string }).ts : '';
     this.cacheReply(context.messageId, {
       channel: context.channelId,
-      ts
+      ts: resultTs
     });
-    return ts;
+    return resultTs;
   }
 
   async editReply(context: MessageContext, _replyId: string, message: string): Promise<void> {
-    const { client } = context.raw as { client: any };
+    const { client } = context.raw as { client: { chat: { update: (opts: { channel: string; ts: string; text: string }) => Promise<void> } } };
     const cached = this.getCachedReply<{ channel: string; ts: string }>(context.messageId);
 
     if (cached) {
