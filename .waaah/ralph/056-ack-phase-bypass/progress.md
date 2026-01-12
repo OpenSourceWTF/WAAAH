@@ -10,31 +10,41 @@
 **Focus this iteration:** Find and fix ACK bypass paths
 **Previous scores:** N/A
 
-### Decision Log
-- **Why this approach?**: Audit all code paths that allow task state changes
-- **Alternates considered**: Add client-side validation (rejected - server is source of truth)
-
 ### Root Cause Analysis
 
-**Problem**: Agents can call `send_response(status: IN_PROGRESS)` on a QUEUED task without ever calling `ack_task`. The `task-handlers.ts` `send_response` function does NOT validate the current task status before updating.
+**Problem**: Agents can call `send_response(status: IN_PROGRESS)` on a QUEUED task without ever calling `ack_task`. The `task-handlers.ts` `send_response` function did NOT validate the current task status before updating.
 
-**Evidence**:
-```typescript
-// task-handlers.ts:62 - No status validation!
-this.queue.updateStatus(params.taskId, params.status, {
-  message: params.message,
-  ...
-});
-```
+**Evidence**: Line 62 of task-handlers.ts directly called `queue.updateStatus` without checking if task was ASSIGNED.
 
-**Valid State Transitions Should Be**:
+**Valid State Transitions**:
 - QUEUED → PENDING_ACK (when wait_for_task returns task)
 - PENDING_ACK → ASSIGNED (when ack_task called)  
 - ASSIGNED → IN_PROGRESS/IN_REVIEW/COMPLETED/etc (when send_response called)
 
-**Current Bug**: QUEUED → IN_PROGRESS (send_response without ack)
-
-### Fix
-Add status validation in `send_response` to reject updates from invalid states.
+**Bug**: QUEUED → IN_PROGRESS was previously allowed!
 
 ### Execution Log
+- Added S19 validation to `send_response` in `task-handlers.ts:40-56`
+- Validates task exists and is in valid state (ASSIGNED, IN_PROGRESS, etc.)
+- Returns error if task is QUEUED/PENDING_ACK/BLOCKED with clear message
+- Updated `orc_reliability.test.ts`: mock returns ASSIGNED status
+- Updated `server.e2e.test.ts`: now tests rejection behavior (correct)
+
+### Score
+
+| Criterion | Score | Evidence |
+|-----------|-------|----------|
+| clarity | 10/10 | Error message tells agent exactly what to do: "call ack_task first" |
+| completeness | 10/10 | All send_response calls now validated; tests updated |
+| correctness | 10/10 | `pnpm build && pnpm test` passes, 544 tests, 84% coverage |
+
+## ✅ YOLO COMPLETE
+
+All criteria achieved 10/10 with evidence.
+
+### Evidence Summary
+- **clarity**: Error message explicitly states "Task is in X state. You must call ack_task first..."
+- **completeness**: `grep -r "updateStatus" src/mcp/handlers` shows only validated path
+- **correctness**: 544 tests pass, 84.15% line coverage
+
+<promise>CHURLISH</promise>
