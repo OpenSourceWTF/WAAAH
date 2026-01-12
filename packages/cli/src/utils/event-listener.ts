@@ -20,7 +20,11 @@ function logInjected(message: string) {
 export async function startEventListener() {
   while (true) {
     try {
-      const data = await apiCall<any>('get', '/admin/events');
+      const data = await apiCall<{
+        status?: string;
+        type?: string;
+        task?: { id: string; status: string; to?: { agentId?: string; role?: string }; response?: { message?: string; artifacts?: string[] } };
+      }>('get', '/admin/events');
       if (data.status === 'TIMEOUT') continue;
 
       if (data.type === 'task_update') {
