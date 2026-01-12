@@ -1,16 +1,14 @@
-/**
- * SSE (Server-Sent Events) Routes
- * Handles real-time streaming endpoints
- */
 import { Router } from 'express';
 import { TaskQueue } from '../state/queue.js';
-import { eventBus } from '../state/events.js';
+import { eventBus as appEventBus } from '../state/events.js'; // The EventEmitter one
+import { IAgentRegistry } from '../state/registry.js';
 
 interface SSERoutesConfig {
   queue: TaskQueue;
+  registry?: IAgentRegistry; // Optional for backward compat if needed, but we'll update server.ts
 }
 
-export function createSSERoutes({ queue }: SSERoutesConfig): Router {
+export function createSSERoutes({ queue, registry }: SSERoutesConfig): Router {
   const router = Router();
 
   // Track active SSE connections
@@ -38,17 +36,17 @@ export function createSSERoutes({ queue }: SSERoutesConfig): Router {
       res.write(`data: ${JSON.stringify(activity)}\n\n`);
     };
 
-    eventBus.on('delegation', onDelegation);
+    appEventBus.on('delegation', onDelegation);
     queue.on('completion', onCompletion);
-    eventBus.on('activity', onActivity);
+    appEventBus.on('activity', onActivity);
 
     activeDelegationStreams++;
     console.log('[SSE] Client connected to delegation/completion stream. Total:', activeDelegationStreams);
 
     req.on('close', () => {
-      eventBus.off('delegation', onDelegation);
+      appEventBus.off('delegation', onDelegation);
       queue.off('completion', onCompletion);
-      eventBus.off('activity', onActivity);
+      appEventBus.off('activity', onActivity);
       activeDelegationStreams = Math.max(0, activeDelegationStreams - 1);
       console.log('[SSE] Client disconnected from stream. Total:', activeDelegationStreams);
     });
@@ -67,11 +65,37 @@ export function createSSERoutes({ queue }: SSERoutesConfig): Router {
 
   /**
    * GET /events
-   * Long-polling endpoint for task completion events
+   * Real-time task events stream (Toast Notifications)
    */
-  router.get('/events', async (req, res) => {
-    await new Promise(r => setTimeout(r, 5000));
-    res.json({ status: 'TIMEOUT' });
+  router.get('/events', (req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
+
+    console.log('[SSE] Client connected to /admin/events');
+
+    // Send initial status
+    if (registry) {
+      const agents = registry.getAll();
+      res.write(`event: agent:list\n`);
+      res.write(`data: ${JSON.stringify(agents)}\n\n`);
+    }
+
+    const onTaskCreated = (task: any) => {
+      res.write(`event: task:created\n`);
+      res.write(`data: ${JSON.stringify(task)}\n\n`);
+    };
+
+    // Future: Listen to agent events if registry supports it
+    // For now we just send initial list.
+
+    appEventBus.on('task:created', onTaskCreated);
+
+    req.on('close', () => {
+      appEventBus.off('task:created', onTaskCreated);
+      console.log('[SSE] Client disconnected from /admin/events');
+    });
   });
 
   return router;

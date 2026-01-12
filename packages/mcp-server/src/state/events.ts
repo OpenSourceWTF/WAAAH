@@ -70,3 +70,12 @@ export const emitActivity = (category: ActivityEvent['category'], message: strin
     metadata
   });
 };
+
+/**
+ * Emits a 'task:created' event to notify listeners (e.g., SSE streams).
+ * 
+ * @param task - The task object.
+ */
+export const emitTaskCreatedEvent = (task: any) => {
+  eventBus.emit('task:created', task);
+};

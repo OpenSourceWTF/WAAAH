@@ -124,7 +124,7 @@ adminApiRouter.use(requireApiKey);
 adminApiRouter.use(createTaskRoutes({ queue, workspaceRoot: WORKSPACE_ROOT }));
 adminApiRouter.use(createReviewRoutes({ queue, db: ctx.db, workspaceRoot: WORKSPACE_ROOT }));
 adminApiRouter.use(createAgentRoutes({ registry, queue }));
-adminApiRouter.use(createSSERoutes({ queue }));
+adminApiRouter.use(createSSERoutes({ queue, registry }));
 app.use('/admin', adminApiRouter);
 
 // Tool Routing - use extracted router
