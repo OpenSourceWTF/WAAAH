@@ -251,8 +251,21 @@ fi
         };
       }
 
+      // Deliver any unread comments on ACK
+      const unreadComments = this.queue.getUnreadComments(params.taskId);
+      if (unreadComments.length > 0) {
+        this.queue.markCommentsAsRead(params.taskId);
+        console.log(`[Tool] Delivering ${unreadComments.length} unread comments on ACK for task ${params.taskId}`);
+      }
+
       return {
-        content: [{ type: 'text', text: `Task ${params.taskId} acknowledged` }]
+        content: [{
+          type: 'text', text: JSON.stringify({
+            acknowledged: true,
+            taskId: params.taskId,
+            unreadComments: unreadComments.length > 0 ? unreadComments : undefined
+          })
+        }]
       };
     } catch (e) { return this.handleError(e); }
   }
@@ -325,6 +338,13 @@ fi
         }
       }
 
+      // Deliver any unread comments when context is fetched
+      const unreadComments = this.queue.getUnreadComments(params.taskId);
+      if (unreadComments.length > 0) {
+        this.queue.markCommentsAsRead(params.taskId);
+        console.log(`[Tool] Delivering ${unreadComments.length} unread comments on get_task_context for task ${params.taskId}`);
+      }
+
       return {
         content: [{
           type: 'text',
@@ -335,7 +355,8 @@ fi
             to: task.to, // Include routing info (capabilities, workspaceId)
             messages,
             context: task.context,
-            dependencyOutputs
+            dependencyOutputs,
+            unreadComments: unreadComments.length > 0 ? unreadComments : undefined
           })
         }]
       };
