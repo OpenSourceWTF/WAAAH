@@ -110,15 +110,13 @@ workspaceContext = {
   path: process.cwd()
 }
 
-NAME = pick([curious,speedy,clever,jolly,nimble]) + " " + 
-       pick([otter,panda,fox,owl,penguin]) + " " + random(10-99)
 result = register_agent({ 
-  displayName: NAME, 
   role: "orchestrator",
   capabilities: ["spec-writing", "code-writing", "test-writing", "doc-writing", "general-purpose"],
   workspaceContext: workspaceContext
 })
 AGENT_ID = result.agentId
+NAME = result.displayName  # Server auto-generates adjective-noun-NN format
 → WAIT
 ```
 
