@@ -1,18 +1,7 @@
 import React from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Clock, Terminal, Monitor } from 'lucide-react';
-
-export interface Agent {
-  id: string;
-  displayName?: string;
-  role: string;
-  status: string;
-  currentTasks?: string[];
-  lastSeen?: number;
-  createdAt?: number;
-  capabilities?: string[];
-  source?: 'cli' | 'ide';
-}
+import type { Agent } from '../kanban/types';
 
 interface AgentIndicatorProps {
   agent: Agent;

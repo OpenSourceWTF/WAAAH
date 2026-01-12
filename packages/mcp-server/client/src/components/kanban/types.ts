@@ -1,17 +1,25 @@
 /**
  * UI-specific types for Kanban components
  * 
- * These types are intentionally separate from @opensourcewtf/waaah-types to:
- * 1. Include UI-specific extensions (e.g., images on TaskMessage)
- * 2. Use relaxed types (string instead of TaskStatus) for display flexibility
- * 3. Avoid bundler complexity of importing from monorepo packages
- * 
- * @see packages/types/src/index.ts for server-side canonical types
+ * These types extend the canonical types from @opensourcewtf/waaah-types
+ * with UI-specific additions (e.g., images on messages).
  */
+import type {
+  TaskStatus,
+  WorkspaceContext,
+  AgentSource
+} from '@opensourcewtf/waaah-types';
 
-/** Message in a task's conversation thread */
+// Re-export base types for convenience
+export type { TaskStatus, WorkspaceContext, AgentSource };
+
+/** 
+ * Task message with UI-specific extensions 
+ * Redefined to allow optional id for UI creation
+ */
 export interface TaskMessage {
   id?: string;
+  taskId?: string;
   timestamp: number;
   role: 'user' | 'agent' | 'system';
   content: string;
@@ -19,19 +27,20 @@ export interface TaskMessage {
   messageType?: 'comment' | 'progress' | 'review_feedback' | 'block_event';
   replyTo?: string;
   metadata?: Record<string, unknown>;
-  /** UI-specific: images attached to messages (displayed in dashboard) */
+  /** UI-specific: images attached to messages */
   images?: Array<{ dataUrl: string; mimeType: string; name: string }>;
 }
 
-/** Task representation for UI display */
+/** 
+ * Task representation for UI display
+ * Uses string status for display flexibility (API returns strings)
+ */
 export interface Task {
   id: string;
-  command: string;
+  command?: string;
   prompt: string;
   title?: string;
-  status: string;
-  toAgentId?: string;
-  toAgentRole?: string;
+  status: string; // String for display flexibility
   assignedTo?: string;
   context?: Record<string, unknown>;
   dependencies?: string[];
@@ -40,15 +49,33 @@ export interface Task {
   history?: { timestamp: number; status: string; agentId?: string; message?: string }[];
   createdAt?: number;
   completedAt?: number;
-  /** Routing information (target agent, capabilities, workspace) */
+  /** Routing information from canonical Task.to */
   to?: {
     workspaceId?: string;
     requiredCapabilities?: string[];
     agentId?: string;
     agentRole?: string;
   };
-  /** Source of task creation: UI (dashboard), CLI (command line), or Agent (delegation) */
+  /** Source of task creation */
   source?: 'UI' | 'CLI' | 'Agent';
+}
+
+/**
+ * Agent for UI display
+ * Matches AgentIdentity from canonical types with UI-specific status
+ */
+export interface Agent {
+  id: string;
+  displayName: string;
+  role?: string;
+  status: 'OFFLINE' | 'WAITING' | 'PROCESSING';
+  lastSeen?: number;
+  currentTasks?: string[];
+  capabilities?: string[];
+  createdAt?: number;
+  source?: AgentSource;
+  color?: string;
+  workspaceContext?: WorkspaceContext;
 }
 
 export interface KanbanBoardProps {
@@ -63,6 +90,12 @@ export interface KanbanBoardProps {
   onAddReviewComment: (taskId: string, filePath: string, lineNumber: number | null, content: string) => void;
   onViewHistory?: () => void;
   onTaskClick?: (task: Task) => void;
+  onUnblockTask?: (taskId: string, reason: string) => void;
+  onLoadMoreCompleted?: () => void;
+  onLoadMoreCancelled?: () => void;
+  hasMoreCompleted?: boolean;
+  hasMoreCancelled?: boolean;
+  loadingMore?: 'completed' | 'cancelled' | null;
 }
 
 export const COLUMNS = [

@@ -2,26 +2,10 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { getSocket, connectSocket } from '../lib/socket';
 import type { ServerToClientEvents } from '../lib/socket';
 import { apiFetch } from '../lib/api';
+import type { Agent } from '../components/kanban/types';
 
-/**
- * Agent interface matching the Dashboard's Agent type
- */
-export interface Agent {
-  id: string;
-  role: string;
-  displayName: string;
-  status: 'OFFLINE' | 'WAITING' | 'PROCESSING';
-  lastSeen?: number;
-  currentTasks?: string[];
-  capabilities?: string[];
-  createdAt?: number;
-  source?: 'cli' | 'ide';
-  color?: string;
-  workspaceContext?: {
-    root?: string;
-    workspaceId?: string;
-  };
-}
+// Re-export Agent type for consumers
+export type { Agent };
 
 /**
  * Agent status indicator colors
