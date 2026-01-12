@@ -96,7 +96,15 @@ export function DiffViewer({ taskId, onAddComment, onDiffLoaded }: DiffViewerPro
     }
   }, [taskId]);
 
-  useEffect(() => { !diffLoaded.current && fetchDiff().then(fetchComments); }, [fetchDiff, fetchComments]);
+  useEffect(() => {
+    if (!diffLoaded.current) {
+      // Defer to next tick to avoid blocking click handler
+      const timeoutId = setTimeout(() => {
+        fetchDiff().then(fetchComments);
+      }, 0);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [fetchDiff, fetchComments]);
 
   // Fix #5: Stable callback references
   const handleAddComment = useCallback(async () => {
