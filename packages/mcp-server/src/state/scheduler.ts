@@ -84,8 +84,8 @@ export class HybridScheduler {
       this.checkBlockedTasks();
       this.assignPendingTasks();
       this.rebalanceOrphanedTasks();
-    } catch (e: any) {
-      console.error(`[Scheduler] Cycle error: ${e.message}`);
+    } catch (e: unknown) {
+      console.error(`[Scheduler] Cycle error: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 

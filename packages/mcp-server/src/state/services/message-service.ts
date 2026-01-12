@@ -21,8 +21,8 @@ export class MessageService {
     try {
       this.repo.addMessage(taskId, role, content, metadata, isRead, replyTo);
       console.log(`[MessageService] Added message to task ${taskId} from ${role} (type: ${messageType || 'default'})`);
-    } catch (e: any) {
-      console.error(`[MessageService] Failed to add message to task ${taskId}: ${e.message}`);
+    } catch (e: unknown) {
+      console.error(`[MessageService] Failed to add message to task ${taskId}: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
@@ -49,8 +49,8 @@ export class MessageService {
   getUnreadComments(taskId: string): Array<{ id: string; content: string; timestamp: number; metadata?: Record<string, any> }> {
     try {
       return this.repo.getUnreadComments(taskId);
-    } catch (e: any) {
-      console.error(`[MessageService] Failed to get unread comments for task ${taskId}: ${e.message}`);
+    } catch (e: unknown) {
+      console.error(`[MessageService] Failed to get unread comments for task ${taskId}: ${e instanceof Error ? e.message : String(e)}`);
       return [];
     }
   }
@@ -61,8 +61,8 @@ export class MessageService {
   markCommentsAsRead(taskId: string): number {
     try {
       return this.repo.markCommentsAsRead(taskId);
-    } catch (e: any) {
-      console.error(`[MessageService] Failed to mark comments as read for task ${taskId}: ${e.message}`);
+    } catch (e: unknown) {
+      console.error(`[MessageService] Failed to mark comments as read for task ${taskId}: ${e instanceof Error ? e.message : String(e)}`);
       return 0;
     }
   }
@@ -73,8 +73,8 @@ export class MessageService {
   getMessages(taskId: string): any[] {
     try {
       return this.repo.getMessages(taskId);
-    } catch (e: any) {
-      console.error(`[MessageService] Failed to get messages for task ${taskId}: ${e.message}`);
+    } catch (e: unknown) {
+      console.error(`[MessageService] Failed to get messages for task ${taskId}: ${e instanceof Error ? e.message : String(e)}`);
       return [];
     }
   }

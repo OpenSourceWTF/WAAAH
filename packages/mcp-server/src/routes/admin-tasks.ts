@@ -224,8 +224,8 @@ export function createTaskRoutes({ queue, workspaceRoot }: TaskRoutesConfig): Ro
       }
 
       res.json({ diff });
-    } catch (e: any) {
-      console.error(`[API] Failed to get diff for ${taskId}:`, e.message);
+    } catch (e: unknown) {
+      console.error(`[API] Failed to get diff for ${taskId}:`, e instanceof Error ? e.message : String(e));
       res.status(500).json({ error: 'Failed to generate diff' });
     }
   });
@@ -254,8 +254,8 @@ export function createTaskRoutes({ queue, workspaceRoot }: TaskRoutesConfig): Ro
       queue.addUserComment(taskId, content, replyTo, images);
       console.log(`[API] User comment added to task ${taskId} (unread)${replyTo ? ` replying to ${replyTo}` : ''}${images?.length ? ` with ${images.length} images` : ''}`);
       res.json({ success: true });
-    } catch (e: any) {
-      console.error(`Failed to add comment to task ${taskId}:`, e.message);
+    } catch (e: unknown) {
+      console.error(`Failed to add comment to task ${taskId}:`, e instanceof Error ? e.message : String(e));
       res.status(500).json({ error: 'Failed to add comment' });
     }
   });

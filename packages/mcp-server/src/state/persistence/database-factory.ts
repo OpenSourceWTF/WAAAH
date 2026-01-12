@@ -226,7 +226,7 @@ function runMigrations(db: Database.Database): void {
         console.log(`[DB] Migrated tasks: added ${migration.column}`);
       } catch (e: any) {
         if (!e.message.includes('duplicate column name')) {
-          console.error(`[DB] Migration failed (${migration.column}):`, e.message);
+          console.error(`[DB] Migration failed (${migration.column}):`, e instanceof Error ? e.message : String(e));
         }
       }
     }
@@ -255,7 +255,7 @@ function runMigrations(db: Database.Database): void {
         console.log(`[DB] Migrated agents: added ${migration.column}`);
       } catch (e: any) {
         if (!e.message.includes('duplicate column name')) {
-          console.error(`[DB] Migration failed (${migration.column}):`, e.message);
+          console.error(`[DB] Migration failed (${migration.column}):`, e instanceof Error ? e.message : String(e));
         }
       }
     }

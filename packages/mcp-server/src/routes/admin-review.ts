@@ -49,9 +49,9 @@ export function createReviewRoutes({ queue, db, workspaceRoot }: ReviewRoutesCon
       const branchName = `feature-${taskId}`;
       const { stdout } = await execAsync(`git diff main...${branchName}`, { cwd: workspaceRoot });
       res.json({ diff: stdout, source: 'git' });
-    } catch (e: any) {
+    } catch (e: unknown) {
       // Return empty diff gracefully (branch may not exist for retried tasks)
-      console.log(`[Diff] No diff available for ${taskId}: ${e.message}`);
+      console.log(`[Diff] No diff available for ${taskId}: ${e instanceof Error ? e.message : 'Unknown error'}`);
       res.json({ diff: '', source: 'none' });
     }
   });
@@ -75,9 +75,10 @@ export function createReviewRoutes({ queue, db, workspaceRoot }: ReviewRoutesCon
       queue.updateStatus(taskId, 'APPROVED_QUEUED');
 
       res.json({ success: true, message: 'Task approved and queued for merge.' });
-    } catch (e: any) {
-      console.error(`Approve failed for ${taskId}:`, e.message);
-      res.status(500).json({ error: 'Failed to approve task', details: e.message });
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Unknown error';
+      console.error(`Approve failed for ${taskId}:`, message);
+      res.status(500).json({ error: 'Failed to approve task', details: message });
     }
   });
 
@@ -102,9 +103,10 @@ export function createReviewRoutes({ queue, db, workspaceRoot }: ReviewRoutesCon
       queue.updateStatus(taskId, 'QUEUED');
 
       res.json({ success: true, message: 'Task rejected and returned to queue' });
-    } catch (e: any) {
-      console.error(`Reject failed for ${taskId}:`, e.message);
-      res.status(500).json({ error: 'Failed to reject task', details: e.message });
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Unknown error';
+      console.error(`Reject failed for ${taskId}:`, message);
+      res.status(500).json({ error: 'Failed to reject task', details: message });
     }
   });
 
@@ -122,9 +124,10 @@ export function createReviewRoutes({ queue, db, workspaceRoot }: ReviewRoutesCon
       `).all(taskId);
 
       res.json(comments);
-    } catch (e: any) {
-      console.error(`Failed to get review comments for ${taskId}:`, e.message);
-      res.status(500).json({ error: 'Failed to get review comments', details: e.message });
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Unknown error';
+      console.error(`Failed to get review comments for ${taskId}:`, message);
+      res.status(500).json({ error: 'Failed to get review comments', details: message });
     }
   });
 
@@ -151,9 +154,10 @@ export function createReviewRoutes({ queue, db, workspaceRoot }: ReviewRoutesCon
       console.log(`[Review] Added comment ${id} on ${filePath}:${lineNumber || 'file'}`);
 
       res.json({ success: true, id });
-    } catch (e: any) {
-      console.error(`Failed to add review comment:`, e.message);
-      res.status(500).json({ error: 'Failed to add review comment', details: e.message });
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Unknown error';
+      console.error(`Failed to add review comment:`, message);
+      res.status(500).json({ error: 'Failed to add review comment', details: message });
     }
   });
 
@@ -185,9 +189,10 @@ export function createReviewRoutes({ queue, db, workspaceRoot }: ReviewRoutesCon
 
       console.log(`[Review] Resolved comment ${commentId}`);
       res.json({ success: true });
-    } catch (e: any) {
-      console.error(`Failed to resolve comment:`, e.message);
-      res.status(500).json({ error: 'Failed to resolve review comment', details: e.message });
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Unknown error';
+      console.error(`Failed to resolve comment:`, message);
+      res.status(500).json({ error: 'Failed to resolve review comment', details: message });
     }
   });
 

@@ -27,8 +27,10 @@ export const restartCommand = new Command('restart')
       } else {
         console.error(chalk.red(`Failed: ${res.statusText}`));
       }
-    } catch (e: any) {
-      console.error(chalk.red(`Error: ${e.response?.data?.error || e.message}`));
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Unknown error';
+      const axiosError = e as { response?: { data?: { error?: string } } };
+      console.error(chalk.red(`Error: ${axiosError.response?.data?.error || message}`));
       process.exit(1);
     }
   });

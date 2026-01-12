@@ -91,9 +91,10 @@ export class ReviewHandlers {
         console.log('- Testing...');
         try {
           await execAsync('pnpm test', { cwd: worktreePath });
-        } catch (e: any) {
+        } catch (e: unknown) {
           console.error('Tests failed');
-          return { isError: true, content: [{ type: 'text', text: `TESTS FAILED for ${params.taskId}:\n\n${e.stdout}\n\n${e.stderr}\n\nSubmission ABORTED. Please fix tests.` }] };
+          const execError = e as { stdout?: string; stderr?: string };
+          return { isError: true, content: [{ type: 'text', text: `TESTS FAILED for ${params.taskId}:\n\n${execError.stdout || ''}\n\n${execError.stderr || ''}\n\nSubmission ABORTED. Please fix tests.` }] };
         }
       }
 

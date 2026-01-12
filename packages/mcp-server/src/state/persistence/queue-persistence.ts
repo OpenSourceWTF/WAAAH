@@ -139,8 +139,8 @@ export class QueuePersistence {
       this.db.prepare(
         `UPDATE agents SET ${updates.join(', ')} WHERE id = ?`
       ).run(...params);
-    } catch (e: any) {
-      console.error(`[QueuePersistence] Failed to set agent waiting: ${e.message}`);
+    } catch (e: unknown) {
+      console.error(`[QueuePersistence] Failed to set agent waiting: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
@@ -152,8 +152,8 @@ export class QueuePersistence {
       this.db.prepare(
         'UPDATE agents SET waitingSince = NULL WHERE id = ?'
       ).run(agentId);
-    } catch (e: any) {
-      console.error(`[QueuePersistence] Failed to clear agent waiting: ${e.message}`);
+    } catch (e: unknown) {
+      console.error(`[QueuePersistence] Failed to clear agent waiting: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 

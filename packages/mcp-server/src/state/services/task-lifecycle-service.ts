@@ -61,8 +61,8 @@ export class TaskLifecycleService {
       this.repo.insert(task);
       console.log(`[Lifecycle] Enqueued task: ${task.id} (${task.status})`);
       return this.matchingService.reserveAgentForTask(task);
-    } catch (e: any) {
-      console.error(`[Lifecycle] Failed to persist task ${task.id}: ${e.message}`);
+    } catch (e: unknown) {
+      console.error(`[Lifecycle] Failed to persist task ${task.id}: ${e instanceof Error ? e.message : String(e)}`);
       throw e;
     }
   }

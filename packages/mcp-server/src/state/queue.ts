@@ -137,8 +137,8 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue {
       console.log(`[Queue] ${status}`);
       reservedAgentId && this.emit('task', task, reservedAgentId);
       // Note: emitTaskCreated now handled by TaskRepository.insert()
-    } catch (e: any) {
-      console.error(`[Queue] Failed to persist task ${task.id}: ${e.message}`);
+    } catch (e: unknown) {
+      console.error(`[Queue] Failed to persist task ${task.id}: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
@@ -186,8 +186,8 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue {
       this.repo.update(updatedTask);
       console.log(`[Queue] Task ${taskId} manually updated`);
       return updatedTask;
-    } catch (e: any) {
-      console.error(`[Queue] Failed to update task ${taskId}: ${e.message}`);
+    } catch (e: unknown) {
+      console.error(`[Queue] Failed to update task ${taskId}: ${e instanceof Error ? e.message : String(e)}`);
       return null;
     }
   }
@@ -358,8 +358,8 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue {
       // Also clear waiting agents
       this.persistence.resetWaitingAgents();
       console.log('[Queue] Cleared all tasks');
-    } catch (e: any) {
-      console.error(`[Queue] Failed to clear tasks: ${e.message}`);
+    } catch (e: unknown) {
+      console.error(`[Queue] Failed to clear tasks: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
@@ -419,8 +419,8 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue {
   private persistUpdate(task: Task): void {
     try {
       this.repo.update(task);
-    } catch (e: any) {
-      console.error(`[Queue] Failed to update task ${task.id}: ${e.message}`);
+    } catch (e: unknown) {
+      console.error(`[Queue] Failed to update task ${task.id}: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
