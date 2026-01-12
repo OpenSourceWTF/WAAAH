@@ -1,12 +1,13 @@
 import { useCallback, useState } from 'react';
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Skull, Sun, Moon, Search } from "lucide-react";
+import { Skull, Sun, Moon, Search, Plus } from "lucide-react";
 import { KanbanBoard } from './KanbanBoard';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useTaskData, useAgentData } from './hooks';
 import { AgentSidebar } from './components/dashboard/AgentSidebar';
 import { apiFetch } from './lib/api';
+import { TaskCreationForm, TaskFormData } from './components/TaskCreationForm';
 
 
 
@@ -15,6 +16,9 @@ export function Dashboard() {
 
   // Search state for server-side filtering
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Task creation form visibility
+  const [showTaskForm, setShowTaskForm] = useState(false);
 
   // Use custom hooks for data fetching with deduplication (prevents animation interruption)
   const {
@@ -153,6 +157,50 @@ export function Dashboard() {
     }
   }, [fetchData]);
 
+  // Handle task creation form submission
+  const handleCreateTask = useCallback(async (data: TaskFormData) => {
+    try {
+      // Build the prompt with optional title prefix
+      const fullPrompt = data.title
+        ? `# ${data.title}\n\n${data.prompt}`
+        : data.prompt;
+
+      // Prepare images for API (if any)
+      const images = data.images.length > 0
+        ? data.images.map(img => ({
+            dataUrl: img.dataUrl,
+            mimeType: img.file.type,
+            name: img.file.name
+          }))
+        : undefined;
+
+      const res = await apiFetch('/admin/enqueue', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: fullPrompt,
+          priority: data.priority,
+          workspaceId: data.workspaceId,
+          role: data.capabilities.length > 0 ? data.capabilities : undefined,
+          source: 'UI',
+          images
+        })
+      });
+
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || 'Failed to create task');
+      }
+
+      console.log('Task created successfully');
+      setShowTaskForm(false);
+      fetchData(); // Refresh to show new task
+    } catch (error) {
+      console.error("Failed to create task", error);
+      throw error; // Re-throw to show error in form
+    }
+  }, [fetchData]);
+
   // Status badge styles - lookup map
   const STATUS_BADGE_CLASSES: Record<string, string> = {
     COMPLETED: 'bg-green-600 text-white border-green-800',
@@ -227,6 +275,14 @@ export function Dashboard() {
         </div>
 
         <div className="flex items-center gap-4">
+          {/* New Task Button */}
+          <Button
+            onClick={() => setShowTaskForm(true)}
+            className="gap-2 bg-green-600 hover:bg-green-700 text-white border border-green-800"
+          >
+            <Plus className="h-4 w-4" />
+            New Task
+          </Button>
           <div className="flex bg-primary/10 border border-primary/20 rounded-md p-1 gap-1">
             <Button variant="ghost" size="icon" className={`h-8 w-8 ${theme === 'LIGHT' ? 'bg-primary text-primary-foreground' : 'text-primary'}`} onClick={() => setTheme('LIGHT')} title="Light Mode"><Sun className="h-4 w-4" /></Button>
             <Button variant="ghost" size="icon" className={`h-8 w-8 ${theme === 'DARK' ? 'bg-primary text-primary-foreground' : 'text-primary'}`} onClick={() => setTheme('DARK')} title="Dark Mode"><Moon className="h-4 w-4" /></Button>
@@ -280,6 +336,23 @@ export function Dashboard() {
       </div>
 
       {/* Task expansion is now handled by KanbanBoard component */}
+
+      {/* Task Creation Form Modal */}
+      {showTaskForm && (
+        <div
+          className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowTaskForm(false);
+          }}
+        >
+          <div className="max-h-[90vh] overflow-y-auto">
+            <TaskCreationForm
+              onSubmit={handleCreateTask}
+              onCancel={() => setShowTaskForm(false)}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
