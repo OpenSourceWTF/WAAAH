@@ -63,6 +63,8 @@ export interface Task {
     workspaceId?: string;  // Repository ID for workspace affinity
   };
   context?: Record<string, unknown>;
+  /** Explicit workspace context for the task (overrides inference) */
+  workspaceContext?: WorkspaceContext;
   createdAt: number;
   completedAt?: number;
   assignedTo?: string; // agentId who picked it up
