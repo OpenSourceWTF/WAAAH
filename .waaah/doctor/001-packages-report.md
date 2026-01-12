@@ -135,7 +135,7 @@ Type safety violations, unsafe casts, and untyped error handling.
   - `packages/cli/src/commands/` (10 instances)
   - `packages/mcp-server/src/routes/` (8 instances)
   - `packages/mcp-server/src/state/` (12 instances)
-- **Status:** [ ] PENDING
+- **Status:** [x] DONE - 25+ catch blocks with type guards
 
 #### P-004: 2 @ts-ignore directives suppressing type errors
 - **File:** `packages/mcp-server/src/`
