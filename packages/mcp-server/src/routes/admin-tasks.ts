@@ -19,10 +19,20 @@ export function createTaskRoutes({ queue, workspaceRoot }: TaskRoutesConfig): Ro
 
   /**
    * POST /enqueue
-   * Enqueues a new task from the Admin interface.
+   * Enqueues a new task from the Admin interface (Dashboard UI).
+   *
+   * Body: {
+   *   prompt: string (required)
+   *   title?: string
+   *   priority?: 'normal' | 'high' | 'critical'
+   *   workspace?: string (maps to to.workspaceId)
+   *   requiredCapabilities?: string[]
+   *   images?: {dataUrl: string, mimeType: string, name: string}[]
+   *   source: 'UI' | 'CLI' | 'Agent'
+   * }
    */
   router.post('/enqueue', (req, res) => {
-    const { prompt, agentId, role, priority, source } = req.body;
+    const { prompt, title, priority, workspace, requiredCapabilities, images, source, agentId } = req.body;
 
     if (!prompt || typeof prompt !== 'string') {
       res.status(400).json({ error: 'Missing or invalid prompt' });
@@ -44,21 +54,46 @@ export function createTaskRoutes({ queue, workspaceRoot }: TaskRoutesConfig): Ro
       return;
     }
 
+    // Validate images if provided
+    if (images) {
+      if (!Array.isArray(images)) {
+        res.status(400).json({ error: 'Images must be an array' });
+        return;
+      }
+      for (const img of images) {
+        if (!img.dataUrl || !img.mimeType || !img.name) {
+          res.status(400).json({ error: 'Each image must have dataUrl, mimeType, and name' });
+          return;
+        }
+      }
+    }
+
     const threadId = Math.random().toString(36).substring(7);
     const taskId = `task-${Date.now()}-${threadId}`;
+
+    // Determine from field based on source
+    const fromField = taskSource === 'UI'
+      ? { type: 'user' as const, id: 'dashboard', name: 'Dashboard UI' }
+      : { type: 'user' as const, id: 'admin', name: 'AdminUser' };
 
     queue.enqueue({
       id: taskId,
       command: 'execute_prompt',
       prompt,
-      from: { type: 'user', id: 'admin', name: 'AdminUser' },
-      to: { agentId },
+      title: title || undefined,
+      from: fromField,
+      to: {
+        agentId,
+        workspaceId: workspace || undefined,
+        requiredCapabilities: requiredCapabilities || undefined
+      },
       priority: priority || 'normal',
       status: 'QUEUED',
       createdAt: Date.now(),
       source: taskSource,
       context: {
-        security: getSecurityContext(workspaceRoot)
+        security: getSecurityContext(workspaceRoot),
+        ...(images && { images })
       }
     });
 

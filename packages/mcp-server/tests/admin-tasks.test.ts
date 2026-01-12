@@ -76,6 +76,93 @@ describe('Admin Tasks Routes', () => {
 
       expect(res.ok).toBe(true);
     });
+
+    it('accepts title, workspace, and requiredCapabilities', async () => {
+      const res = await fetch(`${baseUrl}/admin/enqueue`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: 'Test with all optional fields',
+          title: 'My Custom Task Title',
+          workspace: 'OpenSourceWTF/WAAAH',
+          requiredCapabilities: ['code-writing', 'test-writing'],
+          source: 'UI'
+        })
+      });
+
+      expect(res.ok).toBe(true);
+      const data = await res.json();
+      expect(data.success).toBe(true);
+      expect(data.taskId).toMatch(/^task-/);
+    });
+
+    it('accepts valid images array', async () => {
+      const res = await fetch(`${baseUrl}/admin/enqueue`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: 'Test with images',
+          source: 'UI',
+          images: [
+            { dataUrl: 'data:image/png;base64,abc123', mimeType: 'image/png', name: 'screenshot.png' }
+          ]
+        })
+      });
+
+      expect(res.ok).toBe(true);
+      const data = await res.json();
+      expect(data.success).toBe(true);
+    });
+
+    it('rejects invalid images (not array)', async () => {
+      const res = await fetch(`${baseUrl}/admin/enqueue`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: 'Test with invalid images',
+          source: 'UI',
+          images: 'not-an-array'
+        })
+      });
+
+      expect(res.status).toBe(400);
+      const data = await res.json();
+      expect(data.error).toContain('array');
+    });
+
+    it('rejects images missing required fields', async () => {
+      const res = await fetch(`${baseUrl}/admin/enqueue`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: 'Test with incomplete image',
+          source: 'UI',
+          images: [{ dataUrl: 'data:image/png;base64,abc' }] // missing mimeType and name
+        })
+      });
+
+      expect(res.status).toBe(400);
+      const data = await res.json();
+      expect(data.error).toContain('dataUrl');
+    });
+
+    it('sets correct from field for UI source', async () => {
+      const createRes = await fetch(`${baseUrl}/admin/enqueue`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: 'Test UI source tracking',
+          source: 'UI'
+        })
+      });
+      const { taskId } = await createRes.json();
+
+      // Fetch task to verify from field
+      const taskRes = await fetch(`${baseUrl}/admin/tasks/${taskId}`);
+      const task = await taskRes.json();
+      expect(task.from.id).toBe('dashboard');
+      expect(task.from.name).toBe('Dashboard UI');
+    });
   });
 
   describe('GET /admin/tasks', () => {
