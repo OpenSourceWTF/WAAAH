@@ -30,6 +30,7 @@ Uses same categories as `/code-doctor`:
 | PATTERN | Missing error handling, `any` types | LOW |
 | DOCS | Missing JSDoc, no README | MEDIUM |
 | COVERAGE | Statement < 90%, Branch < 85% | HIGH |
+| SPEC | Scenario not implemented, edge case missing | HIGH |
 
 ## THRESHOLDS
 
@@ -51,6 +52,7 @@ Uses same categories as `/code-doctor`:
 | COMPLEX | code-writing | normal |
 | PATTERN | code-writing | normal |
 | DOCS | doc-writing | normal |
+| SPEC | code-writing | high |
 
 ---
 
