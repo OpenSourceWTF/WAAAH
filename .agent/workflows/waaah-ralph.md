@@ -112,6 +112,15 @@ Every iteration MUST start with in progress.md:
 **Original Task:** [paste the exact user task here]
 **Focus this iteration:** [what you're working on now]
 **Previous scores:** [X/Y/Z or N/A if first iteration]
+
+### Decision Log
+- **Why this approach?**: [reasoning]
+- **Alternates considered**: [brief note]
+
+### Execution Log
+- **Command/Action**: [e.g. `pnpm test`]
+- **Raw Result**: [summary of output, e.g. "3 tests failed"]
+- **Diff Summary**: [what changed in files]
 ```
 
 This prevents drift from original task.

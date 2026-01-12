@@ -354,6 +354,19 @@ describe('AgentHandlers', () => {
       expect(data.registered).toBe(true);
     });
 
+    it('rejects agent without workspace due to schema validation', async () => {
+      const result = await handlers.register_agent({
+        agentId: `bad-agent-${Date.now()}`,
+        capabilities: ['code-writing']
+        // missing workspaceContext
+      });
+
+      expect(result.isError).toBe(true);
+      // Check for Zod error details
+      expect(result.content[0].text).toContain('Required');
+      expect(result.content[0].text).toContain('workspaceContext');
+    });
+
     it('returns error for invalid input', async () => {
       const result = await handlers.register_agent({});
       expect(result.isError).toBe(true);

@@ -112,6 +112,7 @@ export function initializeSchema(db: Database.Database): void {
       assignedTo TEXT,
       dependencies TEXT,
       history TEXT,
+      images TEXT,
       -- DB-backed pending ACK state (replaces in-memory pendingAcks map)
       ackSentAt INTEGER,
       pendingAckAgentId TEXT
@@ -210,7 +211,9 @@ function runMigrations(db: Database.Database): void {
     { column: 'toRequiredCapabilities', sql: 'ALTER TABLE tasks ADD COLUMN toRequiredCapabilities TEXT' },
     { column: 'toWorkspaceId', sql: 'ALTER TABLE tasks ADD COLUMN toWorkspaceId TEXT' },
     // Messages JSON column for inline message storage
-    { column: 'messages', sql: 'ALTER TABLE tasks ADD COLUMN messages TEXT' }
+    { column: 'messages', sql: 'ALTER TABLE tasks ADD COLUMN messages TEXT' },
+    // Images JSON column
+    { column: 'images', sql: 'ALTER TABLE tasks ADD COLUMN images TEXT' }
   ];
 
   for (const migration of taskMigrations) {

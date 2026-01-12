@@ -42,7 +42,7 @@ describe('TaskQueue', () => {
       const task = mockTask({ id: 'emit-test-1', to: { requiredCapabilities: ['code-writing'] } });
 
       // Start waiting for a task first (like an agent would)
-      const waitPromise = queue.waitForTask('test-agent', ['code-writing'], 1000);
+      const waitPromise = queue.waitForTask('test-agent', ['code-writing'], undefined, 1000);
 
       // Give the listener time to register
       await new Promise(resolve => setTimeout(resolve, 10));
@@ -116,7 +116,7 @@ describe('TaskQueue', () => {
       const task = mockTask({ to: { requiredCapabilities: ['code-writing'] } });
       queue.enqueue(task);
 
-      const result = await queue.waitForTask('agent-1', ['code-writing'], 1000);
+      const result = await queue.waitForTask('agent-1', ['code-writing'], undefined, 1000);
       expect(result).not.toBeNull();
       expect((result as Task)?.prompt).toBe('Test prompt');
     });
@@ -125,17 +125,17 @@ describe('TaskQueue', () => {
       const task = mockTask({ to: { agentId: 'specific-agent' } });
       queue.enqueue(task);
 
-      const result = await queue.waitForTask('specific-agent', ['code-writing'], 1000);
+      const result = await queue.waitForTask('specific-agent', ['code-writing'], undefined, 1000);
       expect(result).not.toBeNull();
     });
 
     it('returns null on timeout when no task', async () => {
-      const result = await queue.waitForTask('no-task-agent', ['code-writing'], 100);
+      const result = await queue.waitForTask('no-task-agent', ['code-writing'], undefined, 100);
       expect(result).toBeNull();
     });
 
     it('resolves when task enqueued during wait', async () => {
-      const waitPromise = queue.waitForTask('waiting-agent', ['code-writing'], 5000);
+      const waitPromise = queue.waitForTask('waiting-agent', ['code-writing'], undefined, 5000);
 
       // Enqueue after a short delay
       setTimeout(() => {
@@ -150,7 +150,7 @@ describe('TaskQueue', () => {
       const task = mockTask({ id: 'pending-ack-test' });
       queue.enqueue(task);
 
-      await queue.waitForTask('agent-1', ['code-writing'], 1000);
+      await queue.waitForTask('agent-1', ['code-writing'], undefined, 1000);
       expect(queue.getTask('pending-ack-test')?.status).toBe('PENDING_ACK');
     });
   });
@@ -159,7 +159,7 @@ describe('TaskQueue', () => {
     it('transitions PENDING_ACK to ASSIGNED', async () => {
       const task = mockTask({ id: 'ack-test-1' });
       queue.enqueue(task);
-      await queue.waitForTask('agent-1', ['code-writing'], 1000);
+      await queue.waitForTask('agent-1', ['code-writing'], undefined, 1000);
 
       const result = queue.ackTask('ack-test-1', 'agent-1');
       expect(result.success).toBe(true);
@@ -169,7 +169,7 @@ describe('TaskQueue', () => {
     it('rejects ACK from wrong agent', async () => {
       const task = mockTask({ id: 'wrong-agent-ack' });
       queue.enqueue(task);
-      await queue.waitForTask('agent-1', ['code-writing'], 1000);
+      await queue.waitForTask('agent-1', ['code-writing'], undefined, 1000);
 
       const result = queue.ackTask('wrong-agent-ack', 'agent-2');
       expect(result.success).toBe(false);
@@ -185,7 +185,7 @@ describe('TaskQueue', () => {
     it('sets assignedTo property on the task', async () => {
       const task = mockTask({ id: 'assigned-to-test' });
       queue.enqueue(task);
-      await queue.waitForTask('assigned-agent', ['code-writing'], 1000);
+      await queue.waitForTask('assigned-agent', ['code-writing'], undefined, 1000);
 
       queue.ackTask('assigned-to-test', 'assigned-agent');
 
@@ -258,7 +258,7 @@ describe('TaskQueue', () => {
 
     it('tracks agents during waitForTask', async () => {
       // Start a wait (will timeout quickly)
-      const waitPromise = queue.waitForTask('waiting-test-agent', ['code-writing'], 100);
+      const waitPromise = queue.waitForTask('waiting-test-agent', ['code-writing'], undefined, 100);
 
       // Check if agent is in waiting list during the wait
       const waiting = queue.getWaitingAgents();
@@ -277,7 +277,7 @@ describe('TaskQueue', () => {
 
     it('tracks agent waiting state during waitForTask', async () => {
       // Start a wait
-      const waitPromise = queue.waitForTask('is-waiting-test', ['code-writing'], 100);
+      const waitPromise = queue.waitForTask('is-waiting-test', ['code-writing'], undefined, 100);
 
       // During wait, should be marked as waiting
       const duringWait = queue.isAgentWaiting('is-waiting-test');
@@ -302,7 +302,7 @@ describe('TaskQueue', () => {
       queue.enqueue(task);
 
       // Wait for task to be picked up
-      await queue.waitForTask('assigned-agent', ['code-writing'], 100);
+      await queue.waitForTask('assigned-agent', ['code-writing'], undefined, 100);
 
       // ACK the task to move to ASSIGNED
       queue.ackTask('assigned-test-1', 'assigned-agent');
@@ -328,7 +328,7 @@ describe('TaskQueue', () => {
       queue.enqueue(task);
 
       // Move to PENDING_ACK
-      await queue.waitForTask('agent-1', ['code-writing'], 100);
+      await queue.waitForTask('agent-1', ['code-writing'], undefined, 100);
       expect(queue.getTask('cancel-pending-ack-test')?.status).toBe('PENDING_ACK');
 
       const result = queue.cancelTask('cancel-pending-ack-test');
@@ -394,7 +394,7 @@ describe('TaskQueue', () => {
         const task = mockTask({ id: 'retry-pending-test' });
         queue.enqueue(task);
         // Move to PENDING_ACK
-        await queue.waitForTask('agent-1', ['code-writing'], 100);
+        await queue.waitForTask('agent-1', ['code-writing'], undefined, 100);
 
         const result = queue.forceRetry('retry-pending-test');
         expect(result.success).toBe(true);
@@ -512,7 +512,7 @@ describe('TaskQueue', () => {
     it('returns agents with ASSIGNED tasks', async () => {
       const task = mockTask({ id: 'busy-agent-test' });
       queue.enqueue(task);
-      await queue.waitForTask('busy-agent-1', ['code-writing'], 100);
+      await queue.waitForTask('busy-agent-1', ['code-writing'], undefined, 100);
       queue.ackTask('busy-agent-test', 'busy-agent-1');
 
       const busy = queue.getBusyAgentIds();

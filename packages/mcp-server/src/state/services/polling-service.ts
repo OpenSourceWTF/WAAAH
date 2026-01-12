@@ -1,4 +1,4 @@
-import { Task, StandardCapability } from '@opensourcewtf/waaah-types';
+import { Task, StandardCapability, WorkspaceContext } from '@opensourcewtf/waaah-types';
 import type { ITaskRepository } from '../persistence/task-repository.js';
 import type { QueuePersistence } from '../persistence/queue-persistence.js';
 import type { AgentMatchingService } from './agent-matching-service.js';
@@ -23,30 +23,36 @@ export class PollingService {
   async waitForTask(
     agentId: string,
     capabilities: StandardCapability[],
+    workspaceContext?: WorkspaceContext,
     timeoutMs: number = 290000
   ): Promise<WaitResult> {
-    // 0. Check for pending eviction FIRST
-    const eviction = this.evictionService.popEviction(agentId);
-    if (eviction) {
-      return { controlSignal: 'EVICT', ...eviction };
-    }
+    const startTime = Date.now();
+    // console.log(`[Polling] Starting waitForTask for ${agentId}`);
 
     // Track this agent as waiting in DB
-    this.persistence.setAgentWaiting(agentId, capabilities);
+    this.persistence.setAgentWaiting(agentId, capabilities, workspaceContext);
 
     // Trigger immediate scheduler cycle to minimize assignment latency (deferred to not race)
     if (this.onAgentWaiting) {
       setImmediate(() => this.onAgentWaiting?.());
     }
 
-    // 1. Check if there are pending tasks for this agent
-    const pendingTask = this.matchingService.findPendingTaskForAgent(agentId, capabilities);
-    if (pendingTask) {
+    // 0. Check for pending eviction (Optimistic)
+    const pendingEviction = this.evictionService.popEviction(agentId);
+    if (pendingEviction) {
+      // console.log(`[Polling] Agent ${agentId} immediately evicted`);
+      this.persistence.clearAgentWaiting(agentId);
+      return pendingEviction;
+    }
+
+    // 1. Check if there are pending tasks (Optimistic)
+    const match = this.matchingService.findPendingTaskForAgent(agentId, capabilities, workspaceContext);
+    if (match) {
       this.persistence.clearAgentWaiting(agentId);
       // We need to update status to PENDING_ACK
-      this.repo.updateStatus(pendingTask.id, 'PENDING_ACK');
-      this.persistence.setPendingAck(pendingTask.id, agentId);
-      return pendingTask;
+      this.repo.updateStatus(match.id, 'PENDING_ACK');
+      this.persistence.setPendingAck(match.id, agentId);
+      return match;
     }
 
     return new Promise((resolve) => {
@@ -76,7 +82,7 @@ export class PollingService {
       const onEviction = (targetId: string) => {
         if (targetId === agentId) {
           const ev = this.evictionService.popEviction(agentId);
-          if (ev) finish({ controlSignal: 'EVICT', ...ev });
+          if (ev) finish(ev);
         }
       };
 

@@ -71,6 +71,11 @@ export interface Task {
   messages?: TaskMessage[];
   /** Source of task creation: UI (dashboard), CLI (command line), or Agent (delegation) */
   source?: 'UI' | 'CLI' | 'Agent';
+  images?: {
+    dataUrl: string;
+    mimeType: string;
+    name: string;
+  }[];
   dependencies?: string[];
   history?: TaskHistoryEvent[];
 }

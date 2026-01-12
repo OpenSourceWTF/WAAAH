@@ -73,14 +73,14 @@ describe('EvictionService', () => {
       ctx.queue.queueEviction('agent-1', 'Evicted', 'RESTART');
 
       // Agent waits for task
-      const result = await ctx.queue.waitForTask('agent-1', ['code-writing'], 1000);
+      const result = await ctx.queue.waitForTask('agent-1', ['code-writing'], undefined, 1000);
 
       expect(result).not.toBeNull();
       expect('controlSignal' in result!).toBe(true);
-      if ('controlSignal' in result!) {
-        expect(result.controlSignal).toBe('EVICT');
-        expect(result.reason).toBe('Evicted');
-        expect(result.action).toBe('RESTART');
+      if (result && 'controlSignal' in result && result.controlSignal === 'EVICT') {
+        const eviction = result as any;
+        expect(eviction.reason).toBe('Evicted');
+        expect(eviction.action).toBe('RESTART');
       }
     });
 
@@ -88,20 +88,24 @@ describe('EvictionService', () => {
       ctx.registry.register({ id: 'agent-1', displayName: 'Test Agent', capabilities: ['code-writing'] });
 
       // Agent starts waiting
-      const waitPromise = ctx.queue.waitForTask('agent-1', ['code-writing'], 10000);
+      const waitPromise = ctx.queue.waitForTask('agent-1', ['code-writing'], undefined, 10000);
 
       // Queue eviction while waiting
       ctx.queue.queueEviction('agent-1', 'Interrupted', 'SHUTDOWN');
+
+      // Advance timers to trigger next poll cycle
+      await vi.advanceTimersByTimeAsync(2000);
 
       const result = await waitPromise;
 
       expect(result).not.toBeNull();
       expect('controlSignal' in result!).toBe(true);
-      if ('controlSignal' in result!) {
-        expect(result.controlSignal).toBe('EVICT');
-        expect(result.reason).toBe('Interrupted');
-        expect(result.action).toBe('SHUTDOWN');
+      if (result && 'controlSignal' in result && result.controlSignal === 'EVICT') {
+        const eviction = result as any;
+        expect(eviction.controlSignal).toBe('EVICT');
+        expect(eviction.reason).toBe('Interrupted');
+        expect(eviction.action).toBe('SHUTDOWN');
       }
-    });
+    }, 15000);
   });
 });

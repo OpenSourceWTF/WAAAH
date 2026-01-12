@@ -23,7 +23,7 @@ export function createTaskRoutes({ queue, workspaceRoot }: TaskRoutesConfig): Ro
    * REQUIRES workspaceId - no server-side defaults.
    */
   router.post('/enqueue', (req, res) => {
-    const { prompt, agentId, role, priority, source, workspaceId } = req.body;
+    const { prompt, agentId, role, priority, source, workspaceId, requiredCapabilities, images } = req.body;
 
     if (!prompt || typeof prompt !== 'string') {
       res.status(400).json({ error: 'Missing or invalid prompt' });
@@ -39,6 +39,12 @@ export function createTaskRoutes({ queue, workspaceRoot }: TaskRoutesConfig): Ro
     // Validate source if provided
     const validSources = ['UI', 'CLI', 'Agent'] as const;
     const taskSource = validSources.includes(source) ? source : 'CLI'; // Default to CLI for backward compat
+
+    // Determine sender identity based on source
+    // S17: Explicitly track Dashboard UI as source
+    const from = source === 'UI'
+      ? { type: 'user', id: 'dashboard', name: 'Dashboard UI' }
+      : { type: 'user', id: 'admin', name: 'AdminUser' };
 
     // Security: Scan prompt for attacks
     const scan = scanPrompt(prompt);
@@ -58,12 +64,14 @@ export function createTaskRoutes({ queue, workspaceRoot }: TaskRoutesConfig): Ro
       id: taskId,
       command: 'execute_prompt',
       prompt,
-      from: { type: 'user', id: 'admin', name: 'AdminUser' },
-      to: { agentId, workspaceId },
+      // @ts-ignore - 'from' type might need update in shared types if strict
+      from,
+      to: { agentId, workspaceId, requiredCapabilities },
       priority: priority || 'normal',
       status: 'QUEUED',
       createdAt: Date.now(),
       source: taskSource,
+      images, // Pass images to queue
       context: {
         // Security context derived from client's workspaceId, not server's cwd
         workspaceId

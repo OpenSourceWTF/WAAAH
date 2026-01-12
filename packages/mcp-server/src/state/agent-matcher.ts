@@ -17,6 +17,15 @@
 import type { Task, TaskStatus, StandardCapability, AgentIdentity, WorkspaceContext } from '@opensourcewtf/waaah-types';
 import type { TypedEventEmitter } from './queue-events.js';
 import { areDependenciesMet } from './services/task-lifecycle-service.js';
+import * as fs from 'fs';
+
+const DEBUG_LOG_PATH = '/home/dtai/.gemini/antigravity/brain/aa449a4d-0305-4535-b102-cf765aa4cee1/debug_scheduler.log';
+
+function logDebug(message: string) {
+  try {
+    fs.appendFileSync(DEBUG_LOG_PATH, `[${new Date().toISOString()}] ${message}\n`);
+  } catch (e) { /* ignore */ }
+}
 
 // ===== Configuration =====
 
@@ -106,18 +115,25 @@ function calculateWorkspaceScore(task: Task, agent: WaitingAgent): { score: numb
 
   // If task has no workspace requirement, neutral
   if (!taskWorkspaceId) {
+    logDebug(`NEUTRAL: Task ${task.id} (No WS requirement) vs Agent ${agent.agentId}`);
     return { score: 0.5, eligible: true };
   }
 
-  // If agent has no workspace context, neutral (can work anywhere)
+  // If agent has no workspace context, they CANNOT work on workspace-specific tasks.
+  // This enforces strict affinity: Bound tasks require bound agents.
   if (!agentRepoId) {
-    return { score: 0.5, eligible: true };
+    logDebug(`HARD REJECT: Task ${task.id} (WS=${taskWorkspaceId}) vs Agent ${agent.agentId} (No Context)`);
+    return { score: 0.0, eligible: false }; // HARD REJECT
   }
 
   // Exact repoId match required
   if (taskWorkspaceId === agentRepoId) {
+    logDebug(`MATCH: Task ${task.id} (WS=${taskWorkspaceId}) vs Agent ${agent.agentId} (WS=${agentRepoId})`);
     return { score: 1.0, eligible: true };
   }
+
+  // Debug log for production diagnostics of affinity mismatches
+  logDebug(`HARD REJECT: Task ${task.id} (WS=${taskWorkspaceId}) vs Agent ${agent.agentId} (WS=${agentRepoId})`);
 
   // HARD REJECT: workspace specified but no match
   return { score: 0.0, eligible: false };

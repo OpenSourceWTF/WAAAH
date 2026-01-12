@@ -19,14 +19,19 @@
 import {
   Task,
   TaskStatus,
-  StandardCapability
+  StandardCapability,
+  EvictionSignal,
+  SystemPrompt,
+  assignTaskSchema,
+  WorkspaceContext
 } from '@opensourcewtf/waaah-types';
 import type { Database } from 'better-sqlite3';
-import type { ITaskQueue, AckResult, QueueStats, HistoryOptions, WaitResult } from './queue.interface.js';
+import { ITaskQueue, QueueStats, WaitResult, HistoryOptions } from './queue.interface.js';
+// import { StateHashService } from './services/state-hash-service.js';
 import { TypedEventEmitter } from './queue-events.js';
 import { TaskRepository, type ITaskRepository } from './persistence/task-repository.js';
-import { HybridScheduler, type ISchedulerQueue, SCHEDULER_INTERVAL_MS } from './scheduler.js';
-import { EvictionService, type IEvictionService, type EvictionSignal } from './eviction-service.js';
+import { HybridScheduler, SCHEDULER_INTERVAL_MS } from './scheduler.js';
+import { EvictionService, type IEvictionService } from './eviction-service.js';
 import { QueuePersistence } from './persistence/queue-persistence.js';
 import { SystemPromptService } from './services/system-prompt-service.js';
 import { AgentMatchingService } from './services/agent-matching-service.js';
@@ -39,7 +44,7 @@ import { emitTaskUpdated } from './eventbus.js'; // Only for messages (repo hand
  * Primary queue management component.
  * All state is database-backed.
  */
-export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedulerQueue {
+export class TaskQueue extends TypedEventEmitter implements ITaskQueue {
   /** Task persistence ops */
   private readonly repo: ITaskRepository;
 
@@ -203,9 +208,10 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
   async waitForTask(
     agentId: string,
     capabilities: StandardCapability[],
+    workspaceContext?: WorkspaceContext,
     timeoutMs: number = 290000
   ): Promise<WaitResult> {
-    return this.pollingService.waitForTask(agentId, capabilities, timeoutMs);
+    return this.pollingService.waitForTask(agentId, capabilities, workspaceContext, timeoutMs);
   }
 
   ackTask(taskId: string, agentId: string): { success: boolean; error?: string } {
@@ -277,7 +283,7 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue, ISchedul
   }
 
   /** Get all agents currently waiting with their capabilities (from DB) - implements ISchedulerQueue */
-  getWaitingAgents(): Map<string, StandardCapability[]> {
+  getWaitingAgents(): Map<string, { capabilities: StandardCapability[]; workspaceContext?: WorkspaceContext }> {
     return this.persistence.getWaitingAgents();
   }
 

@@ -252,7 +252,7 @@ describe('ToolHandler', () => {
       });
 
       // Wait for task transitions to PENDING_ACK
-      await queue.waitForTask(agentId, ['code-writing'], 100);
+      await queue.waitForTask(agentId, ['code-writing'], undefined, 100);
 
       const result = await tools.ack_task({
         taskId,

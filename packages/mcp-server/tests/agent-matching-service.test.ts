@@ -128,7 +128,10 @@ describe('AgentMatchingService', () => {
 
     it('reserves matching waiting agent', () => {
       mockPersistence.getWaitingAgents.mockReturnValue(new Map([
-        ['agent-1', ['code-writing']]
+        ['agent-1', {
+          capabilities: ['code-writing'],
+          workspaceContext: { type: 'github', repoId: 'test-repo' }
+        }]
       ]));
       const task = createTask('task-1', 'QUEUED', { to: { requiredCapabilities: ['code-writing'] } });
 
@@ -143,7 +146,10 @@ describe('AgentMatchingService', () => {
 
     it('returns null when no agent has required capabilities', () => {
       mockPersistence.getWaitingAgents.mockReturnValue(new Map([
-        ['agent-1', ['code-writing']]
+        ['agent-1', {
+          capabilities: ['code-writing'],
+          workspaceContext: { type: 'github', repoId: 'test-repo' }
+        }]
       ]));
       const task = createTask('task-1', 'QUEUED', { to: { requiredCapabilities: ['spec-writing'] } });
 
@@ -154,8 +160,14 @@ describe('AgentMatchingService', () => {
 
     it('selects preferred agent via hint score', () => {
       mockPersistence.getWaitingAgents.mockReturnValue(new Map([
-        ['agent-1', ['code-writing']],
-        ['preferred-agent', ['code-writing']]
+        ['agent-1', {
+          capabilities: ['code-writing'],
+          workspaceContext: { type: 'github', repoId: 'test-repo' }
+        }],
+        ['preferred-agent', {
+          capabilities: ['code-writing'],
+          workspaceContext: { type: 'github', repoId: 'test-repo' }
+        }]
       ]));
       const task = createTask('task-1', 'QUEUED', {
         to: { agentId: 'preferred-agent', requiredCapabilities: ['code-writing'] }
@@ -168,7 +180,10 @@ describe('AgentMatchingService', () => {
 
     it('adds history entry on reservation', () => {
       mockPersistence.getWaitingAgents.mockReturnValue(new Map([
-        ['agent-1', ['code-writing']]
+        ['agent-1', {
+          capabilities: ['code-writing'],
+          workspaceContext: { type: 'github', repoId: 'test-repo' }
+        }]
       ]));
       const task = createTask('task-1', 'QUEUED') as any;
 

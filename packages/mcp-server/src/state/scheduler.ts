@@ -10,7 +10,7 @@
  * @module state/scheduler
  */
 
-import type { Task, TaskStatus } from '@opensourcewtf/waaah-types';
+import type { Task, TaskStatus, WorkspaceContext, StandardCapability } from '@opensourcewtf/waaah-types';
 import { ACK_TIMEOUT_MS, SCHEDULER_INTERVAL_MS, ORPHAN_TIMEOUT_MS } from './constants.js';
 import { areDependenciesMet } from './services/task-lifecycle-service.js';
 
@@ -21,7 +21,7 @@ export interface ISchedulerQueue {
   /** Get pending ACKs map */
   getPendingAcks(): Map<string, { taskId: string; agentId: string; sentAt: number }>;
   /** Get waiting agents map (agentId -> capabilities) */
-  getWaitingAgents(): Map<string, import('@opensourcewtf/waaah-types').StandardCapability[]>;
+  getWaitingAgents(): Map<string, { capabilities: StandardCapability[]; workspaceContext?: WorkspaceContext }>;
   /** Force retry a task (reset to QUEUED) */
   forceRetry(taskId: string): { success: boolean; error?: string };
   /** Update task status */
@@ -153,7 +153,7 @@ export class HybridScheduler {
     console.log(`[Scheduler] assignPendingTasks: ${assignableTasks.length} assignable (${queuedTasks.length} total queued), ${waitingAgents.size} waiting`);
 
     if (waitingAgents.size > 0) {
-      const agents = Array.from(waitingAgents.entries()).map(([id, role]) => `${id}(${role})`).join(', ');
+      const agents = Array.from(waitingAgents.entries()).map(([id, details]) => `${id}(${details.capabilities.join(',')})`).join(', ');
       console.log(`[Scheduler] Waiting agents: ${agents}`);
     }
 

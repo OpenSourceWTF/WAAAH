@@ -30,6 +30,7 @@ describe('QueuePersistence', () => {
         id TEXT PRIMARY KEY,
         displayName TEXT,
         capabilities TEXT,
+        workspaceContext JSON,
         waitingSince INTEGER
       );
     `);
@@ -100,8 +101,14 @@ describe('QueuePersistence', () => {
       const waiting = persistence.getWaitingAgents();
 
       expect(waiting.size).toBe(2);
-      expect(waiting.get('agent-1')).toEqual(['code-writing', 'test-writing']);
-      expect(waiting.get('agent-2')).toEqual(['spec-writing']);
+      expect(waiting.get('agent-1')).toEqual({
+        capabilities: ['code-writing', 'test-writing'],
+        workspaceContext: undefined
+      });
+      expect(waiting.get('agent-2')).toEqual({
+        capabilities: ['spec-writing'],
+        workspaceContext: undefined
+      });
     });
 
     it('clears agent waiting state', () => {

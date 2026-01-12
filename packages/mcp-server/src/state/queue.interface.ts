@@ -2,7 +2,7 @@
  * TaskQueue Interface - Defines the public API of the TaskQueue.
  * This interface enables easier testing and potential future decomposition.
  */
-import { Task, TaskStatus, StandardCapability, EvictionSignal, SystemPrompt } from '@opensourcewtf/waaah-types';
+import { Task, TaskStatus, StandardCapability, EvictionSignal, SystemPrompt, WorkspaceContext } from '@opensourcewtf/waaah-types';
 
 /**
  * Result of task acknowledgment
@@ -67,7 +67,12 @@ export interface ITaskQueue {
   // ===== Agent Waiting / Long-Polling =====
 
   /** Wait for a task suitable for the agent (based on capabilities) */
-  waitForTask(agentId: string, capabilities: StandardCapability[], timeoutMs?: number): Promise<WaitResult>;
+  waitForTask(
+    agentId: string,
+    capabilities: StandardCapability[],
+    workspaceContext?: WorkspaceContext,
+    timeoutMs?: number
+  ): Promise<WaitResult>;
 
   /** Wait for a specific task to complete */
   waitForTaskCompletion(taskId: string, timeoutMs?: number): Promise<Task | null>;
@@ -102,8 +107,11 @@ export interface ITaskQueue {
   /** Get task history with filters */
   getTaskHistory(options?: HistoryOptions): Task[];
 
+  /** Get pending ACKs */
+  getPendingAcks(): Map<string, { taskId: string; agentId: string; sentAt: number }>;
+
   /** Get agents currently waiting for tasks with their capabilities */
-  getWaitingAgents(): Map<string, StandardCapability[]>;
+  getWaitingAgents(): Map<string, { capabilities: StandardCapability[]; workspaceContext?: WorkspaceContext }>;
 
   /** Check if an agent is waiting */
   isAgentWaiting(agentId: string): boolean;
