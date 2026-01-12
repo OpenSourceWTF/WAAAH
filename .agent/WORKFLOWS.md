@@ -10,8 +10,10 @@ Agent workflows that define autonomous behaviors. Invoke via `/slash-command` or
 |---------|---------|------|
 | `/waaah-optimize` | Refine any prompt for LLM effectiveness | Utility |
 | `/waaah-spec` | Interactive spec generation with quality gate | Planning |
-| `/waaah-orc-loop` | Orchestrator agent lifecycle (plan/build/verify/merge) | Agent Loop |
-| `/waaah-doctor` | Code health auditor (QA) | Agent Loop |
+| `/waaah-ralph` | Interactive task refinement with 10/10 quality gates | Execution |
+| `/waaah-ralph-yolo` | Autonomous task refinement - no human intervention | Execution |
+| `/waaah-orc-agent` | Orchestrator agent lifecycle (plan/build/verify/merge) | Agent Loop |
+| `/waaah-doctor-agent` | Code health auditor (QA daemon) | Agent Loop |
 
 ---
 
@@ -57,9 +59,25 @@ Agent workflows that define autonomous behaviors. Invoke via `/slash-command` or
 4. Generate task list with dependencies
 5. Bulk-assign to queue
 
+## `/waaah-ralph` & `/waaah-ralph-yolo`
+
+**Purpose:** Iterative task refinement until all quality criteria score 10/10.
+
+**When to use:**
+- Implementing features with TDD
+- Tasks requiring verifiable quality
+- `/waaah-ralph` for interactive (pause at each iteration)
+- `/waaah-ralph-yolo` for fully autonomous (no pauses)
+
+**Process:**
+1. Receive task with criteria
+2. Execute and score each criterion 1-10
+3. Iterate until all scores = 10 or max iterations
+4. Output `<promise>CHURLISH</promise>` on success
+
 ---
 
-## `/waaah-orc-loop`
+## `/waaah-orc-agent`
 
 **Purpose:** Autonomous agent lifecycle for feature development.
 
@@ -81,7 +99,7 @@ Agent workflows that define autonomous behaviors. Invoke via `/slash-command` or
 
 ---
 
-## `/waaah-doctor`
+## `/waaah-doctor-agent`
 
 **Purpose:** Autonomous QA agent that monitors repo health post-merge.
 

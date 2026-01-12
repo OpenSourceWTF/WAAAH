@@ -105,12 +105,20 @@ Generate two types of tasks:
 ⏸️ `notify_user` with both tables → "Confirm to assign?"
 
 On confirm:
+
+**Workspace Inference:** Before assigning tasks, infer the workspace from your current directory:
+- Use `git remote get-url origin` to extract the repo ID (e.g., `OpenSourceWTF/WAAAH`)
+- This ensures tasks route to agents working in the same repository
+
 ```
-t1_id = assign_task({ prompt, verify })
-v1_id = assign_task({ prompt, dependencies: [t1_id], verify })
+# Infer workspace from current directory (repoId format: "Owner/Repo")
+workspaceId = inferWorkspaceFromGitRemote()
+
+t1_id = assign_task({ prompt, verify, workspaceId })
+v1_id = assign_task({ prompt, dependencies: [t1_id], verify, workspaceId })
 ```
 
-Report: `✅ Spec saved. [N] implementation + [M] verification tasks queued.`
+Report: `✅ Spec saved. [N] implementation + [M] verification tasks queued in workspace [workspaceId].`
 
 ## SPEC TEMPLATE
 

@@ -67,11 +67,14 @@ FOREVER:
 
   4. FOR file in CHANGES: RUN checks → record violations
 
-  5. FOR violation:
+  5. # Infer workspace from git remote for task routing
+     workspaceId = inferWorkspaceFromGitRemote()
+     FOR violation:
        assign_task({
          prompt: PROMPT_TEMPLATE(violation),
          priority: violation.priority,
-         capabilities: violation.capabilities
+         capabilities: violation.capabilities,
+         workspaceId: workspaceId
        })
 
   6. Update state.json → loop

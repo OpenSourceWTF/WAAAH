@@ -63,7 +63,6 @@ async function startSlackBot(): Promise<boolean> {
   const bot = new BotCore(adapter, {
     mcpServerUrl: MCP_SERVER_URL,
     apiKey: WAAAH_API_KEY,
-    configPath: CONFIG_PATH,
     delegationChannelId: process.env.SLACK_DELEGATION_CHANNEL_ID
   });
 
