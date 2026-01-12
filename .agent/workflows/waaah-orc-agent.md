@@ -5,7 +5,7 @@ description: Orchestrator - plan/build/verify/merge loop
 
 # WAAAH Orchestrator
 
-**Autonomous agent. Infinite loop until evicted.**
+**RUN FOREVER. LOOP UNTIL EVICTED.**
 
 ## State Machine
 ```
@@ -13,45 +13,47 @@ STARTUP → WAIT ──→ ACK ──→ PLAN ──→ BUILD ──→ SUBMIT
               ↑                              │
               │                              ↓
               │                        [IN_REVIEW] ⏸️
-              │                              │
-              │                         (approve)
-              │                              ↓
-              └────────────────────── MERGE ──→ SMOKE ──→ [COMPLETED]
+              │                         │       │
+              │                    (reject)  (approve)
+              │                         │       │
+              │                         ↓       ↓
+              └───────────────────── QUEUED    MERGE ──→ SMOKE ──→ [COMPLETED]
 ```
 
 ## Core Rules
-1. NEVER `send_response(COMPLETED)` until MERGED to main
-2. ALWAYS `send_response(IN_REVIEW)` after BUILD - NO EXCEPTIONS
-3. ALWAYS work in worktree (NEVER commit directly to main)
-4. NEVER stop loop
-5. **NEVER skip IN_REVIEW even for "simple" or "no changes needed" tasks**
-6. **NEVER push to origin/main without going through IN_REVIEW first**
 
-> ⚠️ **HARD STOP**: If you find yourself thinking "this is simple, I can skip review" - STOP. That thought is the #1 cause of workflow violations. ALWAYS use IN_REVIEW.
+1. **DO NOT** call `send_response(COMPLETED)` until MERGED to main
+2. **ALWAYS** call `send_response(IN_REVIEW)` after BUILD - NO EXCEPTIONS
+3. **ALWAYS** work in worktree - **DO NOT** commit directly to main
+4. **DO NOT** stop the loop
+5. **DO NOT** skip IN_REVIEW for "simple" or "no changes needed" tasks
+6. **DO NOT** push to origin/main without going through IN_REVIEW first
 
-## MUST NOT Rules (Systematic Failure)
+> ⚠️ **HARD STOP**: If you think "this is simple, I can skip review" - STOP. That thought causes workflow violations. USE IN_REVIEW.
+
+## MUST NOT Rules (Automatic Failure)
 
 > [!CAUTION]
 > Violating these rules is an AUTOMATIC FAILURE.
 
-1. **MUST NOT** skip IN_REVIEW step (Anti-Shortcut Rule #1)
-2. **MUST NOT** assume work is complete without verification
-3. **MUST NOT** hardcode paths (use `workspaceContext`)
-4. **MUST NOT** commit to main directly (use feature branches)
-5. **MUST NOT** ignore "unreadComments" in `update_progress`
+1. **DO NOT** skip IN_REVIEW step
+2. **DO NOT** assume work is complete without verification
+3. **DO NOT** hardcode paths - USE `workspaceContext`
+4. **DO NOT** commit to main directly - USE feature branches
+5. **DO NOT** ignore `unreadComments` in `update_progress` response
 
-## Anti-Patterns (NEVER DO)
+## Anti-Patterns
 
-| ❌ Wrong | ✅ Correct |
-|----------|-----------|
+| ❌ DO NOT | ✅ DO THIS |
+|-----------|-----------|
 | BUILD → COMPLETED | BUILD → IN_REVIEW → (approve) → MERGE → COMPLETED |
-| Skip IN_REVIEW | Always wait for approval |
-| SMOKE before merge | SMOKE only after merge succeeds |
-| COMPLETED without merge | COMPLETED only after push to main |
-| "Already done" → COMPLETED | "Already done" → IN_REVIEW with proof → approval → COMPLETED |
-| "No changes needed" → COMPLETED | Document findings → IN_REVIEW → approval → COMPLETED |
-| Push directly to main | ALWAYS push to feature branch first |
-| `git push origin main` | Only after IN_REVIEW → APPROVED → MERGE |
+| Skip IN_REVIEW | WAIT for approval |
+| SMOKE before merge | RUN SMOKE only after merge succeeds |
+| COMPLETED without merge | CALL COMPLETED only after push to main |
+| "Already done" → COMPLETED | SUBMIT to IN_REVIEW with proof → GET approval → COMPLETE |
+| "No changes needed" → COMPLETED | DOCUMENT findings → SUBMIT IN_REVIEW → GET approval → COMPLETE |
+| Push directly to main | PUSH to feature branch first |
+| `git push origin main` | DO THIS only after IN_REVIEW → APPROVED → MERGE |
 
 ## STATUS → ACTION
 
@@ -61,75 +63,73 @@ STARTUP → WAIT ──→ ACK ──→ PLAN ──→ BUILD ──→ SUBMIT
 | IN_REVIEW | WAIT (blocked on approval) |
 | APPROVED | MERGE → SMOKE → COMPLETE |
 | BLOCKED | WAIT → loop |
-| CANCELLED | cleanup → loop |
+| CANCELLED | CLEANUP → loop |
 
-> **Note:** When user clicks REJECT, task transitions to QUEUED with feedback. Check for `[REJECT]` prefix in unreadComments.
+> **REJECTION:** When user clicks REJECT, task returns to QUEUED with feedback. CHECK for `[REJECT]` prefix in unreadComments.
 
 ## TOOLS
 
 | Tool | When |
 |------|------|
-| `register_agent` | STARTUP |
-| `wait_for_prompt` | WAIT |
-| `ack_task` | ACK |
-| `update_progress` | Every step |
-| `block_task` | When stuck |
-| `send_response(IN_REVIEW)` | After BUILD |
-| `send_response(COMPLETED)` | After MERGE + SMOKE |
+| `register_agent` | CALL at STARTUP |
+| `wait_for_prompt` | CALL during WAIT |
+| `ack_task` | CALL at ACK |
+| `update_progress` | CALL at every step |
+| `block_task` | CALL when stuck |
+| `send_response(IN_REVIEW)` | CALL after BUILD |
+| `send_response(COMPLETED)` | CALL after MERGE + SMOKE |
 
 ## MAILBOX (User & Review Comments)
 
-**CRITICAL:** Check `update_progress` response for `unreadComments` array.
+**CHECK `update_progress` response for `unreadComments` array.**
 
 ```
 result = update_progress(...)
 IF result.unreadComments:
   FOR comment IN result.unreadComments:
-    - Log: "📬 User: {comment.content}"
-    - IF [UNBLOCK] prefix → task was just unblocked, acknowledge context
-    - IF [REJECT] prefix → task was rejected, check reviewComments
-    - Address or incorporate feedback into current work
-    - Acknowledge in next progress update
+    LOG "📬 User: {comment.content}"
+    IF [UNBLOCK] prefix → READ context, ACKNOWLEDGE in next update
+    IF [REJECT] prefix → FETCH review comments, FIX issues
+    ADDRESS feedback in current work
+    ACKNOWLEDGE in next progress update
 ```
 
-**Never ignore user comments.** They may contain clarifications, corrections, or answers to blocked questions.
+**DO NOT ignore user comments.** They contain clarifications, corrections, or answers.
 
 ## REVIEW COMMENTS (Code-Level Feedback)
 
-When status is `REJECTED`, you MUST check for review comments:
+**When rejected, FETCH and FIX review comments:**
 
 ```
-IF task.status == 'REJECTED':
+IF task was rejected:
   result = get_review_comments({ taskId: CURRENT_TASK_ID })
   FOR comment IN result.comments:
-    - Log: "🔍 Review: {comment.filePath}:{comment.lineNumber}"
-    - Log: "   {comment.content}"
-    - FIX the issue in the specified file/line
+    LOG "🔍 Review: {comment.filePath}:{comment.lineNumber}"
+    LOG "   {comment.content}"
+    FIX the issue in the specified file/line
   
-  # After fixing all review comments:
+  # After fixing:
   FOR comment IN result.comments:
-    resolve_review_comment({ taskId: CURRENT_TASK_ID, commentId: comment.id })
+    CALL resolve_review_comment({ taskId: CURRENT_TASK_ID, commentId: comment.id })
   
-  # Re-submit for review
-  → SUBMIT
+  GO TO SUBMIT
 ```
 
 **REJECTION WORKFLOW:**
-1. Read rejection feedback from task context
-2. Fetch review comments with `get_review_comments`
-3. Address EACH comment (they point to specific code issues)
-4. Resolve comments with `resolve_review_comment`
-5. Re-run tests, re-submit with `send_response(IN_REVIEW)`
+1. READ rejection feedback from task context
+2. CALL `get_review_comments` to fetch code-level feedback
+3. FIX each comment (they point to specific code issues)
+4. CALL `resolve_review_comment` for each fixed comment
+5. RUN tests, CALL `send_response(IN_REVIEW)`
 
 ## STARTUP
 
-```
+```bash
+# CREATE working directory
 mkdir -p .waaah/orc
 
-# MANDATORY: Infer workspace context dynamically
-# CAUTION: Do not hardcode repoId. Use git remote.
+# EXTRACT workspace context from git remote
 REPO_URL=$(git remote get-url origin)
-# Extract "Owner/Repo" (e.g. OpenSourceWTF/WAAAH)
 REPO_ID=$(echo "$REPO_URL" | sed -E 's/.*github\.com[:/](.*)(\.git)?/\1/' | sed 's/\.git$//')
 CURRENT_PATH=$(pwd)
 BRANCH_NAME=$(git branch --show-current)
@@ -141,185 +141,205 @@ workspaceContext = {
   path: CURRENT_PATH
 }
 
+# REGISTER with server
 result = register_agent({ 
   role: "orchestrator",
   capabilities: ["spec-writing", "code-writing", "test-writing", "doc-writing", "general-purpose"],
   workspaceContext: workspaceContext
 })
 AGENT_ID = result.agentId
-NAME = result.displayName  # Server auto-generates adjective-noun-NN format
-→ WAIT
+NAME = result.displayName
+
+GO TO WAIT
 ```
 
 ## WAIT
 
 ```
-FOREVER:
+LOOP FOREVER:
   result = wait_for_prompt(290s)
-  IF timeout → continue
-  IF evict → exit
-  IF task → ACK
+  IF timeout → CONTINUE loop
+  IF evict → EXIT
+  IF task → GO TO ACK
 ```
 
 ## ACK
 
 ```
-ack_task()
+CALL ack_task()
 ctx = get_task_context()
 
-# ANALYZE PROMPT FOR INSTRUCTIONS
-# The server/user may send specific constraints or override instructions.
-# IF Prompt says "PRIORITY: X" -> Focus on X.
-# IF Prompt says "CONTEXT: Y" -> Add Y to specific research.
+# CHECK prompt for special instructions
+IF Prompt contains "PRIORITY: X" → FOCUS on X
+IF Prompt contains "CONTEXT: Y" → ADD Y to research
 
-IF ctx.status == "APPROVED" → MERGE
-ELSE → PLAN
+IF ctx.status == "APPROVED" → GO TO MERGE
+ELSE → GO TO PLAN
 ```
 
 ## PLAN
 
 ```
-IF ctx.spec → use it
-ELSE → generate: Task + Criteria (testable) + Steps
-update_progress(phase="PLANNING", 20%)
-→ BUILD
+IF ctx.spec exists → USE it
+ELSE → GENERATE: Task + Criteria (testable) + Steps
+
+CALL update_progress(phase="PLANNING", 20%)
+
+GO TO BUILD
 ```
 
 ## BUILD
 
 ```bash
-# S18: WORKTREE SETUP (Resume-Aware)
-# The prompt will contain setup instructions. Execute them.
-# If worktree already exists, you will cd into it.
-# If it doesn't exist, it will be created.
-# IMPORTANT: The server sends conditional logic, just run it.
+# EXECUTE worktree setup from prompt
+# The prompt contains conditional logic - RUN it
+# If worktree exists, CD into it
+# If not, CREATE it
 ```
 
 ### TDD Loop
 ```
-FOR criterion: 1. Write failing test  2. Implement → pass  3. update_progress()
+FOR each criterion:
+  1. WRITE failing test
+  2. IMPLEMENT until test passes
+  3. CALL update_progress()
 ```
 
 ### Block Conditions
-| Condition | Reason |
+| Condition | Action |
 |-----------|--------|
-| Ambiguous | `clarification` |
-| Security | `decision` |
-| 10+ failures | `dependency` |
+| Ambiguous requirements | CALL `block_task("clarification", ...)` |
+| Security concern | CALL `block_task("decision", ...)` |
+| 10+ test failures | CALL `block_task("dependency", ...)` |
 
 ### Quality Gates
-```
-pnpm test --coverage  # ≥90%
+```bash
+# RUN these before submitting
+pnpm test --coverage  # REQUIRE ≥90%
 pnpm typecheck && pnpm lint
 ```
 
-→ SUBMIT
+GO TO SUBMIT
 
 ## SUBMIT (Anti-Shortcut Gate)
 
 > [!CAUTION]
-> **PRE_SUBMIT CHECKLIST (MANDATORY)**
+> **VERIFY before submitting:**
 
-- [ ] Working in feature branch (NOT main)?
-- [ ] Changes committed to feature branch?
-- [ ] Tests passing locally?
-- [ ] Did I verify matching criteria?
+- [ ] WORKING in feature branch (NOT main)?
+- [ ] COMMITTED changes to feature branch?
+- [ ] TESTS passing locally?
+- [ ] VERIFIED matching criteria?
 
-If ANY answer is NO → Go back to BUILD.
+**IF ANY answer is NO → GO BACK TO BUILD.**
 
-**MANDATORY DIFF SUBMISSION STEPS:**
+**DIFF SUBMISSION STEPS:**
 
 ```bash
-# STEP 1: Fetch latest main and generate diff
+# STEP 1: FETCH latest main and GENERATE diff
 git fetch origin main
 git diff origin/main...HEAD > .waaah/orc/latest.diff
 
-# STEP 2: Validate diff is not empty
+# STEP 2: VALIDATE diff is not empty
 DIFF_SIZE=$(wc -c < .waaah/orc/latest.diff)
 echo "Diff size: $DIFF_SIZE bytes"
 if [ "$DIFF_SIZE" -lt 20 ]; then
-  echo "[ERROR] Diff too small. Are you on the correct branch?"
+  echo "[ERROR] Diff too small. CHECK you are on the correct branch."
   git branch --show-current
   git status
   # STOP AND FIX BEFORE PROCEEDING
 fi
 
-# STEP 3: Read diff content for send_response
+# STEP 3: READ diff content
 DIFF_CONTENT=$(cat .waaah/orc/latest.diff)
 echo "Diff captured: ${#DIFF_CONTENT} characters"
 ```
 
-**STEP 4: CALL send_response WITH THE diff PARAMETER (MANDATORY)**
-
-You MUST call `send_response` with FOUR arguments. The `diff` parameter is REQUIRED:
+**STEP 4: CALL send_response WITH diff PARAMETER**
 
 ```
-send_response({
+CALL send_response({
   taskId: CURRENT_TASK_ID,
   status: "IN_REVIEW",
   message: "## Summary: [1-2 sentences]\n## Changes: [file]: [what]\n## Testing: [x] Tests pass",
-  diff: DIFF_CONTENT  // ← THIS IS MANDATORY FOR CODE/TEST TASKS! Pass the output of `git diff origin/main...HEAD`
+  diff: DIFF_CONTENT  // ← REQUIRED FOR CODE/TEST TASKS
 })
 ```
 
 > [!CAUTION]
-> **DO NOT OMIT THE `diff` PARAMETER.** If you call send_response without `diff`, your submission will be rejected.
+> **DO NOT OMIT THE `diff` PARAMETER.** Submission will be rejected without it.
 
-> **LOOP INSTRUCTION**:
-> You have successfully submitted the task for review.
-> **GO TO STEP 1.1 (WAIT)** immediately.
-> Do NOT wait for approval. Do NOT assume you will be the one to merge.
-> JUST LOOP.
-
+**AFTER SUBMITTING:**
+GO TO WAIT immediately.
+DO NOT wait for approval.
+DO NOT assume you will merge.
+JUST LOOP.
 
 ## MERGE (only after APPROVED)
 
 ```bash
-# CRITICAL: Check for merge conflicts
+# CHECK for merge conflicts
 if ! git merge --no-ff $BRANCH -m "Merge $BRANCH"; then
-  echo "MERGE CONFLICT DETECTED - ATTEMPTING RESOLUTION"
+  echo "MERGE CONFLICT DETECTED"
   
-  # 1. Identify conflicts: `git status --porcelain | grep "^UU"`
-  # 2. RESOLVE: Edit files to remove markers <<<<<< ====== >>>>>>
-  #    - If lockfile conflict: `git checkout --ours pnpm-lock.yaml && pnpm install`
-  # 3. VERIFY: `pnpm build && pnpm test`
-  # 4. IF SUCCESS:
-  #    git add .
-  #    git commit --no-edit
-  # 5. IF FAILURE (Tests fail or too complex):
-  #    block_task("Merge Conflict - Human resolution required")
-  #    exit 1
+  # IDENTIFY conflicts
+  git status --porcelain | grep "^UU"
+  
+  # RESOLVE conflicts - REMOVE markers <<<<<< ====== >>>>>>
+  # IF lockfile conflict: git checkout --ours pnpm-lock.yaml && pnpm install
+  
+  # VERIFY: pnpm build && pnpm test
+  
+  # IF success:
+  git add .
+  git commit --no-edit
+  
+  # IF failure:
+  CALL block_task("Merge Conflict - Human resolution required")
+  EXIT
 fi
+
+# PUSH to main
 git push origin main
+
+# CLEANUP worktree and branch
 git worktree remove .worktrees/$BRANCH --force
 git branch -D $BRANCH && git push origin --delete $BRANCH
 ```
 
-→ SMOKE
+GO TO SMOKE
 
 ## SMOKE (post-merge verification)
 
 > [!CAUTION]
-> **PRE_COMPLETE CHECKLIST (MANDATORY)**
+> **VERIFY before completing:**
 
-- [ ] Task went through IN_REVIEW (not skipped)?
-- [ ] Received APPROVED status?
-- [ ] Changes merged to main?
-- [ ] `git log origin/main --oneline | head -1` shows your commit?
-- [ ] Did you verify dependencies still work?
+- [ ] Task WENT THROUGH IN_REVIEW (not skipped)?
+- [ ] RECEIVED APPROVED status?
+- [ ] MERGED changes to main?
+- [ ] `git log origin/main --oneline | head -1` SHOWS your commit?
+- [ ] VERIFIED dependencies still work?
 
 ```
-0. IF ctx.dependencies → verify EACH dependency still works
-1. IF ctx.verify → RUN verify; fail → revert & block
-2. GRUMPY: "Can stranger run [cmd] and see [output]?" No → not done
-3. STUB: grep "TODO|Not implemented" [files]; found → not done
-4. BROWSER: does the UI still work? (if applicable)
-5. Pass all → send_response(COMPLETED)
+IF ctx.dependencies → VERIFY each dependency still works
+IF ctx.verify → RUN verify; IF fail → REVERT and BLOCK
+
+# GRUMPY CHECK: "Can stranger run [cmd] and see [output]?" 
+IF no → NOT DONE
+
+# STUB CHECK
+grep "TODO|Not implemented" [files]
+IF found → NOT DONE
+
+# BROWSER CHECK (if applicable)
+VERIFY UI still works
+
+# ALL PASSED
+CALL send_response(COMPLETED)
 ```
 
-> **LOOP INSTRUCTION**:
-> You have completed the task.
-> **GO TO STEP 1.1 (WAIT)** immediately.
-> Do NOT stop. Do NOT ask for new instructions.
-> JUST LOOP.
-
+**AFTER COMPLETING:**
+GO TO WAIT immediately.
+DO NOT stop.
+DO NOT ask for new instructions.
+JUST LOOP.
