@@ -173,6 +173,36 @@ export function createTaskRoutes({ queue, workspaceRoot }: TaskRoutesConfig): Ro
   });
 
   /**
+   * PATCH /tasks/:taskId
+   * Update task fields (e.g., workspaceContext, capabilities)
+   */
+  router.patch('/tasks/:taskId', (req, res) => {
+    const { taskId } = req.params;
+    const updates = req.body;
+
+    // Map 'requiredCapabilities' to 'to.requiredCapabilities' if present
+    if (updates.requiredCapabilities) {
+      updates.to = updates.to || {};
+      updates.to.requiredCapabilities = updates.requiredCapabilities;
+      delete updates.requiredCapabilities;
+    }
+
+    // Map top-level updates to Task structure
+    // (validation should be done by queue/repo or schema)
+
+    // Ensure we don't overwrite ID or crucial system fields accidentally if not intended
+    // For now, trust the queue's updateTask to merge safely
+    const updatedTask = queue.updateTask(taskId, updates);
+
+    if (!updatedTask) {
+      res.status(404).json({ error: 'Task not found or update failed' });
+      return;
+    }
+
+    res.json(updatedTask);
+  });
+
+  /**
    * GET /tasks/:taskId/diff
    * Returns the git diff for the task's worktree
    */

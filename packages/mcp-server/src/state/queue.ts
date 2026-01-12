@@ -166,7 +166,31 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue {
     return this.stateService.forceRetry(taskId);
   }
 
-  // ===== Messages (Delegated) =====
+  /**
+   * Updates specific fields of a task.
+   * Merges updates into existing task and persists.
+   */
+  updateTask(taskId: string, updates: Partial<Task>): Task | null {
+    const task = this.getTask(taskId);
+    if (!task) return null;
+
+    // Merge updates
+    const updatedTask: Task = {
+      ...task,
+      ...updates,
+      // Deep merge 'to' if provided, otherwise keep existing
+      to: updates.to ? { ...task.to, ...updates.to } : task.to
+    };
+
+    try {
+      this.repo.update(updatedTask);
+      console.log(`[Queue] Task ${taskId} manually updated`);
+      return updatedTask;
+    } catch (e: any) {
+      console.error(`[Queue] Failed to update task ${taskId}: ${e.message}`);
+      return null;
+    }
+  }
 
   addMessage(
     taskId: string,

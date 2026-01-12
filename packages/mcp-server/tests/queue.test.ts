@@ -404,6 +404,43 @@ describe('TaskQueue', () => {
         expect(ackResult.success).toBe(false);
       });
     });
+
+    describe('updateTask', () => {
+      it('updates existing task fields', () => {
+        const task = mockTask({ id: 'update-test-1', priority: 'normal', to: { requiredCapabilities: ['code-writing'] } });
+        queue.enqueue(task);
+
+        const updated = queue.updateTask('update-test-1', {
+          priority: 'high',
+          to: { requiredCapabilities: ['doc-writing'] } // Nested update logic check
+        });
+
+        expect(updated).not.toBeNull();
+        expect(updated?.priority).toBe('high');
+        expect(updated?.to.requiredCapabilities).toContain('doc-writing');
+
+        // Verify persistence
+        const fetched = queue.getTask('update-test-1');
+        expect(fetched?.priority).toBe('high');
+        expect(fetched?.to.requiredCapabilities).toContain('doc-writing');
+      });
+
+      it('returns null for non-existent task', () => {
+        const result = queue.updateTask('non-existent', { priority: 'high' });
+        expect(result).toBeNull();
+      });
+
+      it('updates workspaceContext', () => {
+        const task = mockTask({ id: 'update-context-test' } as any);
+        queue.enqueue(task);
+
+        const context = { type: 'github', repoId: 'owner/repo', branch: 'main', path: '/' } as any;
+        queue.updateTask('update-context-test', { workspaceContext: context } as any);
+
+        const fetched = queue.getTask('update-context-test');
+        expect((fetched as any)?.workspaceContext).toEqual(context);
+      });
+    });
     describe('getStats', () => {
       it('returns 0 counts when queue is empty', () => {
         const stats = queue.getStats();

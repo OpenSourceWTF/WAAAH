@@ -35,13 +35,13 @@ export function Dashboard() {
     hasMoreCompleted,
     hasMoreCancelled,
     loadingMore
-  } = useTaskData({ pollInterval: 2000, search: searchQuery });
+  } = useTaskData({ search: searchQuery });
 
   const {
     agents,
     getRelativeTime,
     refetch: refetchAgents
-  } = useAgentData({ pollInterval: 2000 });
+  } = useAgentData();
 
   // Combined refetch for backward compatibility with fetchData calls
   const fetchData = useCallback(() => {
@@ -155,6 +155,21 @@ export function Dashboard() {
       fetchData(); // Refresh immediately
     } catch (error) {
       console.error("Failed to unblock task", error);
+    }
+  }, [fetchData]);
+
+  const handleUpdateTask = useCallback(async (taskId: string, updates: Record<string, any>) => {
+    try {
+      const res = await apiFetch(`/admin/tasks/${taskId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates)
+      });
+      if (!res.ok) throw new Error('Failed to update task');
+      console.log(`Task ${taskId} updated`);
+      fetchData(); // Refresh immediately
+    } catch (error) {
+      console.error("Failed to update task", error);
     }
   }, [fetchData]);
 
@@ -316,6 +331,7 @@ export function Dashboard() {
               onSendComment={handleSendComment}
               onAddReviewComment={handleAddReviewComment}
               onUnblockTask={handleUnblockTask}
+              onUpdateTask={handleUpdateTask}
               onLoadMoreCompleted={loadMoreCompleted}
               onLoadMoreCancelled={loadMoreCancelled}
               hasMoreCompleted={hasMoreCompleted}

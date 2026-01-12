@@ -58,6 +58,9 @@ export interface ITaskQueue {
   /** Force retry a task */
   forceRetry(taskId: string): AckResult;
 
+  /** Update task fields */
+  updateTask(taskId: string, updates: Partial<Task>): Task | null;
+
   /** Add a message to a task thread */
   addMessage(taskId: string, role: 'user' | 'agent' | 'system', content: string, metadata?: Record<string, unknown>): void;
 

@@ -105,6 +105,7 @@ export function initializeSchema(db: Database.Database): void {
       toAgentId TEXT,
       toRequiredCapabilities TEXT, -- JSON array of StandardCapability
       toWorkspaceId TEXT,
+      workspaceContext TEXT, -- JSON object: type, repoId, branch, path
       context TEXT,
       response TEXT,
       createdAt INTEGER NOT NULL,
@@ -213,7 +214,9 @@ function runMigrations(db: Database.Database): void {
     // Messages JSON column for inline message storage
     { column: 'messages', sql: 'ALTER TABLE tasks ADD COLUMN messages TEXT' },
     // Images JSON column
-    { column: 'images', sql: 'ALTER TABLE tasks ADD COLUMN images TEXT' }
+    { column: 'images', sql: 'ALTER TABLE tasks ADD COLUMN images TEXT' },
+    // Workspace context (V8)
+    { column: 'workspaceContext', sql: 'ALTER TABLE tasks ADD COLUMN workspaceContext TEXT' }
   ];
 
   for (const migration of taskMigrations) {

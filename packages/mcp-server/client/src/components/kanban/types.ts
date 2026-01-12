@@ -58,6 +58,8 @@ export interface Task {
   };
   /** Source of task creation */
   source?: 'UI' | 'CLI' | 'Agent';
+  /** Explicit workspace context for list display */
+  workspaceContext?: WorkspaceContext;
 }
 
 /**
