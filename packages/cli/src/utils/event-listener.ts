@@ -27,10 +27,10 @@ export async function startEventListener() {
       }>('get', '/admin/events');
       if (data.status === 'TIMEOUT') continue;
 
-      if (data.type === 'task_update') {
+      if (data.type === 'task_update' && data.task) {
         const t = data.task;
         if (['COMPLETED', 'FAILED', 'BLOCKED'].includes(t.status)) {
-          const agentId = t.to.agentId || t.to.role || 'unknown';
+          const agentId = t.to?.agentId || t.to?.role || 'unknown';
           const icon = t.status === 'COMPLETED' ? '✅' : t.status === 'FAILED' ? '❌' : '⚠️';
 
           let msg = `\n${icon} [${agentId}] ${t.status}: ${t.response?.message || 'No message'}`;
@@ -39,7 +39,7 @@ export async function startEventListener() {
           }
           logInjected(msg);
         } else if (t.status === 'ASSIGNED') {
-          logInjected(`\n⏳ [${t.to.agentId || t.to.role}] Assigned task: ${t.id}`);
+          logInjected(`\n⏳ [${t.to?.agentId || t.to?.role || 'unknown'}] Assigned task: ${t.id}`);
         }
       }
     } catch {

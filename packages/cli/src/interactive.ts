@@ -30,14 +30,13 @@ const listCommand: CommandHandler = async () => {
 
 const statusCommand: CommandHandler = async (args) => {
   const agentId = args[1];
-  const result = agentId
-    ? await apiCall<{ content?: { text?: string }[] }>('post', '/mcp/tools/get_agent_status', { agentId })
-    : null;
-
-  const parsed = agentId ? parseMCPResponse<AgentInfo>(result) : null;
-  parsed && console.log(formatSingleAgentStatus(parsed));
-
-  !agentId && await showAllAgentStatus();
+  if (agentId) {
+    const result = await apiCall<{ content?: { text?: string }[] }>('post', '/mcp/tools/get_agent_status', { agentId });
+    const parsed = parseMCPResponse<AgentInfo>(result);
+    parsed && console.log(formatSingleAgentStatus(parsed));
+  } else {
+    await showAllAgentStatus();
+  }
 };
 
 const showAllAgentStatus = async () => {
