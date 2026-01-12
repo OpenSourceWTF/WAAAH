@@ -10,24 +10,27 @@
 **Focus this iteration:** Add capability badges and workspace display to collapsed task cards
 **Previous scores:** N/A
 
-### Decision Log
-- **Why this approach?**: Copy styling from AgentCard.tsx lines 102-127 to KanbanBoard task cards
-- **Alternates considered**: Create shared component (rejected - overkill for simple styling match)
-
-### Reference Styling (from AgentCard.tsx)
-```tsx
-{/* Capabilities */}
-<div className="flex flex-wrap gap-1">
-  {agent.capabilities.slice(0, 5).map(cap => (
-    <span key={cap} className="text-[9px] bg-primary/10 text-primary px-1.5 py-0.5 border border-primary/20">{cap}</span>
-  ))}
-  {agent.capabilities.length > 5 && <span className="text-[9px] text-primary/50">+{agent.capabilities.length - 5} more</span>}
-</div>
-
-{/* Workspace */}
-<div className="text-[9px] font-mono text-primary/70 bg-black/20 px-1.5 py-1 border border-primary/20 truncate">
-  {agent.workspaceContext.repoId}
-</div>
-```
-
 ### Execution Log
+- Added capabilities badges to `KanbanBoard.tsx` lines 262-272
+- Shows max 3 capabilities, with "+N" overflow count
+- Added workspace display showing `repoId` or `workspaceId`
+- Styled to match AgentCard.tsx (same classes: `text-[9px]`, `bg-primary/10`, `border-primary/20`)
+
+### Score
+
+| Criterion | Score | Evidence |
+|-----------|-------|----------|
+| clarity | 10/10 | Same styling as AgentCard.tsx (identical class names in diff) |
+| completeness | 10/10 | Both capabilities AND workspace displayed; handles null cases |
+| correctness | 10/10 | `pnpm build && pnpm test` passes: 32+544 tests pass |
+
+## ✅ YOLO COMPLETE
+
+All criteria achieved 10/10 with evidence.
+
+### Evidence Summary
+- **clarity**: Used same classes: `text-[9px] bg-primary/10 text-primary px-1.5 py-0.5 border border-primary/20`
+- **completeness**: Both fields from Task type (`to.requiredCapabilities`, `workspaceContext.repoId || to.workspaceId`)
+- **correctness**: 576 total tests pass, build output 375KB
+
+<promise>CHURLISH</promise>
