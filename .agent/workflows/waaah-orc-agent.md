@@ -96,13 +96,19 @@ IF result.unreadComments:
 ```
 mkdir -p .waaah/orc
 
-# MANDATORY: Infer workspace context from current directory
-# This tells the scheduler which repo you're working in
+# MANDATORY: Infer workspace context dynamically
+# CAUTION: Do not hardcode repoId. Use git remote.
+REPO_URL=$(git remote get-url origin)
+# Extract "Owner/Repo" (e.g. OpenSourceWTF/WAAAH)
+REPO_ID=$(echo "$REPO_URL" | sed -E 's/.*github\.com[:/](.*)(\.git)?/\1/' | sed 's/\.git$//')
+CURRENT_PATH=$(pwd)
+BRANCH_NAME=$(git branch --show-current)
+
 workspaceContext = {
-  type: "github",  # or "local" if not a github repo
-  repoId: parseGitRemote("git remote get-url origin"),  # e.g., "OpenSourceWTF/WAAAH"
-  branch: exec("git rev-parse --abbrev-ref HEAD"),
-  path: process.cwd()
+  type: "github",
+  repoId: REPO_ID, 
+  branch: BRANCH_NAME,
+  path: CURRENT_PATH
 }
 
 result = register_agent({ 
@@ -130,6 +136,12 @@ FOREVER:
 ```
 ack_task()
 ctx = get_task_context()
+
+# ANALYZE PROMPT FOR INSTRUCTIONS
+# The server/user may send specific constraints or override instructions.
+# IF Prompt says "PRIORITY: X" -> Focus on X.
+# IF Prompt says "CONTEXT: Y" -> Add Y to specific research.
+
 IF ctx.status == "APPROVED" → MERGE
 ELSE → PLAN
 ```
@@ -186,9 +198,17 @@ If ANY answer is NO → Go back to BUILD.
 ```bash
 # Verify you're on feature branch, NOT main
 git branch --show-current  # Must NOT be 'main'
+git fetch origin main    # Ensure strict comparison against latest
 git add -A && git commit -m "feat(scope): desc"
 git push origin $(git branch --show-current)  # Push to feature branch
-DIFF=$(git diff origin/main...HEAD)
+git diff origin/main...HEAD > .waaah/orc/latest.diff
+DIFF=$(cat .waaah/orc/latest.diff)
+
+# VALIDATE DIFF (Anti-Blank Check)
+IF DIFF is empty OR length(DIFF) < 10:
+  echo "ERROR: Diff is empty. You haven't made changes or are on wrong branch."
+  echo "Verify 'git branch' and 'git status'."
+  STOP. Do not send response. Fix the diff.
 ```
 
 ```markdown
@@ -199,17 +219,33 @@ DIFF=$(git diff origin/main...HEAD)
 
 ```
 send_response({ status: "IN_REVIEW", diff: DIFF, artifacts: { branch } })
-→ WAIT  # BLOCKED until approved - DO NOT PROCEED
 ```
 
-> ⚠️ After IN_REVIEW, you MUST call `wait_for_prompt` and wait for APPROVED status before proceeding to MERGE.
+> **LOOP INSTRUCTION**:
+> You have successfully submitted the task for review.
+> **GO TO STEP 1.1 (WAIT)** immediately.
+> Do NOT wait for approval. Do NOT assume you will be the one to merge.
+> JUST LOOP.
+
 
 ## MERGE (only after APPROVED)
 
 ```bash
-git checkout main && git pull
-git merge --no-ff $BRANCH -m "Merge $BRANCH"
-IF conflict → block_task("dependency") → WAIT
+# CRITICAL: Check for merge conflicts
+if ! git merge --no-ff $BRANCH -m "Merge $BRANCH"; then
+  echo "MERGE CONFLICT DETECTED - ATTEMPTING RESOLUTION"
+  
+  # 1. Identify conflicts: `git status --porcelain | grep "^UU"`
+  # 2. RESOLVE: Edit files to remove markers <<<<<< ====== >>>>>>
+  #    - If lockfile conflict: `git checkout --ours pnpm-lock.yaml && pnpm install`
+  # 3. VERIFY: `pnpm build && pnpm test`
+  # 4. IF SUCCESS:
+  #    git add .
+  #    git commit --no-edit
+  # 5. IF FAILURE (Tests fail or too complex):
+  #    block_task("Merge Conflict - Human resolution required")
+  #    exit 1
+fi
 git push origin main
 git worktree remove .worktrees/$BRANCH --force
 git branch -D $BRANCH && git push origin --delete $BRANCH
@@ -235,7 +271,11 @@ git branch -D $BRANCH && git push origin --delete $BRANCH
 3. STUB: grep "TODO|Not implemented" [files]; found → not done
 4. BROWSER: does the UI still work? (if applicable)
 5. Pass all → send_response(COMPLETED)
-→ WAIT
 ```
 
-> 🛑 **FINAL CHECK**: Did you skip IN_REVIEW? If yes, you violated the workflow. Do not mark COMPLETED.
+> **LOOP INSTRUCTION**:
+> You have completed the task.
+> **GO TO STEP 1.1 (WAIT)** immediately.
+> Do NOT stop. Do NOT ask for new instructions.
+> JUST LOOP.
+
