@@ -32,7 +32,11 @@ describe('ToolHandler', () => {
       const result = await tools.register_agent({
         agentId,
         displayName: '@TestDev',
-        capabilities: ['code-writing', 'test-writing']
+        capabilities: ['code-writing', 'test-writing'],
+        workspaceContext: {
+          type: 'github',
+          repoId: 'OpenSourceWTF/WAAAH'
+        }
       });
 
       expect(result.content[0].type).toBe('text');
@@ -148,7 +152,8 @@ describe('ToolHandler', () => {
       const result = await tools.assign_task({
         targetAgentId: 'nonexistent-agent-xyz-never-exists',
         prompt: 'Test',
-        sourceAgentId: 'source'
+        sourceAgentId: 'source',
+        workspaceId: 'OpenSourceWTF/WAAAH'
       });
 
       // Should succeed - task is created for capability-based matching
@@ -167,7 +172,8 @@ describe('ToolHandler', () => {
       const result = await tools.assign_task({
         targetAgentId: targetId,
         prompt: 'Run tests',
-        sourceAgentId: sourceId
+        sourceAgentId: sourceId,
+        workspaceId: 'OpenSourceWTF/WAAAH'
       });
 
       // Now should work since delegation permissions are removed
@@ -179,6 +185,7 @@ describe('ToolHandler', () => {
       const result = await tools.assign_task({
         targetAgentId: 'developer',  // Using role name to test security before permission check
         prompt: 'rm -rf /',
+        workspaceId: 'OpenSourceWTF/WAAAH'
         // No sourceAgentId - bypasses permission check
       });
 

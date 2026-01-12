@@ -20,12 +20,19 @@ export function createTaskRoutes({ queue, workspaceRoot }: TaskRoutesConfig): Ro
   /**
    * POST /enqueue
    * Enqueues a new task from the Admin interface.
+   * REQUIRES workspaceId - no server-side defaults.
    */
   router.post('/enqueue', (req, res) => {
-    const { prompt, agentId, role, priority, source } = req.body;
+    const { prompt, agentId, role, priority, source, workspaceId } = req.body;
 
     if (!prompt || typeof prompt !== 'string') {
       res.status(400).json({ error: 'Missing or invalid prompt' });
+      return;
+    }
+
+    // REQUIRED: workspaceId must be provided by the client
+    if (!workspaceId || typeof workspaceId !== 'string') {
+      res.status(400).json({ error: 'Missing or invalid workspaceId. Client must specify the target workspace.' });
       return;
     }
 
@@ -52,13 +59,14 @@ export function createTaskRoutes({ queue, workspaceRoot }: TaskRoutesConfig): Ro
       command: 'execute_prompt',
       prompt,
       from: { type: 'user', id: 'admin', name: 'AdminUser' },
-      to: { agentId },
+      to: { agentId, workspaceId },
       priority: priority || 'normal',
       status: 'QUEUED',
       createdAt: Date.now(),
       source: taskSource,
       context: {
-        security: getSecurityContext(workspaceRoot)
+        // Security context derived from client's workspaceId, not server's cwd
+        workspaceId
       }
     });
 

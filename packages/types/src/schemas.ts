@@ -162,7 +162,8 @@ export const registerAgentSchema = z.object({
   displayName: z.string().optional().describe("Human-readable name for the agent (auto-generated if not provided)"),
   role: z.string().optional().describe("Role of the agent (e.g., 'full-stack-engineer')"),
   capabilities: z.array(StandardCapability).min(1).describe("Capabilities this agent has"),
-  workspaceContext: workspaceContextSchema.optional().describe("Workspace the agent is working in"),
+  /** REQUIRED: Agents MUST declare their workspace. Infer from git remote. */
+  workspaceContext: workspaceContextSchema.describe("Workspace the agent is working in (REQUIRED - infer from git remote)"),
   source: z.enum(['CLI', 'IDE']).optional().default('IDE').describe("Source of the agent: CLI (waaah-agent wrapper) or IDE (Cursor/Claude/etc)")
 });
 export type RegisterAgentArgs = z.infer<typeof registerAgentSchema>;
@@ -201,8 +202,8 @@ export const assignTaskSchema = z.object({
   targetRole: z.string().min(1).optional().describe("DEPRECATED: Ignored for matching"),
   /** Required capabilities for the task */
   requiredCapabilities: z.array(StandardCapability).optional().describe("Capabilities required to execute this task"),
-  /** Workspace ID for affinity matching */
-  workspaceId: z.string().optional().describe("Repository ID for workspace affinity (e.g., 'OpenSourceWTF/WAAAH')"),
+  /** REQUIRED: Workspace ID for task routing. Must match agent's workspaceContext.repoId */
+  workspaceId: z.string().min(1).describe("Repository ID for workspace routing (REQUIRED - e.g., 'OpenSourceWTF/WAAAH')"),
   sourceAgentId: z.string().min(1).optional().default('Da Boss').describe("The ID of the agent assigning the task (defaults to 'Da Boss')"),
   prompt: z.string().min(1).describe("The task description/prompt"),
   context: z.record(z.unknown()).optional().describe("Additional context data for the task"),

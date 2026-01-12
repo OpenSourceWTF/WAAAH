@@ -343,7 +343,11 @@ describe('AgentHandlers', () => {
       const result = await handlers.register_agent({
         agentId: `new-agent-${Date.now()}`,
         displayName: '@NewAgent',
-        capabilities: ['code-writing']
+        capabilities: ['code-writing'],
+        workspaceContext: {
+          type: 'github',
+          repoId: 'OpenSourceWTF/WAAAH'
+        }
       });
 
       const data = JSON.parse(result.content[0].text);

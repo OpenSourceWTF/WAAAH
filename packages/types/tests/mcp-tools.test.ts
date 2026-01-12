@@ -26,7 +26,14 @@ describe('MCP_TOOL_DEFINITIONS', () => {
   it('should define assign_task correctly', () => {
     const assignTask = MCP_TOOL_DEFINITIONS.find(t => t.name === 'assign_task');
     expect(assignTask).toBeDefined();
-    expect(assignTask?.inputSchema.required).toContain('targetAgentId');
+    expect(assignTask?.inputSchema.required).toContain('workspaceId');
     expect(assignTask?.inputSchema.required).toContain('prompt');
+  });
+
+  it('should define register_agent with workspaceContext required', () => {
+    const registerAgent = MCP_TOOL_DEFINITIONS.find(t => t.name === 'register_agent');
+    expect(registerAgent).toBeDefined();
+    expect(registerAgent?.inputSchema.required).toContain('workspaceContext');
+    expect(registerAgent?.inputSchema.required).toContain('capabilities');
   });
 });

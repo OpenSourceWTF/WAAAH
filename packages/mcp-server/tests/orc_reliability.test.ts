@@ -34,6 +34,7 @@ describe('TaskHandlers: Orc Reliability', () => {
     // Arrange
     const args = {
       prompt: 'Fix the bug',
+      workspaceId: 'OpenSourceWTF/WAAAH',
       taskId: 'test-123'
     };
 

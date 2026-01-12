@@ -17,9 +17,20 @@ export const MCP_TOOL_DEFINITIONS = [
           description: 'The role of the agent. Recommended: boss, orchestrator, code-doctor, project-manager, full-stack-engineer, test-engineer, ops-engineer, designer, developer. Any custom role is allowed.'
         },
         displayName: { type: 'string', description: 'Human-readable name for the agent' },
-        capabilities: { type: 'array', items: { type: 'string' }, description: 'List of capabilities/tools the agent has' }
+        capabilities: { type: 'array', items: { type: 'string' }, description: 'List of capabilities/tools the agent has' },
+        workspaceContext: {
+          type: 'object',
+          description: 'REQUIRED: Workspace the agent is working in. Infer from git remote.',
+          properties: {
+            type: { type: 'string', enum: ['local', 'github'], description: 'Workspace type' },
+            repoId: { type: 'string', description: 'Repository identifier (e.g., Owner/Repo from git remote)' },
+            branch: { type: 'string', description: 'Current branch name' },
+            path: { type: 'string', description: 'Local filesystem path' }
+          },
+          required: ['type', 'repoId']
+        }
       },
-      required: ['agentId', 'role']
+      required: ['agentId', 'role', 'capabilities', 'workspaceContext']
     }
   },
   {
@@ -62,10 +73,11 @@ export const MCP_TOOL_DEFINITIONS = [
         targetAgentId: { type: 'string', description: 'The ID of the agent to assign the task to' },
         sourceAgentId: { type: 'string', description: 'The ID of the agent assigning the task' },
         prompt: { type: 'string', description: 'The task description/prompt' },
+        workspaceId: { type: 'string', description: 'REQUIRED: Repository ID for task routing (e.g., Owner/Repo)' },
         context: { type: 'object', description: 'Additional context data for the task' },
         priority: { type: 'string', enum: ['normal', 'high', 'critical'], description: 'Task priority' }
       },
-      required: ['targetAgentId', 'prompt']
+      required: ['prompt', 'workspaceId']
     }
   },
   {

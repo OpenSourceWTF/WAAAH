@@ -47,6 +47,7 @@ describe('Server E2E', () => {
             name: 'assign_task',
             arguments: {
               prompt: 'E2E Test: Create a simple task',
+              workspaceId: 'OpenSourceWTF/WAAAH',
               context: { test: true }
             }
           },
@@ -78,6 +79,7 @@ describe('Server E2E', () => {
             name: 'assign_task',
             arguments: {
               prompt: 'E2E Test: Task for status update',
+              workspaceId: 'OpenSourceWTF/WAAAH',
               context: { test: true }
             }
           },

@@ -41,6 +41,7 @@ describe('TaskHandlers - Dependency Fix', () => {
     await handlers.assign_task({
       targetAgentId: 'target-agent',
       prompt: 'Do something',
+      workspaceId: 'OpenSourceWTF/WAAAH',
       context: {
         dependencies: ['dep-1', 'dep-2'],
         someOtherContext: 'value'
@@ -63,6 +64,7 @@ describe('TaskHandlers - Dependency Fix', () => {
     await handlers.assign_task({
       targetAgentId: 'target-agent',
       prompt: 'Do something',
+      workspaceId: 'OpenSourceWTF/WAAAH',
       dependencies: ['top-level-dep'],
       context: {
         dependencies: ['context-dep'] // Should be ignored if top-level exists

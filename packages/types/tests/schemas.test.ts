@@ -58,17 +58,23 @@ describe('registerAgentSchema', () => {
     const result = registerAgentSchema.parse({
       agentId: 'test-agent',
       displayName: '@Test',
-      capabilities: ['code-writing', 'test-writing']
+      capabilities: ['code-writing', 'test-writing'],
+      workspaceContext: {
+        type: 'github',
+        repoId: 'OpenSourceWTF/WAAAH'
+      }
     });
     expect(result.agentId).toBe('test-agent');
     expect(result.capabilities).toEqual(['code-writing', 'test-writing']);
+    expect(result.workspaceContext.repoId).toBe('OpenSourceWTF/WAAAH');
   });
 
   it('requires at least one capability', () => {
     expect(() => registerAgentSchema.parse({
       agentId: 'test-agent',
       displayName: '@Test',
-      capabilities: []
+      capabilities: [],
+      workspaceContext: { type: 'local', repoId: 'test' }
     })).toThrow();
   });
 
@@ -76,7 +82,8 @@ describe('registerAgentSchema', () => {
     expect(() => registerAgentSchema.parse({
       agentId: '',
       displayName: '@Test',
-      capabilities: ['code-writing']
+      capabilities: ['code-writing'],
+      workspaceContext: { type: 'local', repoId: 'test' }
     })).toThrow();
   });
 
@@ -138,14 +145,17 @@ describe('sendResponseSchema', () => {
 describe('assignTaskSchema', () => {
   it('validates with defaults', () => {
     const result = assignTaskSchema.parse({
-      prompt: 'Build a feature'
+      prompt: 'Build a feature',
+      workspaceId: 'OpenSourceWTF/WAAAH'
     });
     expect(result.priority).toBe('normal');
+    expect(result.workspaceId).toBe('OpenSourceWTF/WAAAH');
   });
 
   it('accepts requiredCapabilities', () => {
     const result = assignTaskSchema.parse({
       prompt: 'Write tests',
+      workspaceId: 'OpenSourceWTF/WAAAH',
       requiredCapabilities: ['test-writing']
     });
     expect(result.requiredCapabilities).toEqual(['test-writing']);
@@ -161,7 +171,14 @@ describe('assignTaskSchema', () => {
 
   it('rejects empty prompt', () => {
     expect(() => assignTaskSchema.parse({
-      prompt: ''
+      prompt: '',
+      workspaceId: 'OpenSourceWTF/WAAAH'
+    })).toThrow();
+  });
+
+  it('requires workspaceId', () => {
+    expect(() => assignTaskSchema.parse({
+      prompt: 'Build something'
     })).toThrow();
   });
 });

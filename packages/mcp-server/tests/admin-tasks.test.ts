@@ -28,6 +28,7 @@ describe('Admin Tasks Routes', () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           prompt: 'Test task prompt',
+          workspaceId: 'OpenSourceWTF/WAAAH',
           priority: 'normal'
         })
       });
@@ -55,7 +56,8 @@ describe('Admin Tasks Routes', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          prompt: 'rm -rf /'
+          prompt: 'rm -rf /',
+          workspaceId: 'OpenSourceWTF/WAAAH'
         })
       });
 
@@ -70,6 +72,7 @@ describe('Admin Tasks Routes', () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           prompt: 'Test from UI',
+          workspaceId: 'OpenSourceWTF/WAAAH',
           source: 'UI'
         })
       });
@@ -113,7 +116,7 @@ describe('Admin Tasks Routes', () => {
       const createRes = await fetch(`${baseUrl}/admin/enqueue`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: 'Get by ID test' })
+        body: JSON.stringify({ prompt: 'Get by ID test', workspaceId: 'OpenSourceWTF/WAAAH' })
       });
       const { taskId } = await createRes.json();
 
@@ -137,7 +140,7 @@ describe('Admin Tasks Routes', () => {
       const createRes = await fetch(`${baseUrl}/admin/enqueue`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: 'Cancel test' })
+        body: JSON.stringify({ prompt: 'Cancel test', workspaceId: 'OpenSourceWTF/WAAAH' })
       });
       const { taskId } = await createRes.json();
 
@@ -155,7 +158,7 @@ describe('Admin Tasks Routes', () => {
       const createRes = await fetch(`${baseUrl}/admin/enqueue`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: 'Retry test' })
+        body: JSON.stringify({ prompt: 'Retry test', workspaceId: 'OpenSourceWTF/WAAAH' })
       });
       const { taskId } = await createRes.json();
 
@@ -174,7 +177,7 @@ describe('Admin Tasks Routes', () => {
       const createRes = await fetch(`${baseUrl}/admin/enqueue`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: 'Comment test' })
+        body: JSON.stringify({ prompt: 'Comment test', workspaceId: 'OpenSourceWTF/WAAAH' })
       });
       const { taskId } = await createRes.json();
 
@@ -237,7 +240,7 @@ describe('Admin Tasks Routes', () => {
       const createRes = await fetch(`${baseUrl}/admin/enqueue`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: 'Diff test' })
+        body: JSON.stringify({ prompt: 'Diff test', workspaceId: 'OpenSourceWTF/WAAAH' })
       });
       const { taskId } = await createRes.json();
 

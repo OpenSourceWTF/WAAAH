@@ -53,7 +53,11 @@ describe('AgentHandlers', () => {
       const result = await handlers.register_agent({
         agentId: 'agent-1',
         displayName: '@TestAgent',
-        capabilities: ['code-writing']
+        capabilities: ['code-writing'],
+        workspaceContext: {
+          type: 'github',
+          repoId: 'OpenSourceWTF/WAAAH'
+        }
       });
 
       expect(mockRegistry.register).toHaveBeenCalled();
@@ -63,7 +67,11 @@ describe('AgentHandlers', () => {
     it('generates display name if not provided', async () => {
       const result = await handlers.register_agent({
         agentId: 'agent-2',
-        capabilities: ['code-writing']
+        capabilities: ['code-writing'],
+        workspaceContext: {
+          type: 'github',
+          repoId: 'OpenSourceWTF/WAAAH'
+        }
       });
 
       expect(result.content[0].text).toContain('agent');
