@@ -79,12 +79,43 @@ STARTUP → WAIT ──→ ACK ──→ PLAN ──→ BUILD ──→ SUBMIT
 | `send_response(IN_REVIEW)` | CALL after BUILD |
 | `send_response(COMPLETED)` | CALL after MERGE + SMOKE |
 
+## TIMING
+
+| Constant | Value |
+|----------|-------|
+| `wait_for_prompt` timeout | 290s |
+| ACK timeout (before requeue) | 30s |
+| Agent offline threshold | 5min |
+| Scheduler tick | 2s |
+
+## PRIORITIES
+
+| Priority | Behavior |
+|----------|----------|
+| `critical` | PROCESSED first |
+| `high` | PROCESSED before normal |
+| `normal` | DEFAULT |
+
+CHECK task prompt for "PRIORITY: X" → ADJUST urgency.
+
+## CAPABILITY MATCHING
+
+Server assigns tasks using this formula:
+```
+score = matched_capabilities / total_agent_capabilities
+```
+
+**Specialists WIN.** Agent with 2/2 matches beats agent with 2/4 matches.
+
 ## MAILBOX (User & Review Comments)
 
-**CHECK `update_progress` response for `unreadComments` array.**
+**Unread comments are delivered via:**
+- `ack_task` response
+- `get_task_context` response  
+- `update_progress` response
 
 ```
-result = update_progress(...)
+result = update_progress(...) OR ack_task(...) OR get_task_context(...)
 IF result.unreadComments:
   FOR comment IN result.unreadComments:
     LOG "📬 User: {comment.content}"
