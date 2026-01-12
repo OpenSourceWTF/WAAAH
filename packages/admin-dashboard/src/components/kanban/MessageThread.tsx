@@ -172,26 +172,40 @@ export const MessageThread: React.FC<MessageThreadProps> = ({
               );
             }
 
-            // Response (final output)
+            // Response (final output) - with special handling for BLOCKED tasks
             if (item.type === 'response') {
+              const resp = task.response as Record<string, unknown>;
+              const isBlocked = task.status === 'BLOCKED';
+              const blockedReason = resp?.blockedReason as string || resp?.message as string || '';
+
+              // Different styling for blocked vs completed responses
+              const bgColor = isBlocked ? 'bg-orange-700' : 'bg-green-700';
+              const badgeBgColor = isBlocked ? 'bg-orange-900' : 'bg-green-900';
+              const badgeText = isBlocked ? 'BLOCKED' : 'RESPONSE';
+
               return (
                 <div key={`response-${idx}`} className="flex gap-2 justify-start">
-                  <div className={`max-w-[90%] p-2 text-xs bg-green-700 text-white ${rounds}`}>
+                  <div className={`max-w-[90%] p-2 text-xs ${bgColor} text-white ${rounds}`}>
                     <div className="flex items-center gap-2 mb-1">
-                      <Badge className={`bg-green-900 text-white text-[10px] px-1 py-0 ${rounds}`}>RESPONSE</Badge>
+                      <Badge className={`${badgeBgColor} text-white text-[10px] px-1 py-0 ${rounds}`}>{badgeText}</Badge>
                       <span className="text-[10px] opacity-70">
                         {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </span>
                     </div>
-                    <pre className="whitespace-pre-wrap break-words font-mono text-[11px]">
-                      {(() => {
-                        if (typeof task.response === 'string') return task.response;
-                        const resp = task.response as Record<string, unknown>;
-                        if (resp?.message && typeof resp.message === 'string') return resp.message;
-                        if (resp?.output && typeof resp.output === 'string') return resp.output;
-                        return JSON.stringify(task.response, null, 2);
-                      })()}
-                    </pre>
+                    <div className="whitespace-pre-wrap break-words">
+                      {isBlocked && blockedReason ? (
+                        // For blocked tasks, show the blockedReason nicely
+                        blockedReason
+                      ) : (
+                        // For other responses, try to extract readable content
+                        (() => {
+                          if (typeof task.response === 'string') return task.response;
+                          if (resp?.message && typeof resp.message === 'string') return resp.message;
+                          if (resp?.output && typeof resp.output === 'string') return resp.output;
+                          return JSON.stringify(task.response, null, 2);
+                        })()
+                      )}
+                    </div>
                   </div>
                 </div>
               );

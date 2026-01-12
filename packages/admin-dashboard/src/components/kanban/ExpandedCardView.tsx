@@ -140,27 +140,27 @@ export const ExpandedCardView: React.FC<ExpandedCardViewProps> = ({
           )}
           {/* Action buttons in header */}
           {canApprove && (
-            <Button variant="default" size="sm" className="h-8 gap-1 text-xs bg-green-600 hover:bg-green-700 text-white"
+            <Button variant="default" size="sm" className="h-8 gap-1 text-xs bg-green-600 hover:bg-green-700 text-white uppercase"
               onClick={(e) => { onApproveTask(e, task.id); onClose(); }}>
-              <CheckCircle className="h-3 w-3" /> Approve
+              <CheckCircle className="h-3 w-3" /> APPROVE
             </Button>
           )}
           {canUnblock && onUnblockTask && (
-            <Button variant="default" size="sm" className="h-8 gap-1 text-xs bg-orange-600 hover:bg-orange-700 text-white"
+            <Button variant="default" size="sm" className="h-8 gap-1 text-xs bg-orange-600 hover:bg-orange-700 text-white uppercase"
               onClick={() => setShowUnblockModal(true)}>
-              <RefreshCw className="h-3 w-3" /> Unblock
+              <RefreshCw className="h-3 w-3" /> UNBLOCK
             </Button>
           )}
           {canRetry && (
-            <Button variant="outline" size="sm" className="h-8 gap-1 text-xs border-primary text-primary hover:bg-primary hover:text-black"
+            <Button variant="outline" size="sm" className="h-8 gap-1 text-xs border-primary text-primary hover:bg-primary hover:text-black uppercase"
               onClick={(e) => { onRetryTask(e, task.id); onClose(); }}>
-              <RefreshCw className="h-3 w-3" /> Retry
+              <RefreshCw className="h-3 w-3" /> RETRY
             </Button>
           )}
           {canCancel && (
-            <Button variant="destructive" size="sm" className="h-8 gap-1 text-xs bg-red-600 hover:bg-red-700"
+            <Button variant="destructive" size="sm" className="h-8 gap-1 text-xs bg-red-600 hover:bg-red-700 uppercase"
               onClick={(e) => { onCancelTask(e, task.id); onClose(); }}>
-              <XCircle className="h-3 w-3" /> Cancel
+              <XCircle className="h-3 w-3" /> CANCEL
             </Button>
           )}
           <Button
