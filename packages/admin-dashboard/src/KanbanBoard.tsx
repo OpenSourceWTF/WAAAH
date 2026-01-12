@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback, useEffect } from 'react';
+import React, { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Clock, User, Loader2 } from "lucide-react";
@@ -22,12 +22,13 @@ interface KanbanBoardProps {
   onViewHistory?: () => void;
   onTaskClick?: (task: Task) => void;
   onUpdateTask?: (taskId: string, updates: Record<string, any>) => Promise<void>;
-  // Infinite scroll props
   onLoadMoreCompleted?: () => void;
   onLoadMoreCancelled?: () => void;
   hasMoreCompleted?: boolean;
   hasMoreCancelled?: boolean;
   loadingMore?: 'completed' | 'cancelled' | null;
+  // Search query for filtering
+  searchQuery?: string;
 }
 
 // Helper to create a fingerprint of tasks for comparison
@@ -43,7 +44,8 @@ function arePropsEqual(prev: KanbanBoardProps, next: KanbanBoardProps): boolean 
     tasksFingerprint(prev.cancelledTasks) === tasksFingerprint(next.cancelledTasks) &&
     prev.hasMoreCompleted === next.hasMoreCompleted &&
     prev.hasMoreCancelled === next.hasMoreCancelled &&
-    prev.loadingMore === next.loadingMore
+    prev.loadingMore === next.loadingMore &&
+    prev.searchQuery === next.searchQuery
   );
 }
 
@@ -63,10 +65,15 @@ export const KanbanBoard = React.memo(function KanbanBoard({
   hasMoreCompleted,
   hasMoreCancelled,
   loadingMore,
-  onUpdateTask
+  onUpdateTask,
+  searchQuery = ''
 }: KanbanBoardProps) {
   // Expanded card state
   const [expandedTask, setExpandedTask] = useState<Task | null>(null);
+
+  // Refs for infinite scroll observers
+  const completedSentinelRef = useRef<HTMLDivElement>(null);
+  const cancelledSentinelRef = useRef<HTMLDivElement>(null);
 
   // Rejection modal state
   const [showRejectModal, setShowRejectModal] = useState(false);
@@ -84,18 +91,31 @@ export const KanbanBoard = React.memo(function KanbanBoard({
     }
   }, [tasks, completedTasks, cancelledTasks, expandedTask]);
 
-  // Group tasks by column
+  // Group tasks by column with search filtering
   const columns = useMemo(() => {
+    // Helper function to filter by search
+    const matchesSearch = (task: Task): boolean => {
+      if (!searchQuery.trim()) return true;
+      const query = searchQuery.toLowerCase();
+      return (
+        task.id.toLowerCase().includes(query) ||
+        (task.title?.toLowerCase().includes(query) ?? false) ||
+        task.prompt.toLowerCase().includes(query) ||
+        task.status.toLowerCase().includes(query) ||
+        (task.assignedTo?.toLowerCase().includes(query) ?? false)
+      );
+    };
+
     const cols: Record<string, Task[]> = {
       TODO: [],
       IN_PROGRESS: [],
       REVIEW: [],
       APPROVED: [],
-      DONE: [...completedTasks],
-      CANCELLED: [...cancelledTasks]
+      DONE: completedTasks.filter(matchesSearch),
+      CANCELLED: cancelledTasks.filter(matchesSearch)
     };
 
-    tasks.forEach(task => {
+    tasks.filter(matchesSearch).forEach(task => {
       if (!['COMPLETED', 'CANCELLED', 'FAILED'].includes(task.status)) {
         const col = COLUMNS.find(c => c.statuses.includes(task.status));
         if (col) {
@@ -104,14 +124,14 @@ export const KanbanBoard = React.memo(function KanbanBoard({
       }
     });
 
-    tasks.forEach(task => {
+    tasks.filter(matchesSearch).forEach(task => {
       if (['CANCELLED', 'FAILED'].includes(task.status)) {
         cols['CANCELLED'].push(task);
       }
     });
 
     return cols;
-  }, [tasks, completedTasks, cancelledTasks]);
+  }, [tasks, completedTasks, cancelledTasks, searchQuery]);
 
   // Handlers
   const handleCardClick = useCallback((task: Task) => {
@@ -137,6 +157,36 @@ export const KanbanBoard = React.memo(function KanbanBoard({
       handleCloseExpanded();
     }
   }, [rejectingTaskId, rejectFeedback, onRejectTask, handleCloseRejectModal, handleCloseExpanded]);
+
+  // IntersectionObserver for infinite scroll
+  useEffect(() => {
+    const completedSentinel = completedSentinelRef.current;
+    const cancelledSentinel = cancelledSentinelRef.current;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            if (entry.target === completedSentinel && hasMoreCompleted && !loadingMore && onLoadMoreCompleted) {
+              onLoadMoreCompleted();
+            }
+            if (entry.target === cancelledSentinel && hasMoreCancelled && !loadingMore && onLoadMoreCancelled) {
+              onLoadMoreCancelled();
+            }
+          }
+        });
+      },
+      { threshold: 0.1, rootMargin: '100px' }
+    );
+
+    if (completedSentinel) observer.observe(completedSentinel);
+    if (cancelledSentinel) observer.observe(cancelledSentinel);
+
+    return () => {
+      if (completedSentinel) observer.unobserve(completedSentinel);
+      if (cancelledSentinel) observer.unobserve(cancelledSentinel);
+    };
+  }, [hasMoreCompleted, hasMoreCancelled, loadingMore, onLoadMoreCompleted, onLoadMoreCancelled]);
 
   return (
     <div className="relative flex h-full gap-4 overflow-x-auto pb-4">
@@ -298,38 +348,31 @@ export const KanbanBoard = React.memo(function KanbanBoard({
             {columns[col.id].length === 0 && (
               <div className="text-center text-primary/30 text-xs py-8 italic">No tasks</div>
             )}
-            {/* Load More Button for DONE/CANCELLED columns */}
-            {col.id === 'DONE' && hasMoreCompleted && onLoadMoreCompleted && (
-              <button
-                onClick={onLoadMoreCompleted}
-                disabled={loadingMore === 'completed'}
-                className="w-full py-2 text-xs text-primary/60 hover:text-primary hover:bg-primary/10 border border-dashed border-primary/30 mt-2 disabled:opacity-50"
-              >
+            {/* Infinite scroll sentinel for DONE column */}
+            {col.id === 'DONE' && hasMoreCompleted && (
+              <div ref={completedSentinelRef} className="w-full py-2 text-center text-xs text-primary/40">
                 {loadingMore === 'completed' ? (
                   <span className="flex items-center justify-center gap-2">
                     <Loader2 className="h-3 w-3 animate-spin" />
                     Loading...
                   </span>
                 ) : (
-                  'Load More'
+                  <span className="opacity-50">Scroll for more</span>
                 )}
-              </button>
+              </div>
             )}
-            {col.id === 'CANCELLED' && hasMoreCancelled && onLoadMoreCancelled && (
-              <button
-                onClick={onLoadMoreCancelled}
-                disabled={loadingMore === 'cancelled'}
-                className="w-full py-2 text-xs text-primary/60 hover:text-primary hover:bg-primary/10 border border-dashed border-primary/30 mt-2 disabled:opacity-50"
-              >
+            {/* Infinite scroll sentinel for CANCELLED column */}
+            {col.id === 'CANCELLED' && hasMoreCancelled && (
+              <div ref={cancelledSentinelRef} className="w-full py-2 text-center text-xs text-primary/40">
                 {loadingMore === 'cancelled' ? (
                   <span className="flex items-center justify-center gap-2">
                     <Loader2 className="h-3 w-3 animate-spin" />
                     Loading...
                   </span>
                 ) : (
-                  'Load More'
+                  <span className="opacity-50">Scroll for more</span>
                 )}
-              </button>
+              </div>
             )}
           </div>
         </div>

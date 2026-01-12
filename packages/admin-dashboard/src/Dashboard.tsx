@@ -348,6 +348,7 @@ export function Dashboard() {
               hasMoreCompleted={hasMoreCompleted}
               hasMoreCancelled={hasMoreCancelled}
               loadingMore={loadingMore}
+              searchQuery={searchQuery}
             />
           </div>
         </div>
