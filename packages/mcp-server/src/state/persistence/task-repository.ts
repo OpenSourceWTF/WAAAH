@@ -3,6 +3,36 @@ import type { Task, TaskStatus } from '@opensourcewtf/waaah-types';
 import { emitTaskCreated, emitTaskUpdated } from '../eventbus.js';
 import { emitTaskCreatedEvent } from '../events.js';
 
+/** DB row type for tasks table - matches SQLite column types */
+interface TaskRow {
+  id: string;
+  status: string;
+  prompt: string;
+  title: string | null;
+  priority: string | null;
+  fromAgentId: string | null;
+  fromAgentName: string | null;
+  toAgentId: string | null;
+  toRequiredCapabilities: string | null;
+  toWorkspaceId: string | null;
+  assignedTo: string | null;
+  context: string | null;
+  workspaceContext: string | null;
+  response: string | null;
+  messages: string | null;
+  dependencies: string | null;
+  history: string | null;
+  images: string | null;
+  createdAt: number;
+  completedAt: number | null;
+}
+
+/** DB row type for count queries */
+interface CountRow { count: number; }
+
+/** DB row type for status grouping queries */
+interface StatusCountRow { status: string; count: number; }
+
 /**
  * Interface for task repository operations.
  * Provides CRUD operations for tasks in the database.
@@ -143,30 +173,30 @@ export class TaskRepository implements ITaskRepository {
   }
 
   getById(taskId: string): Task | null {
-    const row = this.database.prepare('SELECT * FROM tasks WHERE id = ?').get(taskId) as any;
+    const row = this.database.prepare('SELECT * FROM tasks WHERE id = ?').get(taskId) as TaskRow | undefined;
     return row ? this.mapRowToTask(row) : null;
   }
 
   getActive(): Task[] {
     const rows = this.database.prepare(
       `SELECT * FROM tasks WHERE status NOT IN (${TERMINAL_STATUSES.map(() => '?').join(', ')})`
-    ).all(...TERMINAL_STATUSES) as any[];
+    ).all(...TERMINAL_STATUSES) as TaskRow[];
     return rows.map(r => this.mapRowToTask(r));
   }
 
   getByStatus(status: TaskStatus): Task[] {
-    const rows = this.database.prepare('SELECT * FROM tasks WHERE status = ?').all(status) as any[];
+    const rows = this.database.prepare('SELECT * FROM tasks WHERE status = ?').all(status) as TaskRow[];
     return rows.map(r => this.mapRowToTask(r));
   }
 
   getByStatuses(statuses: TaskStatus[]): Task[] {
     const placeholders = statuses.map(() => '?').join(', ');
-    const rows = this.database.prepare(`SELECT * FROM tasks WHERE status IN (${placeholders})`).all(...statuses) as any[];
+    const rows = this.database.prepare(`SELECT * FROM tasks WHERE status IN (${placeholders})`).all(...statuses) as TaskRow[];
     return rows.map(r => this.mapRowToTask(r));
   }
 
   getByAssignedTo(agentId: string): Task[] {
-    const rows = this.database.prepare('SELECT * FROM tasks WHERE assignedTo = ?').all(agentId) as any[];
+    const rows = this.database.prepare('SELECT * FROM tasks WHERE assignedTo = ?').all(agentId) as TaskRow[];
     return rows.map(r => this.mapRowToTask(r));
   }
 
@@ -211,13 +241,13 @@ export class TaskRepository implements ITaskRepository {
       params.push(options.offset);
     }
 
-    const rows = this.database.prepare(query).all(...params) as any[];
+    const rows = this.database.prepare(query).all(...params) as TaskRow[];
     return rows.map(r => this.mapRowToTask(r));
   }
 
   getStats(): { total: number; byStatus: Record<string, number> } {
-    const total = (this.database.prepare('SELECT COUNT(*) as count FROM tasks').get() as any).count;
-    const byStatusRows = this.database.prepare('SELECT status, COUNT(*) as count FROM tasks GROUP BY status').all() as any[];
+    const total = (this.database.prepare('SELECT COUNT(*) as count FROM tasks').get() as CountRow).count;
+    const byStatusRows = this.database.prepare('SELECT status, COUNT(*) as count FROM tasks GROUP BY status').all() as StatusCountRow[];
     const byStatus: Record<string, number> = {};
     for (const row of byStatusRows) {
       byStatus[row.status] = row.count;
@@ -285,7 +315,7 @@ export class TaskRepository implements ITaskRepository {
     this.database.prepare('DELETE FROM tasks').run();
   }
 
-  private mapRowToTask(row: any): Task {
+  private mapRowToTask(row: TaskRow): Task {
     let requiredCapabilities = undefined;
     if (row.toRequiredCapabilities) {
       try {
@@ -296,16 +326,16 @@ export class TaskRepository implements ITaskRepository {
       id: row.id,
       command: 'execute_prompt', // Default command
       prompt: row.prompt,
-      title: row.title,
+      title: row.title ?? undefined,
       status: row.status as TaskStatus,
-      priority: row.priority || 'normal',
-      from: row.fromAgentId ? { type: 'agent', id: row.fromAgentId, name: row.fromAgentName } : { type: 'user', id: 'system', name: 'System' },
+      priority: (row.priority as 'normal' | 'high' | 'critical') || 'normal',
+      from: row.fromAgentId ? { type: 'agent', id: row.fromAgentId, name: row.fromAgentName ?? undefined } : { type: 'user', id: 'system', name: 'System' },
       to: {
-        agentId: row.toAgentId || row.assignedTo || undefined,
+        agentId: row.toAgentId ?? row.assignedTo ?? undefined,
         requiredCapabilities,
-        workspaceId: row.toWorkspaceId || undefined
+        workspaceId: row.toWorkspaceId ?? undefined
       },
-      assignedTo: row.assignedTo,
+      assignedTo: row.assignedTo ?? undefined,
       context: row.context ? JSON.parse(row.context) : undefined,
       workspaceContext: row.workspaceContext ? JSON.parse(row.workspaceContext) : undefined,
       response: row.response ? JSON.parse(row.response) : undefined,
@@ -314,7 +344,7 @@ export class TaskRepository implements ITaskRepository {
       history: row.history ? JSON.parse(row.history) : [],
       images: row.images ? JSON.parse(row.images) : [],
       createdAt: row.createdAt,
-      completedAt: row.completedAt
+      completedAt: row.completedAt ?? undefined
     };
   }
 }

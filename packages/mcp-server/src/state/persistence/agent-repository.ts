@@ -10,6 +10,32 @@ import { AGENT_OFFLINE_THRESHOLD_MS } from '@opensourcewtf/waaah-types';
 import type { IAgentRepository, AgentInput } from '../interfaces.js';
 import { emitAgentStatus } from '../eventbus.js';
 
+/** DB row type for agents table */
+interface AgentRow {
+  id: string;
+  displayName: string;
+  role: string | null;
+  color: string | null;
+  capabilities: string | null;
+  workspaceContext: string | null;
+  lastSeen: number | null;
+  createdAt: number | null;
+  eviction_requested: number | null;
+  eviction_reason: string | null;
+}
+
+/** DB row for eviction check */
+interface EvictionRow {
+  eviction_requested: number | null;
+  eviction_reason: string | null;
+}
+
+/** DB row for lastSeen query */
+interface LastSeenRow { lastSeen: number | null; }
+
+/** DB row for color query */
+interface ColorRow { color: string | null; }
+
 /**
  * SQLite implementation of IAgentRepository.
  */
@@ -71,7 +97,7 @@ export class AgentRepository implements IAgentRepository {
   }
 
   get(agentId: string): (AgentIdentity & { lastSeen?: number }) | undefined {
-    const row = this.db.prepare('SELECT * FROM agents WHERE id = ?').get(agentId) as any;
+    const row = this.db.prepare('SELECT * FROM agents WHERE id = ?').get(agentId) as AgentRow | undefined;
     return row ? this.mapRow(row) : undefined;
   }
 
@@ -81,14 +107,14 @@ export class AgentRepository implements IAgentRepository {
       SELECT a.* FROM agents a
       JOIN aliases al ON a.id = al.agentId
       WHERE LOWER(al.alias) = LOWER(?)
-    `).get(displayName) as any;
+    `).get(displayName) as AgentRow | undefined;
 
     if (alias) return this.mapRow(alias);
 
     // Then check display names
     const row = this.db.prepare(`
       SELECT * FROM agents WHERE LOWER(displayName) = LOWER(?)
-    `).get(displayName) as any;
+    `).get(displayName) as AgentRow | undefined;
 
     return row ? this.mapRow(row) : undefined;
   }
@@ -99,12 +125,12 @@ export class AgentRepository implements IAgentRepository {
       SELECT * FROM agents 
       WHERE capabilities LIKE ? 
       ORDER BY lastSeen DESC
-    `).all(`%"${capability}"%`) as any[];
+    `).all(`%"${capability}"%`) as AgentRow[];
     return rows.map(r => this.mapRow(r));
   }
 
   getAll(): (AgentIdentity & { lastSeen?: number; createdAt?: number })[] {
-    const rows = this.db.prepare('SELECT * FROM agents ORDER BY lastSeen DESC').all() as any[];
+    const rows = this.db.prepare('SELECT * FROM agents ORDER BY lastSeen DESC').all() as AgentRow[];
     return rows.map(r => this.mapRow(r));
   }
 
@@ -144,7 +170,7 @@ export class AgentRepository implements IAgentRepository {
   checkEviction(agentId: string): { requested: boolean; reason?: string } {
     const row = this.db.prepare(
       'SELECT eviction_requested, eviction_reason FROM agents WHERE id = ?'
-    ).get(agentId) as any;
+    ).get(agentId) as EvictionRow | undefined;
 
     if (!row) return { requested: false };
     return {
@@ -187,17 +213,17 @@ export class AgentRepository implements IAgentRepository {
 
   /** Get lastSeen timestamp for an agent */
   getLastSeen(agentId: string): number | undefined {
-    const row = this.db.prepare('SELECT lastSeen FROM agents WHERE id = ?').get(agentId) as any;
-    return row?.lastSeen;
+    const row = this.db.prepare('SELECT lastSeen FROM agents WHERE id = ?').get(agentId) as LastSeenRow | undefined;
+    return row?.lastSeen ?? undefined;
   }
 
   /** Get color for an agent */
   getAgentColor(agentId: string): string | undefined {
-    const row = this.db.prepare('SELECT color FROM agents WHERE id = ?').get(agentId) as any;
-    return row?.color;
+    const row = this.db.prepare('SELECT color FROM agents WHERE id = ?').get(agentId) as ColorRow | undefined;
+    return row?.color ?? undefined;
   }
 
-  private mapRow(row: any): AgentIdentity & { lastSeen?: number; createdAt?: number } {
+  private mapRow(row: AgentRow): AgentIdentity & { lastSeen?: number; createdAt?: number } {
     let workspaceContext = undefined;
     if (row.workspaceContext) {
       try {
