@@ -197,8 +197,10 @@ pnpm typecheck && pnpm lint
 
 If ANY answer is NO → Go back to BUILD.
 
+**MANDATORY DIFF SUBMISSION STEPS:**
+
 ```bash
-# STEP 1: Generate diff file
+# STEP 1: Fetch latest main and generate diff
 git fetch origin main
 git diff origin/main...HEAD > .waaah/orc/latest.diff
 
@@ -212,27 +214,26 @@ if [ "$DIFF_SIZE" -lt 20 ]; then
   # STOP AND FIX BEFORE PROCEEDING
 fi
 
-# STEP 3: Read diff content into variable
+# STEP 3: Read diff content for send_response
 DIFF_CONTENT=$(cat .waaah/orc/latest.diff)
-
-# STEP 4: Call send_response with LITERAL diff content
-# 'diff' MUST contain the actual content from Step 3
+echo "Diff captured: ${#DIFF_CONTENT} characters"
 ```
 
-```markdown
-## Summary: [1-2 sentences]
-## Changes: [file]: [what]
-## Testing: [x] Tests pass  [x] Manual: [what checked]
-```
+**STEP 4: CALL send_response WITH THE diff PARAMETER (MANDATORY)**
+
+You MUST call `send_response` with FOUR arguments. The `diff` parameter is REQUIRED:
 
 ```
 send_response({
   taskId: CURRENT_TASK_ID,
   status: "IN_REVIEW",
-  message: "[Your review summary]",
-  diff: DIFF_CONTENT  // MANDATORY for code/test tasks
+  message: "## Summary: [1-2 sentences]\n## Changes: [file]: [what]\n## Testing: [x] Tests pass",
+  diff: DIFF_CONTENT  // ← THIS IS MANDATORY! Pass the output of `git diff origin/main...HEAD`
 })
 ```
+
+> [!CAUTION]
+> **DO NOT OMIT THE `diff` PARAMETER.** If you call send_response without `diff`, your submission will be rejected.
 
 > **LOOP INSTRUCTION**:
 > You have successfully submitted the task for review.
