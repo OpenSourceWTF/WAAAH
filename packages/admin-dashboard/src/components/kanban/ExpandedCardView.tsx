@@ -1,13 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { X, Clock, User, FileText, Settings, CheckCircle, RefreshCw, XCircle, ChevronDown, Edit, Plus, Save, RotateCcw } from "lucide-react";
+import { X, Clock, User, FileText, Settings, CheckCircle, RefreshCw, XCircle, ChevronDown, RotateCcw } from "lucide-react";
 import { DiffViewer } from "@/components/DiffViewer";
 import type { Task } from './types';
-import { getStatusBadgeClass, formatDate, getTaskDuration, formatTaskTitle, getProgressUpdates } from './utils';
+import { getStatusBadgeClass, getTaskDuration, formatTaskTitle, getProgressUpdates } from './utils';
 import { ImagePreviewModal } from './ImagePreviewModal';
 import { MessageThread } from './MessageThread';
+import { ContextTab } from './ContextTab';
+import { TimelineTab } from './TimelineTab';
 
 interface ExpandedCardViewProps {
   task: Task;
@@ -51,33 +53,6 @@ export const ExpandedCardView: React.FC<ExpandedCardViewProps> = ({
   // Reject modal state
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectFeedback, setRejectFeedback] = useState('');
-
-  // Context Editing State
-  const [isEditingContext, setIsEditingContext] = useState(false);
-  const [editedWorkspace, setEditedWorkspace] = useState(task.workspaceContext || { type: 'local', repoId: '', branch: '', path: '' });
-  const [editedCapabilities, setEditedCapabilities] = useState<string[]>(task.to?.requiredCapabilities || []);
-  const [newCapability, setNewCapability] = useState('');
-
-  // Update local state when task changes (unless currently editing)
-  useEffect(() => {
-    if (!isEditingContext) {
-      setEditedWorkspace(task.workspaceContext || { type: 'local', repoId: '', branch: '', path: '' });
-      setEditedCapabilities(task.to?.requiredCapabilities || []);
-    }
-  }, [task, isEditingContext]);
-
-  const handleSaveContext = async () => {
-    if (!onUpdateTask) return;
-    try {
-      await onUpdateTask(task.id, {
-        workspaceContext: editedWorkspace,
-        requiredCapabilities: editedCapabilities
-      });
-      setIsEditingContext(false);
-    } catch (e) {
-      console.error("Failed to update context", e);
-    }
-  };
 
   // Resizable messenger width (persisted)
   const [messagesWidth, setMessagesWidth] = useState(() => {
@@ -286,70 +261,7 @@ export const ExpandedCardView: React.FC<ExpandedCardViewProps> = ({
 
             {/* TIMELINE TAB - Interleaved chronological view */}
             <TabsContent value="timeline" className="m-0 p-4 h-full">
-              <div className="space-y-2 max-h-full overflow-y-auto">
-                {(() => {
-                  type TimelineItem =
-                    | { type: 'progress'; data: NonNullable<typeof task.messages>[0]; timestamp: number }
-                    | { type: 'status'; data: NonNullable<typeof task.history>[0]; timestamp: number };
-
-                  const items: TimelineItem[] = [];
-
-                  // Add progress updates only (agent messages with percentage)
-                  task.messages?.forEach(msg => {
-                    const percentage = (msg.metadata as Record<string, unknown>)?.percentage;
-                    if (msg.role === 'agent' && percentage !== undefined) {
-                      items.push({ type: 'progress', data: msg, timestamp: msg.timestamp });
-                    }
-                  });
-
-                  // Add status history events
-                  task.history?.forEach(evt => {
-                    items.push({ type: 'status', data: evt, timestamp: evt.timestamp });
-                  });
-
-                  // Sort chronologically
-                  items.sort((a, b) => a.timestamp - b.timestamp);
-
-                  if (items.length === 0) {
-                    return <div className="text-center p-8 text-primary/40 italic">No timeline events available</div>;
-                  }
-
-                  return items.map((item, idx) => {
-                    const time = new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-
-                    if (item.type === 'status') {
-                      const evt = item.data;
-                      return (
-                        <div key={`status-${idx}`} className="flex items-center gap-3 text-sm py-1 px-2 border-l-2 border-primary/30 bg-primary/5">
-                          <span className="h-2 w-2 rounded-full bg-primary/50 shrink-0" />
-                          <span className="text-primary/40 font-mono shrink-0">{time}</span>
-                          <Badge className={getStatusBadgeClass(evt.status)}>{evt.status}</Badge>
-                          {evt.agentId && <span className="text-primary/50">{evt.agentId}</span>}
-                          {evt.message && <span className="text-primary/60 truncate">{evt.message}</span>}
-                        </div>
-                      );
-                    }
-
-                    // Progress update
-                    const msg = item.data;
-                    const percentage = (msg.metadata as Record<string, unknown>)?.percentage as number;
-
-                    return (
-                      <div key={`progress-${idx}`} className="text-sm p-2 border-l-2 border-green-500 bg-green-500/10">
-                        <div className="flex items-center gap-2 mb-1">
-                          <Badge variant="outline" className="text-[10px] border-green-500 text-green-400">PROGRESS</Badge>
-                          <span className="text-primary/40 font-mono">{time}</span>
-                          <span className="text-green-400 font-bold">{percentage}%</span>
-                        </div>
-                        <div className="w-full h-1.5 bg-black/30 mb-1">
-                          <div className="h-full bg-green-500 transition-all" style={{ width: `${percentage}%` }} />
-                        </div>
-                        <p className="text-primary/80 whitespace-pre-wrap">{msg.content}</p>
-                      </div>
-                    );
-                  });
-                })()}
-              </div>
+              <TimelineTab task={task} />
             </TabsContent>
 
             {/* REVIEW TAB */}
@@ -375,182 +287,7 @@ export const ExpandedCardView: React.FC<ExpandedCardViewProps> = ({
 
             {/* CONTEXT TAB */}
             <TabsContent value="context" className="m-0 p-4 h-full flex flex-col">
-              <div className="flex-1 flex flex-col space-y-3 min-h-0">
-                <div className="shrink-0 flex items-center justify-between">
-                  <h3 className="text-sm font-bold text-primary/70 mb-1">TASK METADATA</h3>
-                  {onUpdateTask && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-6 w-6 p-0 hover:bg-primary/20"
-                      onClick={() => setIsEditingContext(!isEditingContext)}
-                    >
-                      {isEditingContext ? <X className="h-4 w-4" /> : <Edit className="h-4 w-4" />}
-                    </Button>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div className="bg-black/30 p-2 border border-primary/20">
-                    <span className="text-primary/50 text-xs">ID:</span>
-                    <p className="font-mono text-sm break-all">{task.id}</p>
-                  </div>
-                  <div className="bg-black/30 p-2 border border-primary/20">
-                    <span className="text-primary/50 text-xs">Status:</span>
-                    <p className="font-mono text-sm">{task.status}</p>
-                  </div>
-                  <div className="bg-black/30 p-2 border border-primary/20">
-                    <span className="text-primary/50 text-xs">Created:</span>
-                    <p className="font-mono text-sm">{formatDate(task.createdAt)}</p>
-                  </div>
-                  <div className="bg-black/30 p-2 border border-primary/20">
-                    <span className="text-primary/50 text-xs">Assigned To:</span>
-                    <p className="font-mono text-sm">{task.assignedTo || task.to?.agentId || 'Unassigned'}</p>
-                  </div>
-                </div>
-
-                {/* Routing / Workspace Context */}
-                <div className="shrink-0 mt-2">
-                  <div className="flex items-center justify-between mb-1">
-                    <h3 className="text-sm font-bold text-primary/70">WORKSPACE CONTEXT</h3>
-                    {isEditingContext && (
-                      <Button variant="default" size="sm" className="h-6 gap-1 text-[10px] bg-green-600 hover:bg-green-700" onClick={handleSaveContext}>
-                        <Save className="h-3 w-3" /> Save Changes
-                      </Button>
-                    )}
-                  </div>
-
-                  {isEditingContext ? (
-                    <div className="bg-black/30 p-3 border border-primary/30 space-y-2">
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="text-[10px] text-primary/50 block mb-1">Type</label>
-                          <select
-                            className="w-full bg-black border border-primary/30 p-1 text-xs"
-                            value={editedWorkspace.type || 'local'}
-                            onChange={e => setEditedWorkspace({ ...editedWorkspace, type: e.target.value as any })}
-                          >
-                            <option value="local">Local</option>
-                            <option value="github">GitHub</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="text-[10px] text-primary/50 block mb-1">Repo ID</label>
-                          <input
-                            className="w-full bg-black border border-primary/30 p-1 text-xs"
-                            value={editedWorkspace.repoId || ''}
-                            onChange={e => setEditedWorkspace({ ...editedWorkspace, repoId: e.target.value })}
-                            placeholder="Owner/Repo"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[10px] text-primary/50 block mb-1">Branch</label>
-                          <input
-                            className="w-full bg-black border border-primary/30 p-1 text-xs"
-                            value={editedWorkspace.branch || ''}
-                            onChange={e => setEditedWorkspace({ ...editedWorkspace, branch: e.target.value })}
-                            placeholder="main"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[10px] text-primary/50 block mb-1">Path</label>
-                          <input
-                            className="w-full bg-black border border-primary/30 p-1 text-xs"
-                            value={editedWorkspace.path || ''}
-                            onChange={e => setEditedWorkspace({ ...editedWorkspace, path: e.target.value })}
-                            placeholder="/"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-2 gap-2 text-sm bg-black/30 p-2 border border-primary/20">
-                      {task.workspaceContext ? (
-                        <>
-                          <div className="col-span-2 flex gap-4 border-b border-primary/10 pb-1 mb-1">
-                            <div className="flex gap-1"><span className="text-primary/50 text-xs">Type:</span> <span className="font-mono">{task.workspaceContext.type}</span></div>
-                            <div className="flex gap-1"><span className="text-primary/50 text-xs">Repo:</span> <span className="font-mono">{task.workspaceContext.repoId}</span></div>
-                          </div>
-                          <div><span className="text-primary/50 text-xs">Branch:</span> <span className="font-mono">{task.workspaceContext.branch || '-'}</span></div>
-                          <div><span className="text-primary/50 text-xs">Path:</span> <span className="font-mono">{task.workspaceContext.path || '-'}</span></div>
-                        </>
-                      ) : task.to && task.to.workspaceId ? (
-                        <>
-                          <div className="col-span-2 text-primary/40 italic text-xs mb-1">Target Workspace:</div>
-                          <div className="col-span-2 flex gap-1"><span className="text-primary/50 text-xs">ID:</span> <span className="font-mono">{task.to.workspaceId}</span></div>
-                        </>
-                      ) : (
-                        <div className="col-span-2 text-primary/40 italic text-xs">No workspace context defined (using inference)</div>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {/* Capabilities */}
-                <div className="shrink-0 mt-2">
-                  <h3 className="text-sm font-bold text-primary/70 mb-1">REQUIRED CAPABILITIES</h3>
-                  {isEditingContext ? (
-                    <div className="bg-black/30 p-3 border border-primary/30">
-                      <div className="flex flex-wrap gap-2 mb-2">
-                        {editedCapabilities.map(cap => (
-                          <Badge key={cap} variant="outline" className="text-xs border-primary/40 gap-1 pr-1">
-                            {cap}
-                            <button onClick={() => setEditedCapabilities(editedCapabilities.filter(c => c !== cap))} className="hover:text-red-500">
-                              <X className="h-3 w-3" />
-                            </button>
-                          </Badge>
-                        ))}
-                      </div>
-                      <div className="flex gap-2">
-                        <input
-                          className="flex-1 bg-black border border-primary/30 p-1 text-xs"
-                          value={newCapability}
-                          onChange={e => setNewCapability(e.target.value)}
-                          onKeyDown={e => {
-                            if (e.key === 'Enter' && newCapability.trim()) {
-                              setEditedCapabilities([...editedCapabilities, newCapability.trim()]);
-                              setNewCapability('');
-                            }
-                          }}
-                          placeholder="Add capability..."
-                        />
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-7 w-7 p-0"
-                          onClick={() => {
-                            if (newCapability.trim()) {
-                              setEditedCapabilities([...editedCapabilities, newCapability.trim()]);
-                              setNewCapability('');
-                            }
-                          }}
-                        >
-                          <Plus className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="bg-black/30 p-2 border border-primary/20 min-h-[40px]">
-                      {task.to?.requiredCapabilities && task.to.requiredCapabilities.length > 0 ? (
-                        <div className="flex flex-wrap gap-1">
-                          {task.to.requiredCapabilities.map(cap => (
-                            <Badge key={cap} variant="outline" className="text-xs border-primary/40">{cap}</Badge>
-                          ))}
-                        </div>
-                      ) : (
-                        <span className="text-primary/40 italic text-xs">No specific capabilities required</span>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {task.context && (
-                  <div className="flex-1 flex flex-col min-h-0 pt-2">
-                    <h3 className="text-sm font-bold text-primary/70 mb-1 shrink-0">CONTEXT OBJECT</h3>
-                    <pre className="whitespace-pre-wrap text-sm bg-black/30 p-4 border border-primary/20 flex-1 overflow-y-auto">{JSON.stringify(task.context, null, 2)}</pre>
-                  </div>
-                )}
-              </div>
+              <ContextTab task={task} onUpdateTask={onUpdateTask} />
             </TabsContent>
           </div>
         </Tabs>

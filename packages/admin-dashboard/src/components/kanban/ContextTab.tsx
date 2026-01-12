@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { X, Settings, Edit, Plus, Save } from "lucide-react";
+import { X, Edit, Plus, Save } from "lucide-react";
 import type { Task } from './types';
 import { formatDate } from './utils';
 
