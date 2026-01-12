@@ -196,19 +196,25 @@ pnpm typecheck && pnpm lint
 If ANY answer is NO → Go back to BUILD.
 
 ```bash
-# Verify you're on feature branch, NOT main
-git branch --show-current  # Must NOT be 'main'
-git fetch origin main    # Ensure strict comparison against latest
-git add -A && git commit -m "feat(scope): desc"
-git push origin $(git branch --show-current)  # Push to feature branch
+# STEP 1: Generate diff file
+git fetch origin main
 git diff origin/main...HEAD > .waaah/orc/latest.diff
-DIFF=$(cat .waaah/orc/latest.diff)
 
-# VALIDATE DIFF (Anti-Blank Check)
-IF DIFF is empty OR length(DIFF) < 10:
-  echo "ERROR: Diff is empty. You haven't made changes or are on wrong branch."
-  echo "Verify 'git branch' and 'git status'."
-  STOP. Do not send response. Fix the diff.
+# STEP 2: Validate diff is not empty
+DIFF_SIZE=$(wc -c < .waaah/orc/latest.diff)
+echo "Diff size: $DIFF_SIZE bytes"
+if [ "$DIFF_SIZE" -lt 20 ]; then
+  echo "[ERROR] Diff too small. Are you on the correct branch?"
+  git branch --show-current
+  git status
+  # STOP AND FIX BEFORE PROCEEDING
+fi
+
+# STEP 3: Read diff content into variable
+DIFF_CONTENT=$(cat .waaah/orc/latest.diff)
+
+# STEP 4: Call send_response with LITERAL diff content
+# 'diff' MUST contain the actual content from Step 3
 ```
 
 ```markdown
@@ -218,7 +224,12 @@ IF DIFF is empty OR length(DIFF) < 10:
 ```
 
 ```
-send_response({ status: "IN_REVIEW", diff: DIFF, artifacts: { branch } })
+send_response({
+  taskId: CURRENT_TASK_ID,
+  status: "IN_REVIEW",
+  message: "[Your review summary]",
+  diff: DIFF_CONTENT  // MANDATORY for code/test tasks
+})
 ```
 
 > **LOOP INSTRUCTION**:

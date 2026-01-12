@@ -39,6 +39,26 @@ export class TaskHandlers {
       if (task?.to.agentId) {
         this.registry.heartbeat(task.to.agentId);
       }
+
+      // S17: Validate diff for IN_REVIEW status (code/test tasks only)
+      if (params.status === 'IN_REVIEW') {
+        const caps = task?.to?.requiredCapabilities || [];
+        const isCodeTask = caps.some(c => c.includes('code') || c.includes('test'));
+
+        if (isCodeTask && (!params.diff || params.diff.length < 20)) {
+          console.warn(`[Tool] ⚠️ IN_REVIEW without valid diff (taskId: ${params.taskId}, length: ${params.diff?.length || 0})`);
+          return {
+            content: [{
+              type: 'text', text: JSON.stringify({
+                success: false,
+                error: 'Code/test tasks require a valid diff. Your diff appears empty or too short.'
+              })
+            }],
+            isError: true
+          };
+        }
+      }
+
       this.queue.updateStatus(params.taskId, params.status, {
         message: params.message,
         artifacts: params.artifacts,
