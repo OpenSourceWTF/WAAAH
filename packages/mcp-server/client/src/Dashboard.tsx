@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/ToastProvider";
 import { Skull, Sun, Moon, Search, Plus } from "lucide-react";
 import { KanbanBoard } from './KanbanBoard';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -13,6 +14,8 @@ import { TaskCreationForm, TaskFormData } from './components/TaskCreationForm';
 
 export function Dashboard() {
   const { theme, setTheme, t } = useTheme();
+  // Use toast for API errors
+  const { addToast } = useToast();
 
   // Search state for server-side filtering
   const [searchQuery, setSearchQuery] = useState('');
@@ -56,6 +59,7 @@ export function Dashboard() {
       fetchData(); // Refresh immediately
     } catch (error) {
       console.error("Failed to cancel task", error);
+      addToast("Failed to cancel task", 'error');
     }
   }, []);
 
@@ -66,6 +70,7 @@ export function Dashboard() {
       fetchData(); // Refresh immediately
     } catch (error) {
       console.error("Failed to retry task", error);
+      addToast("Failed to retry task", 'error');
     }
   }, []);
 
@@ -82,6 +87,7 @@ export function Dashboard() {
       fetchData();
     } catch (error) {
       console.error("Failed to evict agent", error);
+      addToast("Failed to evict agent", 'error');
     }
   }, []);
 
@@ -94,6 +100,7 @@ export function Dashboard() {
       fetchData(); // Refresh immediately
     } catch (error) {
       console.error("Failed to approve task", error);
+      addToast("Failed to approve task", 'error');
     }
   }, []);
 
@@ -109,6 +116,7 @@ export function Dashboard() {
       fetchData(); // Refresh immediately
     } catch (error) {
       console.error("Failed to reject task", error);
+      addToast("Failed to reject task", 'error');
     }
   }, []);
 
@@ -124,6 +132,7 @@ export function Dashboard() {
       fetchData(); // Refresh to show new comment
     } catch (error) {
       console.error("Failed to send comment", error);
+      addToast("Failed to send comment", 'error');
     }
   }, [fetchData]);
 
@@ -139,6 +148,7 @@ export function Dashboard() {
       fetchData(); // Refresh to show new comment
     } catch (error) {
       console.error("Failed to add review comment", error);
+      addToast("Failed to add review comment", 'error');
     }
   }, []);
 
@@ -154,6 +164,7 @@ export function Dashboard() {
       fetchData(); // Refresh immediately
     } catch (error) {
       console.error("Failed to unblock task", error);
+      addToast("Failed to unblock task", 'error');
     }
   }, [fetchData]);
 
@@ -168,10 +179,10 @@ export function Dashboard() {
       // Prepare images for API (if any)
       const images = data.images.length > 0
         ? data.images.map(img => ({
-            dataUrl: img.dataUrl,
-            mimeType: img.file.type,
-            name: img.file.name
-          }))
+          dataUrl: img.dataUrl,
+          mimeType: img.file.type,
+          name: img.file.name
+        }))
         : undefined;
 
       const res = await apiFetch('/admin/enqueue', {

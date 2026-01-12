@@ -1,8 +1,11 @@
 import { Dashboard } from './Dashboard'
+import { ToastProvider } from "@/components/ui/ToastProvider"
 
 function App() {
   return (
-    <Dashboard />
+    <ToastProvider>
+      <Dashboard />
+    </ToastProvider>
   )
 }
 

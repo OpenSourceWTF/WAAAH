@@ -1,6 +1,7 @@
 import type { Database } from 'better-sqlite3';
 import type { Task, TaskStatus } from '@opensourcewtf/waaah-types';
 import { emitTaskCreated, emitTaskUpdated } from '../eventbus.js';
+import { emitTaskCreatedEvent } from '../events.js';
 
 /**
  * Interface for task repository operations.
@@ -83,6 +84,7 @@ export class TaskRepository implements ITaskRepository {
 
     // Emit event for real-time UI updates (unified event architecture)
     emitTaskCreated(task);
+    emitTaskCreatedEvent(task);
   }
 
   update(task: Task): void {
