@@ -5,7 +5,7 @@
  * Subscribes to task:created and error events to show contextual toasts.
  */
 import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
-import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
+
 // import { getSocket, connectSocket } from '../../lib/socket'; // Switch to SSE
 
 // Toast types with corresponding colors
