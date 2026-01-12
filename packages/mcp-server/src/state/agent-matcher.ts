@@ -93,19 +93,24 @@ export interface AgentScore {
 
 /**
  * Calculate workspace affinity score.
- * Returns 1.0 for exact match, 0.5 if no workspace specified (neutral), 0.0 for mismatch.
+ * Returns 1.0 for exact match, 0.5 if no workspace specified (neutral).
+ * Returns 0.0 AND eligible:false for mismatch (HARD REJECT).
  */
-function calculateWorkspaceScore(task: Task, agent: WaitingAgent): number {
+function calculateWorkspaceScore(task: Task, agent: WaitingAgent): { score: number; eligible: boolean } {
   const taskWorkspace = task.to.workspaceId;
   const agentWorkspace = agent.workspaceContext?.repoId;
 
   if (!taskWorkspace) {
-    return 0.5; // No workspace requirement - neutral
+    return { score: 0.5, eligible: true }; // No workspace requirement - neutral
   }
   if (!agentWorkspace) {
-    return 0.5; // Agent has no workspace - neutral
+    return { score: 0.5, eligible: true }; // Agent has no workspace - neutral (can work anywhere)
   }
-  return taskWorkspace === agentWorkspace ? 1.0 : 0.0;
+  if (taskWorkspace === agentWorkspace) {
+    return { score: 1.0, eligible: true }; // Exact match
+  }
+  // HARD REJECT: workspace mismatch means agent cannot work on this task
+  return { score: 0.0, eligible: false };
 }
 
 /**
@@ -149,9 +154,12 @@ function calculateHintScore(task: Task, agent: WaitingAgent): number {
  * Score an agent against a task.
  */
 export function scoreAgent(task: Task, agent: WaitingAgent): AgentScore {
-  const workspaceScore = calculateWorkspaceScore(task, agent);
-  const { score: capabilityScore, eligible } = calculateCapabilityScore(task, agent);
+  const { score: workspaceScore, eligible: workspaceEligible } = calculateWorkspaceScore(task, agent);
+  const { score: capabilityScore, eligible: capabilityEligible } = calculateCapabilityScore(task, agent);
   const hintScore = calculateHintScore(task, agent);
+
+  // BOTH workspace AND capabilities must be eligible
+  const eligible = workspaceEligible && capabilityEligible;
 
   // Weighted combination
   const { weights } = SCHEDULER_CONFIG;
