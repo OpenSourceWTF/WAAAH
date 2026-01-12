@@ -259,6 +259,26 @@ export const KanbanBoard = React.memo(function KanbanBoard({
                     <div className="font-mono text-[10px] text-primary/50 truncate">
                       {task.id}
                     </div>
+
+                    {/* Capabilities - same style as AgentCard */}
+                    {task.to?.requiredCapabilities && task.to.requiredCapabilities.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {task.to.requiredCapabilities.slice(0, 3).map(cap => (
+                          <span key={cap} className="text-[9px] bg-primary/10 text-primary px-1.5 py-0.5 border border-primary/20">{cap}</span>
+                        ))}
+                        {task.to.requiredCapabilities.length > 3 && (
+                          <span className="text-[9px] text-primary/50">+{task.to.requiredCapabilities.length - 3}</span>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Workspace - same style as AgentCard */}
+                    {(task.workspaceContext?.repoId || task.to?.workspaceId) && (
+                      <div className="text-[9px] font-mono text-primary/70 bg-black/20 px-1.5 py-0.5 border border-primary/20 truncate mt-1">
+                        {task.workspaceContext?.repoId || task.to?.workspaceId}
+                      </div>
+                    )}
+
                     {/* Created at + Duration on same line */}
                     {task.createdAt && (
                       <div className="flex items-center justify-between text-[10px] mt-1">
