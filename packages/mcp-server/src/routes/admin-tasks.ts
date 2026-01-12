@@ -42,7 +42,7 @@ export function createTaskRoutes({ queue, workspaceRoot }: TaskRoutesConfig): Ro
 
     // Determine sender identity based on source
     // S17: Explicitly track Dashboard UI as source
-    const from = source === 'UI'
+    const from: { type: 'user' | 'agent' | 'system'; id: string; name: string } = source === 'UI'
       ? { type: 'user', id: 'dashboard', name: 'Dashboard UI' }
       : { type: 'user', id: 'admin', name: 'AdminUser' };
 
@@ -64,7 +64,6 @@ export function createTaskRoutes({ queue, workspaceRoot }: TaskRoutesConfig): Ro
       id: taskId,
       command: 'execute_prompt',
       prompt,
-      // @ts-ignore - 'from' type might need update in shared types if strict
       from,
       to: { agentId, workspaceId, requiredCapabilities },
       priority: priority || 'normal',

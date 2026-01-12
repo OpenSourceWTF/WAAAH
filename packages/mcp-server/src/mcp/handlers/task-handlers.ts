@@ -185,9 +185,9 @@ fi
       // BACKWARD COMPATIBILITY: Lift dependencies from context if not at top-level
       // This allows 'assign_task' calls that put dependencies in context to still work with scheduler.
       if ((!params.dependencies || params.dependencies.length === 0) && params.context?.dependencies) {
-        if (Array.isArray(params.context.dependencies)) {
-          // @ts-ignore - we know it's an array of strings if valid, or will fall back
-          params.dependencies = params.context.dependencies as string[];
+        const ctxDeps = params.context.dependencies;
+        if (Array.isArray(ctxDeps) && ctxDeps.every((d): d is string => typeof d === 'string')) {
+          params.dependencies = ctxDeps;
           console.log(`[Tools] Lifted ${params.dependencies.length} dependencies from context to top-level for scheduler.`);
         }
       }
