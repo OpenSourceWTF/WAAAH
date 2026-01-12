@@ -4,13 +4,10 @@
 import { execSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
+import type { WorkspaceContext } from '@opensourcewtf/waaah-types';
 
-export interface WorkspaceContext {
-  type: 'local' | 'github';
-  repoId: string;
-  branch?: string;
-  path?: string;
-}
+// Re-export for convenience
+export type { WorkspaceContext };
 
 /**
  * Infer workspace context from the current directory (S12).

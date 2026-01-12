@@ -4,6 +4,7 @@
  * Defines the contract that all platform adapters (Discord, Slack, etc) must implement.
  * Allows the core bot logic to be platform-agnostic.
  */
+import type { TaskResponse as BaseTaskResponse, TaskStatus } from '@opensourcewtf/waaah-types';
 
 export interface MessageContext {
   /** Original message/event ID */
@@ -33,10 +34,14 @@ export interface TaskEnqueueRequest {
   context: MessageContext;
 }
 
+/**
+ * Bot-specific task response with response object for display
+ * Extends canonical TaskResponse with bot-specific fields
+ */
 export interface TaskResponse {
   taskId: string;
-  status: 'QUEUED' | 'PENDING_ACK' | 'ASSIGNED' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED' | 'BLOCKED';
-  assignedTo?: string; // Agent ID that picked up the task
+  status: TaskStatus;
+  assignedTo?: string;
   response?: {
     message: string;
     artifacts?: string[];

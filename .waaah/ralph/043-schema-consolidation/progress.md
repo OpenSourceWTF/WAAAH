@@ -1,46 +1,39 @@
 # Ralph YOLO: Schema Consolidation Audit
 
-**Task:** Audit models and collapse redundant/non-standard fields into reasonable schema  
+**Task:** Audit models and collapse redundant/non-standard fields  
 **Type:** Code  
 **Criteria:** clarity, completeness, correctness
 
 ---
 
-## YOLO Mode — Iteration 1
-
-### Issues Found
-
-1. **Workspace data split** across 3 locations (task.to.workspaceId, context.security.workspaceRoot, agent.workspaceContext)
-2. **Duplicate frontend types** (Task, Agent defined in 3+ files)
-3. **No AgentSource enum** (string literals 'CLI'/'IDE' vs 'cli'/'ide')
+## YOLO Mode — Iteration 2
 
 ### Changes Made
 
-#### Phase 1: Workspace Routing Fix (commit 6c527a7)
-- `agent-matcher.ts`: Check BOTH task.to.workspaceId AND context.security.workspaceRoot
+#### Duplicates Removed
 
-#### Phase 2: Type Consolidation
-- **Added `AgentSource` enum** to `packages/types/src/schemas.ts`
-- **Updated client** `kanban/types.ts` to import from `@opensourcewtf/waaah-types`
-- **Removed duplicate** Agent definitions from `useAgentData.ts` and `AgentIndicator.tsx`
-- **Added** `@opensourcewtf/waaah-types` dependency to client
+| Type | Original Location | Now Imports From |
+|------|-------------------|------------------|
+| WorkspaceContext | `cli/utils/workspace.ts` | `@opensourcewtf/waaah-types` |
+| TaskStatus (enum inline) | `bot/adapters/interface.ts` | `@opensourcewtf/waaah-types` |
+| Agent | `client/useAgentData.ts`, `AgentIndicator.tsx` | `kanban/types.ts` |
 
-### Files Changed
+#### New Types Added
+- `AgentSource` enum (`'cli' | 'ide'`) in `packages/types/src/schemas.ts`
 
-| File | Change |
-|------|--------|
-| `packages/types/src/schemas.ts` | +AgentSource enum |
-| `packages/mcp-server/client/package.json` | +types dependency |
-| `packages/mcp-server/client/src/components/kanban/types.ts` | Import from shared types |
-| `packages/mcp-server/client/src/hooks/useAgentData.ts` | Import Agent from kanban/types |
-| `packages/mcp-server/client/src/components/dashboard/AgentIndicator.tsx` | Import Agent from kanban/types |
+#### Dependencies Added
+- `@opensourcewtf/waaah-types` to: cli, bot, client packages
+
+### Workspace Routing Fix (Iteration 1)
+`agent-matcher.ts` now checks BOTH:
+- `task.to.workspaceId` (repoId)
+- `task.context.security.workspaceRoot` (path)
 
 ### Verification
 
 ```bash
-cd packages/mcp-server && npx tsc --noEmit → PASS
-cd packages/mcp-server/client && npx tsc --noEmit → PASS
-cd packages/mcp-server && pnpm test → PASS (81% coverage)
+pnpm build → PASS (all 7 packages)
+pnpm test → PASS (81% coverage)
 ```
 
 ---

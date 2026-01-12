@@ -29,6 +29,9 @@ importers:
 
   packages/bot:
     dependencies:
+      '@opensourcewtf/waaah-types':
+        specifier: workspace:*
+        version: link:../types
       '@slack/bolt':
         specifier: ^3.18.0
         version: 3.22.0
@@ -57,6 +60,9 @@ importers:
 
   packages/cli:
     dependencies:
+      '@opensourcewtf/waaah-types':
+        specifier: workspace:*
+        version: link:../types
       axios:
         specifier: ^1.6.2
         version: 1.13.2
