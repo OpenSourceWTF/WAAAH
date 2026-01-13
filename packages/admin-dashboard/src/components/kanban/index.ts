@@ -5,3 +5,6 @@ export { getStatusBadgeClass, formatDate, getDuration, getTaskDuration, formatTa
 export { ImagePreviewModal } from './ImagePreviewModal';
 export { MessageThread } from './MessageThread';
 export { ExpandedCardView } from './ExpandedCardView';
+export { TaskCard } from './TaskCard';
+export { KanbanColumn } from './KanbanColumn';
+export { RejectModal } from './RejectModal';
