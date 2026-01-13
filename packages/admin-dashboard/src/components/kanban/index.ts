@@ -7,4 +7,5 @@ export { MessageThread } from './MessageThread';
 export { ExpandedCardView } from './ExpandedCardView';
 export { TaskCard } from './TaskCard';
 export { KanbanColumn } from './KanbanColumn';
-export { RejectModal } from './RejectModal';
+export { useResizableWidth, useDropdownState, useModalWithField } from './hooks';
+export { TaskActionButtons, ExpandedCardHeader, TaskProgressBar, FileNavigator, UnblockModal, RejectModal } from './ExpandedCardComponents';
