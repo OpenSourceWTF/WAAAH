@@ -1,297 +1,800 @@
-diff --git a/packages/admin-dashboard/tests/e2e/task-details.e2e.tsx b/packages/admin-dashboard/tests/e2e/task-details.e2e.tsx
+diff --git a/packages/admin-dashboard/src/KanbanBoard.tsx b/packages/admin-dashboard/src/KanbanBoard.tsx
+index d39e600..0f495a7 100644
+--- a/packages/admin-dashboard/src/KanbanBoard.tsx
++++ b/packages/admin-dashboard/src/KanbanBoard.tsx
+@@ -1,12 +1,9 @@
+-import React, { useMemo, useState, useCallback, useEffect, useRef } from 'react';
+-import { Card, CardHeader, CardContent } from "@/components/ui/card";
+-import { Badge } from "@/components/ui/badge";
+-import { Clock, User, Loader2 } from "lucide-react";
++import React, { useState, useCallback } from 'react';
+ 
+ // Import from modular components
+ import type { Task } from './components/kanban';
+-import { COLUMNS, getStatusBadgeClass, getTaskDuration, formatTaskTitle, formatDate, formatStatusLabel } from './components/kanban';
+-import { ExpandedCardView } from './components/kanban/ExpandedCardView';
++import { COLUMNS, ExpandedCardView, KanbanColumn, RejectModal } from './components/kanban';
++import { useInfiniteScroll, useFilteredTasks, useExpandedTask } from './hooks';
+ 
+ interface KanbanBoardProps {
+   tasks: Task[];
+@@ -21,14 +18,13 @@ interface KanbanBoardProps {
+   onUnblockTask?: (taskId: string, reason: string) => void;
+   onViewHistory?: () => void;
+   onTaskClick?: (task: Task) => void;
+-  onUpdateTask?: (taskId: string, updates: Record<string, any>) => Promise<void>;
++  onUpdateTask?: (taskId: string, updates: Record<string, unknown>) => Promise<void>;
+   onExpandChange?: (isExpanded: boolean) => void;
+   onLoadMoreCompleted?: () => void;
+   onLoadMoreCancelled?: () => void;
+   hasMoreCompleted?: boolean;
+   hasMoreCancelled?: boolean;
+   loadingMore?: 'completed' | 'cancelled' | null;
+-  // Search query for filtering
+   searchQuery?: string;
+ }
+ 
+@@ -70,84 +66,34 @@ export const KanbanBoard = React.memo(function KanbanBoard({
+   searchQuery = '',
+   onExpandChange
+ }: KanbanBoardProps) {
+-  // Expanded card state
+-  const [expandedTask, setExpandedTask] = useState<Task | null>(null);
+-
+-  // Refs for infinite scroll observers
+-  const completedSentinelRef = useRef<HTMLDivElement>(null);
+-  const cancelledSentinelRef = useRef<HTMLDivElement>(null);
++  // Use custom hooks for state management
++  const { expandedTask, handleCardClick, handleCloseExpanded } = useExpandedTask({
++    tasks,
++    completedTasks,
++    cancelledTasks,
++    onExpandChange
++  });
++
++  const columns = useFilteredTasks({
++    tasks,
++    completedTasks,
++    cancelledTasks,
++    searchQuery
++  });
++
++  const { completedSentinelRef, cancelledSentinelRef } = useInfiniteScroll({
++    hasMoreCompleted,
++    hasMoreCancelled,
++    loadingMore,
++    onLoadMoreCompleted,
++    onLoadMoreCancelled
++  });
+ 
+   // Rejection modal state
+   const [showRejectModal, setShowRejectModal] = useState(false);
+   const [rejectFeedback, setRejectFeedback] = useState('');
+   const [rejectingTaskId, setRejectingTaskId] = useState<string | null>(null);
+ 
+-  // Keep expanded task data fresh during polling
+-  useEffect(() => {
+-    if (expandedTask) {
+-      const allTasks = [...tasks, ...completedTasks, ...cancelledTasks];
+-      const freshTask = allTasks.find(t => t.id === expandedTask.id);
+-      if (freshTask && JSON.stringify(freshTask) !== JSON.stringify(expandedTask)) {
+-        setExpandedTask(freshTask);
+-      }
+-    }
+-  }, [tasks, completedTasks, cancelledTasks, expandedTask]);
+-
+-  // Group tasks by column with search filtering
+-  const columns = useMemo(() => {
+-    // Helper function to filter by search
+-    const matchesSearch = (task: Task): boolean => {
+-      if (!searchQuery.trim()) return true;
+-      const query = searchQuery.toLowerCase();
+-      return (
+-        task.id.toLowerCase().includes(query) ||
+-        (task.title?.toLowerCase().includes(query) ?? false) ||
+-        task.prompt.toLowerCase().includes(query) ||
+-        task.status.toLowerCase().includes(query) ||
+-        (task.assignedTo?.toLowerCase().includes(query) ?? false)
+-      );
+-    };
+-
+-    const cols: Record<string, Task[]> = {
+-      TODO: [],
+-      IN_PROGRESS: [],
+-      REVIEW: [],
+-      APPROVED: [],
+-      DONE: completedTasks.filter(matchesSearch),
+-      CANCELLED: cancelledTasks.filter(matchesSearch)
+-    };
+-
+-    tasks.filter(matchesSearch).forEach(task => {
+-      if (!['COMPLETED', 'CANCELLED', 'FAILED'].includes(task.status)) {
+-        const col = COLUMNS.find(c => c.statuses.includes(task.status));
+-        if (col) {
+-          cols[col.id].push(task);
+-        }
+-      }
+-    });
+-
+-    tasks.filter(matchesSearch).forEach(task => {
+-      if (['CANCELLED', 'FAILED'].includes(task.status)) {
+-        cols['CANCELLED'].push(task);
+-      }
+-    });
+-
+-    return cols;
+-  }, [tasks, completedTasks, cancelledTasks, searchQuery]);
+-
+-  // Handlers
+-  const handleCardClick = useCallback((task: Task) => {
+-    setExpandedTask(task);
+-    onExpandChange?.(true);
+-  }, [onExpandChange]);
+-
+-  const handleCloseExpanded = useCallback(() => {
+-    setExpandedTask(null);
+-    onExpandChange?.(false);
+-  }, [onExpandChange]);
+-
+-
+-
+   const handleCloseRejectModal = useCallback(() => {
+     setShowRejectModal(false);
+     setRejectFeedback('');
+@@ -162,36 +108,6 @@ export const KanbanBoard = React.memo(function KanbanBoard({
+     }
+   }, [rejectingTaskId, rejectFeedback, onRejectTask, handleCloseRejectModal, handleCloseExpanded]);
+ 
+-  // IntersectionObserver for infinite scroll
+-  useEffect(() => {
+-    const completedSentinel = completedSentinelRef.current;
+-    const cancelledSentinel = cancelledSentinelRef.current;
+-
+-    const observer = new IntersectionObserver(
+-      (entries) => {
+-        entries.forEach(entry => {
+-          if (entry.isIntersecting) {
+-            if (entry.target === completedSentinel && hasMoreCompleted && !loadingMore && onLoadMoreCompleted) {
+-              onLoadMoreCompleted();
+-            }
+-            if (entry.target === cancelledSentinel && hasMoreCancelled && !loadingMore && onLoadMoreCancelled) {
+-              onLoadMoreCancelled();
+-            }
+-          }
+-        });
+-      },
+-      { threshold: 0.1, rootMargin: '100px' }
+-    );
+-
+-    if (completedSentinel) observer.observe(completedSentinel);
+-    if (cancelledSentinel) observer.observe(cancelledSentinel);
+-
+-    return () => {
+-      if (completedSentinel) observer.unobserve(completedSentinel);
+-      if (cancelledSentinel) observer.unobserve(cancelledSentinel);
+-    };
+-  }, [hasMoreCompleted, hasMoreCancelled, loadingMore, onLoadMoreCompleted, onLoadMoreCancelled]);
+-
+   return (
+     <div className="relative flex h-full gap-4 overflow-x-auto pb-4">
+       {/* Backdrop when expanded */}
+@@ -220,164 +136,34 @@ export const KanbanBoard = React.memo(function KanbanBoard({
+       )}
+ 
+       {/* Reject Modal */}
+-      {showRejectModal && (
+-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+-          <div className="bg-card border-2 border-primary p-6 rounded-lg shadow-lg max-w-md w-full">
+-            <h3 className="text-lg font-bold text-primary mb-4">Reject Task</h3>
+-            <p className="text-sm text-primary/70 mb-4">Please provide feedback for why this task is being rejected:</p>
+-            <textarea
+-              value={rejectFeedback}
+-              onChange={(e) => setRejectFeedback(e.target.value)}
+-              placeholder="Enter rejection feedback..."
+-              className="w-full h-24 p-3 text-sm bg-black/30 border border-primary/30 text-foreground placeholder:text-primary/40 focus:outline-none focus:border-primary resize-none"
+-            />
+-            <div className="flex gap-3 mt-4 justify-end">
+-              <button onClick={handleCloseRejectModal} className="px-4 py-2 text-sm border border-primary/30 text-primary/70 hover:bg-primary/10">Cancel</button>
+-              <button onClick={handleConfirmReject} disabled={!rejectFeedback.trim()} className="px-4 py-2 text-sm bg-red-600 text-white hover:bg-red-700 disabled:opacity-50">Confirm Reject</button>
+-            </div>
+-          </div>
+-        </div>
+-      )}
++      <RejectModal
++        isOpen={showRejectModal}
++        feedback={rejectFeedback}
++        onFeedbackChange={setRejectFeedback}
++        onConfirm={handleConfirmReject}
++        onClose={handleCloseRejectModal}
++      />
+ 
+       {/* Kanban Columns */}
+-      {COLUMNS.map(col => (
+-        <div key={col.id} className="flex-1 min-w-[180px] flex flex-col border-2 border-primary/30">
+-          {/* Column Header - lighter */}
+-          <div className="flex items-center justify-between p-3 pb-2 border-b-2 border-primary/30 bg-card/80">
+-            <h3 className="font-bold text-sm text-primary">{col.label}</h3>
+-            <Badge variant="outline" className="text-xs border-primary/50">{columns[col.id].length}</Badge>
+-          </div>
+-          {/* Column Body - darker */}
+-          <div className="flex-1 space-y-2 overflow-y-auto p-2 bg-black/30">
+-            {columns[col.id].map(task => {
+-              const unreadCount = task.messages?.filter(m => m.role === 'user' && m.isRead === false).length ?? 0;
+-              const progressUpdates = task.messages?.filter(m => m.role === 'agent' && m.metadata && (m.metadata as Record<string, unknown>).percentage !== undefined) ?? [];
+-              const latestProgress = progressUpdates.length > 0 ? progressUpdates[progressUpdates.length - 1] : null;
+-              const percentage = latestProgress ? ((latestProgress.metadata as Record<string, unknown>)?.percentage as number) || 0 : 0;
+-              const isTerminal = ['COMPLETED', 'FAILED', 'CANCELLED'].includes(task.status);
+-
+-              return (
+-                <Card
+-                  key={task.id}
+-                  className="cursor-pointer hover:border-primary/50 transition-all duration-200 bg-card/80 hover:bg-card border-2 border-primary/20 hover:shadow-lg hover:shadow-primary/10 rounded-none"
+-                  onClick={() => handleCardClick(task)}
+-                >
+-                  <CardHeader className="p-3 pb-2 space-y-1">
+-                    {/* Row 1: Status + BLOCKED/NEW badge + Source badge */}
+-                    <div className="flex items-center justify-between">
+-                      <div className="flex items-center gap-1">
+-                        <Badge className={getStatusBadgeClass(task.status)}>{formatStatusLabel(task.status)}</Badge>
+-                      </div>
+-                      <div className="flex items-center gap-1">
+-                        {unreadCount > 0 && (
+-                          <Badge className="bg-amber-500 text-white text-compact px-1.5 py-0.5">{unreadCount} PENDING</Badge>
+-                        )}
+-                        {/* Source badge */}
+-                        {task.source && (
+-                          <Badge className={`text-compact px-1.5 py-0.5 ${task.source === 'UI' ? 'bg-blue-500 text-white border border-blue-700' :
+-                            task.source === 'CLI' ? 'bg-green-500 text-white border border-green-700' :
+-                              'bg-purple-500 text-white border border-purple-700'
+-                            }`}>{task.source}</Badge>
+-                        )}
+-                      </div>
+-                    </div>
+-                    {/* Row 2: Agent (if assigned) */}
+-                    {task.assignedTo && (
+-                      <div className="text-compact text-primary/60 flex items-center gap-1">
+-                        <User className="h-2.5 w-2.5" />
+-                        {task.assignedTo}
+-                      </div>
+-                    )}
+-                  </CardHeader>
+-                  <CardContent className="p-3 pt-0 space-y-2">
+-                    <p className="text-sm font-medium line-clamp-2 leading-tight">{formatTaskTitle(task)}</p>
+-
+-                    {/* Progress Bar */}
+-                    {(latestProgress || isTerminal) && (
+-                      <div className="space-y-1">
+-                        <div className="h-1.5 bg-primary/20 rounded-full overflow-hidden">
+-                          <div
+-                            className={`h-full transition-all duration-300 ${task.status === 'COMPLETED' ? 'bg-green-500' :
+-                              ['FAILED', 'CANCELLED'].includes(task.status) ? 'bg-red-500' : 'bg-primary'
+-                              }`}
+-                            style={{ width: `${isTerminal ? 100 : percentage}%` }}
+-                          />
+-                        </div>
+-                      </div>
+-                    )}
+-
+-                    {/* Task ID - full row */}
+-                    <div className="font-mono text-compact text-primary/50 truncate">
+-                      {task.id}
+-                    </div>
+-
+-                    {/* Capabilities - same style as AgentCard */}
+-                    {task.to?.requiredCapabilities && task.to.requiredCapabilities.length > 0 && (
+-                      <div className="flex flex-wrap gap-1 mt-1">
+-                        {task.to.requiredCapabilities.slice(0, 3).map(cap => (
+-                          <span key={cap} className="text-compact bg-primary/10 text-primary px-1.5 py-0.5 border border-primary/20">{cap}</span>
+-                        ))}
+-                        {task.to.requiredCapabilities.length > 3 && (
+-                          <span className="text-compact text-primary/50">+{task.to.requiredCapabilities.length - 3}</span>
+-                        )}
+-                      </div>
+-                    )}
+-
+-                    {/* Workspace - same style as AgentCard */}
+-                    {(task.workspaceContext?.repoId || task.to?.workspaceId) && (
+-                      <div className="text-compact font-mono text-primary/70 bg-black/20 px-1.5 py-0.5 border border-primary/20 truncate mt-1">
+-                        {task.workspaceContext?.repoId || task.to?.workspaceId}
+-                      </div>
+-                    )}
+-
+-                    {/* Created at + Duration on same line */}
+-                    {task.createdAt && (
+-                      <div className="flex items-center justify-between text-compact mt-1">
+-                        <span className="text-primary/40">
+-                          {formatDate(task.createdAt)}
+-                        </span>
+-                        <span className="flex items-center gap-1 text-primary/60">
+-                          <Clock className="h-2.5 w-2.5" />
+-                          {getTaskDuration(task)}
+-                        </span>
+-                      </div>
+-                    )}
+-                  </CardContent>
+-                </Card>
+-              );
+-            })}
+-            {columns[col.id].length === 0 && (
+-              <div className="text-center text-primary/30 text-xs py-8 italic">No tasks</div>
+-            )}
+-            {/* Infinite scroll sentinel for DONE column */}
+-            {col.id === 'DONE' && hasMoreCompleted && (
+-              <div ref={completedSentinelRef} className="w-full py-2 text-center text-xs text-primary/40">
+-                {loadingMore === 'completed' ? (
+-                  <span className="flex items-center justify-center gap-2">
+-                    <Loader2 className="h-3 w-3 animate-spin" />
+-                    Loading...
+-                  </span>
+-                ) : (
+-                  <span className="opacity-50">Scroll for more</span>
+-                )}
+-              </div>
+-            )}
+-            {/* Infinite scroll sentinel for CANCELLED column */}
+-            {col.id === 'CANCELLED' && hasMoreCancelled && (
+-              <div ref={cancelledSentinelRef} className="w-full py-2 text-center text-xs text-primary/40">
+-                {loadingMore === 'cancelled' ? (
+-                  <span className="flex items-center justify-center gap-2">
+-                    <Loader2 className="h-3 w-3 animate-spin" />
+-                    Loading...
+-                  </span>
+-                ) : (
+-                  <span className="opacity-50">Scroll for more</span>
+-                )}
+-              </div>
+-            )}
+-          </div>
+-        </div>
+-      ))}
++      {COLUMNS.map(col => {
++        // Infinite scroll props for terminal columns
++        const infiniteScrollProps = col.id === 'DONE'
++          ? { hasMore: hasMoreCompleted, loadingMore: loadingMore === 'completed', sentinelRef: completedSentinelRef }
++          : col.id === 'CANCELLED'
++          ? { hasMore: hasMoreCancelled, loadingMore: loadingMore === 'cancelled', sentinelRef: cancelledSentinelRef }
++          : {};
++
++        return (
++          <KanbanColumn
++            key={col.id}
++            id={col.id}
++            label={col.label}
++            tasks={columns[col.id]}
++            onCardClick={handleCardClick}
++            {...infiniteScrollProps}
++          />
++        );
++      })}
+     </div>
+   );
+ }, arePropsEqual);
+diff --git a/packages/admin-dashboard/src/components/kanban/KanbanColumn.tsx b/packages/admin-dashboard/src/components/kanban/KanbanColumn.tsx
 new file mode 100644
-index 0000000..b154ad9
+index 0000000..aa81219
 --- /dev/null
-+++ b/packages/admin-dashboard/tests/e2e/task-details.e2e.tsx
-@@ -0,0 +1,280 @@
-+/**
-+ * E2E Tests for Task Details Tab (Merged View)
-+ *
-+ * Tests the merged Task Details tab that combines PROMPT and CONTEXT
-+ * into a single DETAILS view.
-+ *
-+ * Spec: 010-ui-redesign
-+ * Dependencies: T3 (Task Details Tab)
-+ */
-+import { describe, it, expect, vi, beforeEach } from 'vitest';
-+import { render, screen, within, type RenderResult } from '@testing-library/react';
-+import React, { type ReactElement } from 'react';
-+import { ExpandedCardView } from '@/components/kanban/ExpandedCardView';
-+import type { Task } from '@/components/kanban/types';
-+import { ThemeProvider } from '@/contexts/ThemeContext';
++++ b/packages/admin-dashboard/src/components/kanban/KanbanColumn.tsx
+@@ -0,0 +1,64 @@
++import React from 'react';
++import { Badge } from "@/components/ui/badge";
++import { Loader2 } from "lucide-react";
++import type { Task } from './types';
++import { TaskCard } from './TaskCard';
 +
-+// Mock DiffViewer since it makes API calls
-+vi.mock('@/components/DiffViewer', () => ({
-+  DiffViewer: () => <div data-testid="diff-viewer">Mock Diff Viewer</div>
-+}));
-+
-+// Mock the utils that may have side effects
-+vi.mock('@/components/kanban/utils', async (importOriginal) => {
-+  const actual = await importOriginal() as Record<string, unknown>;
-+  return {
-+    ...actual,
-+    getProgressUpdates: () => [],
-+  };
-+});
-+
-+// Wrapper to provide required contexts
-+function renderWithProviders(ui: ReactElement): RenderResult {
-+  return render(
-+    <ThemeProvider>
-+      {ui}
-+    </ThemeProvider>
-+  );
++interface KanbanColumnProps {
++  id: string;
++  label: string;
++  tasks: Task[];
++  onCardClick: (task: Task) => void;
++  // Infinite scroll props (optional, only for DONE/CANCELLED)
++  hasMore?: boolean;
++  loadingMore?: boolean;
++  sentinelRef?: React.RefObject<HTMLDivElement | null>;
 +}
 +
-+const createMockTask = (overrides: Partial<Task> = {}): Task => ({
-+  id: 'task-test-123',
-+  prompt: '# Test Task\n\nThis is a test prompt with full content.',
-+  status: 'QUEUED',
-+  createdAt: Date.now(),
-+  messages: [],
-+  ...overrides,
++export const KanbanColumn: React.FC<KanbanColumnProps> = React.memo(({
++  id,
++  label,
++  tasks,
++  onCardClick,
++  hasMore,
++  loadingMore,
++  sentinelRef
++}) => {
++  return (
++    <div className="flex-1 min-w-[180px] flex flex-col border-2 border-primary/30">
++      {/* Column Header - lighter */}
++      <div className="flex items-center justify-between p-3 pb-2 border-b-2 border-primary/30 bg-card/80">
++        <h3 className="font-bold text-sm text-primary">{label}</h3>
++        <Badge variant="outline" className="text-xs border-primary/50">{tasks.length}</Badge>
++      </div>
++      {/* Column Body - darker */}
++      <div className="flex-1 space-y-2 overflow-y-auto p-2 bg-black/30">
++        {tasks.map(task => (
++          <TaskCard
++            key={task.id}
++            task={task}
++            onClick={() => onCardClick(task)}
++          />
++        ))}
++        {tasks.length === 0 && (
++          <div className="text-center text-primary/30 text-xs py-8 italic">No tasks</div>
++        )}
++        {/* Infinite scroll sentinel */}
++        {hasMore && sentinelRef && (
++          <div ref={sentinelRef} className="w-full py-2 text-center text-xs text-primary/40">
++            {loadingMore ? (
++              <span className="flex items-center justify-center gap-2">
++                <Loader2 className="h-3 w-3 animate-spin" />
++                Loading...
++              </span>
++            ) : (
++              <span className="opacity-50">Scroll for more</span>
++            )}
++          </div>
++        )}
++      </div>
++    </div>
++  );
 +});
 +
-+const defaultProps = {
-+  onClose: vi.fn(),
-+  onSendComment: vi.fn(),
-+  onApproveTask: vi.fn(),
-+  onRejectTask: vi.fn(),
-+  onUnblockTask: vi.fn(),
-+  onRetryTask: vi.fn(),
-+  onCancelTask: vi.fn(),
-+  onAddReviewComment: vi.fn(),
-+  onUpdateTask: vi.fn(),
++KanbanColumn.displayName = 'KanbanColumn';
+diff --git a/packages/admin-dashboard/src/components/kanban/RejectModal.tsx b/packages/admin-dashboard/src/components/kanban/RejectModal.tsx
+new file mode 100644
+index 0000000..0e555cd
+--- /dev/null
++++ b/packages/admin-dashboard/src/components/kanban/RejectModal.tsx
+@@ -0,0 +1,38 @@
++import React from 'react';
++
++interface RejectModalProps {
++  isOpen: boolean;
++  feedback: string;
++  onFeedbackChange: (feedback: string) => void;
++  onConfirm: () => void;
++  onClose: () => void;
++}
++
++export const RejectModal: React.FC<RejectModalProps> = ({
++  isOpen,
++  feedback,
++  onFeedbackChange,
++  onConfirm,
++  onClose
++}) => {
++  if (!isOpen) return null;
++
++  return (
++    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
++      <div className="bg-card border-2 border-primary p-6 rounded-lg shadow-lg max-w-md w-full">
++        <h3 className="text-lg font-bold text-primary mb-4">Reject Task</h3>
++        <p className="text-sm text-primary/70 mb-4">Please provide feedback for why this task is being rejected:</p>
++        <textarea
++          value={feedback}
++          onChange={(e) => onFeedbackChange(e.target.value)}
++          placeholder="Enter rejection feedback..."
++          className="w-full h-24 p-3 text-sm bg-black/30 border border-primary/30 text-foreground placeholder:text-primary/40 focus:outline-none focus:border-primary resize-none"
++        />
++        <div className="flex gap-3 mt-4 justify-end">
++          <button onClick={onClose} className="px-4 py-2 text-sm border border-primary/30 text-primary/70 hover:bg-primary/10">Cancel</button>
++          <button onClick={onConfirm} disabled={!feedback.trim()} className="px-4 py-2 text-sm bg-red-600 text-white hover:bg-red-700 disabled:opacity-50">Confirm Reject</button>
++        </div>
++      </div>
++    </div>
++  );
 +};
+diff --git a/packages/admin-dashboard/src/components/kanban/TaskCard.tsx b/packages/admin-dashboard/src/components/kanban/TaskCard.tsx
+new file mode 100644
+index 0000000..a2e1aef
+--- /dev/null
++++ b/packages/admin-dashboard/src/components/kanban/TaskCard.tsx
+@@ -0,0 +1,110 @@
++import React from 'react';
++import { Card, CardHeader, CardContent } from "@/components/ui/card";
++import { Badge } from "@/components/ui/badge";
++import { Clock, User } from "lucide-react";
++import type { Task } from './types';
++import { getStatusBadgeClass, getTaskDuration, formatTaskTitle, formatDate, formatStatusLabel } from './utils';
 +
-+describe('Task Details Tab - E2E Tests', () => {
-+  beforeEach(() => {
-+    vi.clearAllMocks();
-+  });
++interface TaskCardProps {
++  task: Task;
++  onClick: () => void;
++}
 +
-+  describe('1. All fields visible', () => {
-+    it('should display task title', () => {
-+      const task = createMockTask({
-+        prompt: '# My Test Title\n\nTask description here.',
-+      });
++export const TaskCard: React.FC<TaskCardProps> = React.memo(({ task, onClick }) => {
++  const unreadCount = task.messages?.filter(m => m.role === 'user' && m.isRead === false).length ?? 0;
++  const progressUpdates = task.messages?.filter(m => m.role === 'agent' && m.metadata && (m.metadata as Record<string, unknown>).percentage !== undefined) ?? [];
++  const latestProgress = progressUpdates.length > 0 ? progressUpdates[progressUpdates.length - 1] : null;
++  const percentage = latestProgress ? ((latestProgress.metadata as Record<string, unknown>)?.percentage as number) || 0 : 0;
++  const isTerminal = ['COMPLETED', 'FAILED', 'CANCELLED'].includes(task.status);
 +
-+      renderWithProviders(<ExpandedCardView task={task} {...defaultProps} />);
++  return (
++    <Card
++      className="cursor-pointer hover:border-primary/50 transition-all duration-200 bg-card/80 hover:bg-card border-2 border-primary/20 hover:shadow-lg hover:shadow-primary/10 rounded-none"
++      onClick={onClick}
++    >
++      <CardHeader className="p-3 pb-2 space-y-1">
++        {/* Row 1: Status + BLOCKED/NEW badge + Source badge */}
++        <div className="flex items-center justify-between">
++          <div className="flex items-center gap-1">
++            <Badge className={getStatusBadgeClass(task.status)}>{formatStatusLabel(task.status)}</Badge>
++          </div>
++          <div className="flex items-center gap-1">
++            {unreadCount > 0 && (
++              <Badge className="bg-amber-500 text-white text-compact px-1.5 py-0.5">{unreadCount} PENDING</Badge>
++            )}
++            {/* Source badge */}
++            {task.source && (
++              <Badge className={`text-compact px-1.5 py-0.5 ${task.source === 'UI' ? 'bg-blue-500 text-white border border-blue-700' :
++                task.source === 'CLI' ? 'bg-green-500 text-white border border-green-700' :
++                  'bg-purple-500 text-white border border-purple-700'
++                }`}>{task.source}</Badge>
++            )}
++          </div>
++        </div>
++        {/* Row 2: Agent (if assigned) */}
++        {task.assignedTo && (
++          <div className="text-compact text-primary/60 flex items-center gap-1">
++            <User className="h-2.5 w-2.5" />
++            {task.assignedTo}
++          </div>
++        )}
++      </CardHeader>
++      <CardContent className="p-3 pt-0 space-y-2">
++        <p className="text-sm font-medium line-clamp-2 leading-tight">{formatTaskTitle(task)}</p>
 +
-+      // Title should be extracted from markdown heading
-+      // May appear multiple times (in title area and in full prompt)
-+      const titleElements = screen.getAllByText(/my test title/i);
-+      expect(titleElements.length).toBeGreaterThan(0);
-+    });
++        {/* Progress Bar */}
++        {(latestProgress || isTerminal) && (
++          <div className="space-y-1">
++            <div className="h-1.5 bg-primary/20 rounded-full overflow-hidden">
++              <div
++                className={`h-full transition-all duration-300 ${task.status === 'COMPLETED' ? 'bg-green-500' :
++                  ['FAILED', 'CANCELLED'].includes(task.status) ? 'bg-red-500' : 'bg-primary'
++                  }`}
++                style={{ width: `${isTerminal ? 100 : percentage}%` }}
++              />
++            </div>
++          </div>
++        )}
 +
-+    it('should display full prompt content', () => {
-+      const task = createMockTask({
-+        prompt: '# Title\n\nFull prompt content with details.',
-+      });
++        {/* Task ID - full row */}
++        <div className="font-mono text-compact text-primary/50 truncate">
++          {task.id}
++        </div>
 +
-+      renderWithProviders(<ExpandedCardView task={task} {...defaultProps} />);
++        {/* Capabilities - same style as AgentCard */}
++        {task.to?.requiredCapabilities && task.to.requiredCapabilities.length > 0 && (
++          <div className="flex flex-wrap gap-1 mt-1">
++            {task.to.requiredCapabilities.slice(0, 3).map(cap => (
++              <span key={cap} className="text-compact bg-primary/10 text-primary px-1.5 py-0.5 border border-primary/20">{cap}</span>
++            ))}
++            {task.to.requiredCapabilities.length > 3 && (
++              <span className="text-compact text-primary/50">+{task.to.requiredCapabilities.length - 3}</span>
++            )}
++          </div>
++        )}
 +
-+      // Full prompt should be visible (in pre tag within PROMPT tab)
-+      const promptElements = screen.getAllByText(/full prompt content/i);
-+      expect(promptElements.length).toBeGreaterThan(0);
-+    });
++        {/* Workspace - same style as AgentCard */}
++        {(task.workspaceContext?.repoId || task.to?.workspaceId) && (
++          <div className="text-compact font-mono text-primary/70 bg-black/20 px-1.5 py-0.5 border border-primary/20 truncate mt-1">
++            {task.workspaceContext?.repoId || task.to?.workspaceId}
++          </div>
++        )}
 +
-+    it('should display source badge when source is set', () => {
-+      const task = createMockTask({
-+        from: { type: 'agent', id: 'agent-1', source: 'CLI' },
-+      });
-+
-+      renderWithProviders(<ExpandedCardView task={task} {...defaultProps} />);
-+
-+      // Source badge should be visible (CLI, IDE, etc.)
-+      // Note: Test passes if source info is displayed somewhere
-+      const taskId = screen.getByText(/task-test-123/i);
-+      expect(taskId).toBeInTheDocument();
-+    });
-+
-+    it('should display workspace info when set', () => {
-+      const task = createMockTask({
-+        workspaceContext: {
-+          type: 'github',
-+          repoId: 'Owner/Repo',
-+          branch: 'main',
-+          path: '/src',
-+        },
-+      });
-+
-+      renderWithProviders(<ExpandedCardView task={task} {...defaultProps} />);
-+
-+      // Navigate to CONTEXT tab to see workspace info
-+      const contextTab = screen.getByRole('tab', { name: /context/i });
-+      expect(contextTab).toBeInTheDocument();
-+    });
-+
-+    it('should display required capabilities when set', () => {
-+      const task = createMockTask({
-+        to: {
-+          requiredCapabilities: ['code-writing', 'test-writing', 'doc-writing'],
-+        },
-+      });
-+
-+      renderWithProviders(<ExpandedCardView task={task} {...defaultProps} />);
-+
-+      // Capabilities should be visible in the task details
-+      const contextTab = screen.getByRole('tab', { name: /context/i });
-+      expect(contextTab).toBeInTheDocument();
-+    });
-+  });
-+
-+  describe('2. Priority displays when set', () => {
-+    it('should display priority badge for high priority task', () => {
-+      const task = createMockTask({
-+        priority: 'high',
-+      });
-+
-+      renderWithProviders(<ExpandedCardView task={task} {...defaultProps} />);
-+
-+      // Priority should be visible somewhere in the UI
-+      // Note: This depends on T3 implementation
-+      expect(screen.getByText(/task-test-123/i)).toBeInTheDocument();
-+    });
-+
-+    it('should display priority badge for critical priority task', () => {
-+      const task = createMockTask({
-+        priority: 'critical',
-+      });
-+
-+      renderWithProviders(<ExpandedCardView task={task} {...defaultProps} />);
-+
-+      // Critical priority should be prominently displayed
-+      expect(screen.getByText(/task-test-123/i)).toBeInTheDocument();
-+    });
-+
-+    it('should not display priority badge when priority is normal/default', () => {
-+      const task = createMockTask({
-+        priority: 'normal',
-+      });
-+
-+      renderWithProviders(<ExpandedCardView task={task} {...defaultProps} />);
-+
-+      // Normal priority should not show a special badge
-+      expect(screen.getByText(/task-test-123/i)).toBeInTheDocument();
-+    });
-+  });
-+
-+  describe('3. Dependencies display correctly', () => {
-+    it('should display dependencies when task has them', () => {
-+      const task = createMockTask({
-+        dependencies: ['task-dep-1', 'task-dep-2'],
-+      });
-+
-+      renderWithProviders(<ExpandedCardView task={task} {...defaultProps} />);
-+
-+      // Dependencies should be listed
-+      expect(screen.getByText(/task-test-123/i)).toBeInTheDocument();
-+    });
-+
-+    it('should display "+N more" indicator when >3 dependencies', () => {
-+      const task = createMockTask({
-+        dependencies: [
-+          'task-dep-1',
-+          'task-dep-2',
-+          'task-dep-3',
-+          'task-dep-4',
-+          'task-dep-5',
-+        ],
-+      });
-+
-+      renderWithProviders(<ExpandedCardView task={task} {...defaultProps} />);
-+
-+      // Should show first 3 and "+2 more"
-+      // Note: This depends on T3 implementation showing dependencies
-+      expect(screen.getByText(/task-test-123/i)).toBeInTheDocument();
-+    });
-+
-+    it('should not display dependencies section when no dependencies', () => {
-+      const task = createMockTask({
-+        dependencies: undefined,
-+      });
-+
-+      renderWithProviders(<ExpandedCardView task={task} {...defaultProps} />);
-+
-+      // No dependencies section should appear
-+      expect(screen.getByText(/task-test-123/i)).toBeInTheDocument();
-+    });
-+  });
-+
-+  describe('4. No tab switching required - Merged DETAILS tab', () => {
-+    it('should have DETAILS tab instead of separate PROMPT and CONTEXT', () => {
-+      const task = createMockTask();
-+
-+      renderWithProviders(<ExpandedCardView task={task} {...defaultProps} />);
-+
-+      // Check for tab presence - the merged implementation should have DETAILS
-+      // Current implementation has PROMPT tab - this test documents the expected behavior
-+      const tabs = screen.getAllByRole('tab');
-+      const tabNames = tabs.map(t => t.textContent?.toLowerCase());
-+
-+      // Document current state vs expected state
-+      // Expected after T3: DETAILS tab exists
-+      // Currently: PROMPT and CONTEXT tabs exist
-+      expect(tabs.length).toBeGreaterThan(0);
-+    });
-+
-+    it('should display title, prompt, workspace, and capabilities without switching tabs', () => {
-+      const task = createMockTask({
-+        prompt: '# Combined Title\n\nPrompt content.',
-+        workspaceContext: {
-+          type: 'github',
-+          repoId: 'Test/Repo',
-+          branch: 'feature',
-+        },
-+        to: {
-+          requiredCapabilities: ['code-writing'],
-+        },
-+      });
-+
-+      renderWithProviders(<ExpandedCardView task={task} {...defaultProps} />);
-+
-+      // All information should be accessible without clicking multiple tabs
-+      // The prompt content should be visible (may appear in multiple places)
-+      const titleElements = screen.getAllByText(/combined title/i);
-+      expect(titleElements.length).toBeGreaterThan(0);
-+    });
-+  });
-+
-+  describe('Tab structure verification', () => {
-+    it('should have expected tabs: DETAILS, TIMELINE, REVIEW', () => {
-+      const task = createMockTask();
-+
-+      renderWithProviders(<ExpandedCardView task={task} {...defaultProps} />);
-+
-+      // Get all tabs
-+      const tablist = screen.getByRole('tablist');
-+      const tabs = within(tablist).getAllByRole('tab');
-+
-+      // Verify tabs exist (names depend on T3 implementation)
-+      expect(tabs.length).toBeGreaterThanOrEqual(2);
-+
-+      // Should have TIMELINE tab
-+      const timelineTab = tabs.find(t =>
-+        t.textContent?.toLowerCase().includes('timeline')
-+      );
-+      expect(timelineTab).toBeDefined();
-+
-+      // Should have REVIEW tab
-+      const reviewTab = tabs.find(t =>
-+        t.textContent?.toLowerCase().includes('review')
-+      );
-+      expect(reviewTab).toBeDefined();
-+    });
-+  });
++        {/* Created at + Duration on same line */}
++        {task.createdAt && (
++          <div className="flex items-center justify-between text-compact mt-1">
++            <span className="text-primary/40">
++              {formatDate(task.createdAt)}
++            </span>
++            <span className="flex items-center gap-1 text-primary/60">
++              <Clock className="h-2.5 w-2.5" />
++              {getTaskDuration(task)}
++            </span>
++          </div>
++        )}
++      </CardContent>
++    </Card>
++  );
 +});
-diff --git a/packages/admin-dashboard/vitest.config.ts b/packages/admin-dashboard/vitest.config.ts
-index 7d2697b..8ea3281 100644
---- a/packages/admin-dashboard/vitest.config.ts
-+++ b/packages/admin-dashboard/vitest.config.ts
-@@ -13,5 +13,6 @@ export default defineConfig({
-     environment: 'jsdom',
-     setupFiles: ['./tests/setup.ts'],
-     globals: true,
-+    include: ['tests/**/*.{test,spec,e2e}.{ts,tsx}'],
-   },
- });
++
++TaskCard.displayName = 'TaskCard';
+diff --git a/packages/admin-dashboard/src/components/kanban/index.ts b/packages/admin-dashboard/src/components/kanban/index.ts
+index 75c1a35..a6cf767 100644
+--- a/packages/admin-dashboard/src/components/kanban/index.ts
++++ b/packages/admin-dashboard/src/components/kanban/index.ts
+@@ -5,3 +5,6 @@ export { getStatusBadgeClass, formatDate, getDuration, getTaskDuration, formatTa
+ export { ImagePreviewModal } from './ImagePreviewModal';
+ export { MessageThread } from './MessageThread';
+ export { ExpandedCardView } from './ExpandedCardView';
++export { TaskCard } from './TaskCard';
++export { KanbanColumn } from './KanbanColumn';
++export { RejectModal } from './RejectModal';
+diff --git a/packages/admin-dashboard/src/hooks/index.ts b/packages/admin-dashboard/src/hooks/index.ts
+index f9edb4f..8f283ba 100644
+--- a/packages/admin-dashboard/src/hooks/index.ts
++++ b/packages/admin-dashboard/src/hooks/index.ts
+@@ -8,3 +8,6 @@
+ export { useTaskData, type Task } from './useTaskData';
+ export { useAgentData, type Agent, type AgentStatusColor } from './useAgentData';
+ export { useWebSocket, type WebSocketStatus, type SyncFullPayload, type UseWebSocketOptions, type UseWebSocketResult } from './useWebSocket';
++export { useInfiniteScroll } from './useInfiniteScroll';
++export { useFilteredTasks } from './useFilteredTasks';
++export { useExpandedTask } from './useExpandedTask';
+diff --git a/packages/admin-dashboard/src/hooks/useExpandedTask.ts b/packages/admin-dashboard/src/hooks/useExpandedTask.ts
+new file mode 100644
+index 0000000..8e3b378
+--- /dev/null
++++ b/packages/admin-dashboard/src/hooks/useExpandedTask.ts
+@@ -0,0 +1,45 @@
++import { useState, useEffect, useCallback } from 'react';
++import type { Task } from '@/components/kanban/types';
++
++interface UseExpandedTaskOptions {
++  tasks: Task[];
++  completedTasks: Task[];
++  cancelledTasks: Task[];
++  onExpandChange?: (isExpanded: boolean) => void;
++}
++
++export function useExpandedTask({
++  tasks,
++  completedTasks,
++  cancelledTasks,
++  onExpandChange
++}: UseExpandedTaskOptions) {
++  const [expandedTask, setExpandedTask] = useState<Task | null>(null);
++
++  // Keep expanded task data fresh during polling
++  useEffect(() => {
++    if (expandedTask) {
++      const allTasks = [...tasks, ...completedTasks, ...cancelledTasks];
++      const freshTask = allTasks.find(t => t.id === expandedTask.id);
++      if (freshTask && JSON.stringify(freshTask) !== JSON.stringify(expandedTask)) {
++        setExpandedTask(freshTask);
++      }
++    }
++  }, [tasks, completedTasks, cancelledTasks, expandedTask]);
++
++  const handleCardClick = useCallback((task: Task) => {
++    setExpandedTask(task);
++    onExpandChange?.(true);
++  }, [onExpandChange]);
++
++  const handleCloseExpanded = useCallback(() => {
++    setExpandedTask(null);
++    onExpandChange?.(false);
++  }, [onExpandChange]);
++
++  return {
++    expandedTask,
++    handleCardClick,
++    handleCloseExpanded
++  };
++}
+diff --git a/packages/admin-dashboard/src/hooks/useFilteredTasks.ts b/packages/admin-dashboard/src/hooks/useFilteredTasks.ts
+new file mode 100644
+index 0000000..716bb09
+--- /dev/null
++++ b/packages/admin-dashboard/src/hooks/useFilteredTasks.ts
+@@ -0,0 +1,60 @@
++import { useMemo } from 'react';
++import type { Task } from '@/components/kanban/types';
++import { COLUMNS } from '@/components/kanban/types';
++
++interface UseFilteredTasksOptions {
++  tasks: Task[];
++  completedTasks: Task[];
++  cancelledTasks: Task[];
++  searchQuery: string;
++}
++
++export function useFilteredTasks({
++  tasks,
++  completedTasks,
++  cancelledTasks,
++  searchQuery
++}: UseFilteredTasksOptions) {
++  return useMemo(() => {
++    // Helper function to filter by search
++    const matchesSearch = (task: Task): boolean => {
++      if (!searchQuery.trim()) return true;
++      const query = searchQuery.toLowerCase();
++      return (
++        task.id.toLowerCase().includes(query) ||
++        (task.title?.toLowerCase().includes(query) ?? false) ||
++        task.prompt.toLowerCase().includes(query) ||
++        task.status.toLowerCase().includes(query) ||
++        (task.assignedTo?.toLowerCase().includes(query) ?? false)
++      );
++    };
++
++    const cols: Record<string, Task[]> = {
++      TODO: [],
++      IN_PROGRESS: [],
++      REVIEW: [],
++      APPROVED: [],
++      DONE: completedTasks.filter(matchesSearch),
++      CANCELLED: cancelledTasks.filter(matchesSearch)
++    };
++
++    // Group active tasks into columns
++    tasks.filter(matchesSearch).forEach(task => {
++      if (!['COMPLETED', 'CANCELLED', 'FAILED'].includes(task.status)) {
++        const col = COLUMNS.find(c => c.statuses.includes(task.status));
++        if (col) {
++          cols[col.id].push(task);
++        }
++      }
++    });
++
++    // Add failed/cancelled tasks to CANCELLED column
++    tasks.filter(matchesSearch).forEach(task => {
++      if (['CANCELLED', 'FAILED'].includes(task.status)) {
++        cols['CANCELLED'].push(task);
++      }
++    });
++
++    return cols;
++  }, [tasks, completedTasks, cancelledTasks, searchQuery]);
++}
+diff --git a/packages/admin-dashboard/src/hooks/useInfiniteScroll.ts b/packages/admin-dashboard/src/hooks/useInfiniteScroll.ts
+new file mode 100644
+index 0000000..9eb968b
+--- /dev/null
++++ b/packages/admin-dashboard/src/hooks/useInfiniteScroll.ts
+@@ -0,0 +1,54 @@
++import { useEffect, useRef } from 'react';
++
++interface UseInfiniteScrollOptions {
++  hasMoreCompleted?: boolean;
++  hasMoreCancelled?: boolean;
++  loadingMore?: 'completed' | 'cancelled' | null;
++  onLoadMoreCompleted?: () => void;
++  onLoadMoreCancelled?: () => void;
++}
++
++export function useInfiniteScroll({
++  hasMoreCompleted,
++  hasMoreCancelled,
++  loadingMore,
++  onLoadMoreCompleted,
++  onLoadMoreCancelled
++}: UseInfiniteScrollOptions) {
++  const completedSentinelRef = useRef<HTMLDivElement>(null);
++  const cancelledSentinelRef = useRef<HTMLDivElement>(null);
++
++  useEffect(() => {
++    const completedSentinel = completedSentinelRef.current;
++    const cancelledSentinel = cancelledSentinelRef.current;
++
++    const observer = new IntersectionObserver(
++      (entries) => {
++        entries.forEach(entry => {
++          if (entry.isIntersecting) {
++            if (entry.target === completedSentinel && hasMoreCompleted && !loadingMore && onLoadMoreCompleted) {
++              onLoadMoreCompleted();
++            }
++            if (entry.target === cancelledSentinel && hasMoreCancelled && !loadingMore && onLoadMoreCancelled) {
++              onLoadMoreCancelled();
++            }
++          }
++        });
++      },
++      { threshold: 0.1, rootMargin: '100px' }
++    );
++
++    if (completedSentinel) observer.observe(completedSentinel);
++    if (cancelledSentinel) observer.observe(cancelledSentinel);
++
++    return () => {
++      if (completedSentinel) observer.unobserve(completedSentinel);
++      if (cancelledSentinel) observer.unobserve(cancelledSentinel);
++    };
++  }, [hasMoreCompleted, hasMoreCancelled, loadingMore, onLoadMoreCompleted, onLoadMoreCancelled]);
++
++  return {
++    completedSentinelRef,
++    cancelledSentinelRef
++  };
++}
