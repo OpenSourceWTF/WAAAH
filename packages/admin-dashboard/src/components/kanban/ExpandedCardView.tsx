@@ -1,15 +1,24 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { X, Clock, User, FileText, Settings, CheckCircle, RefreshCw, XCircle, ChevronDown, RotateCcw } from "lucide-react";
+import { Clock, FileText, Settings, CheckCircle } from "lucide-react";
 import { DiffViewer } from "@/components/DiffViewer";
 import type { Task } from './types';
-import { getStatusBadgeClass, getTaskDuration, formatTaskTitle, getProgressUpdates } from './utils';
+import { getStatusBadgeClass, formatTaskTitle, getProgressUpdates } from './utils';
 import { ImagePreviewModal } from './ImagePreviewModal';
 import { MessageThread } from './MessageThread';
 import { ContextTab } from './ContextTab';
 import { TimelineTab } from './TimelineTab';
+import {
+  TaskActionButtons,
+  ExpandedCardHeader,
+  TaskProgressBar,
+  FileNavigator,
+  UnblockModal,
+  RejectModal,
+} from './ExpandedCardComponents';
+import { useResizableWidth, useDropdownState, useModalWithField } from './hooks';
+import type { FileStats } from '@/utils/diffParser';
 
 interface ExpandedCardViewProps {
   task: Task;
@@ -24,6 +33,18 @@ interface ExpandedCardViewProps {
   onUpdateTask?: (taskId: string, updates: Record<string, any>) => Promise<void>;
 }
 
+// Status check arrays
+const canCancelStatuses = ['QUEUED', 'ASSIGNED', 'PENDING_ACK', 'PROCESSING', 'IN_PROGRESS'];
+const canRetryStatuses = ['FAILED', 'CANCELLED', 'ASSIGNED', 'QUEUED', 'PENDING_ACK'];
+const canApproveStatuses = ['REVIEW', 'IN_REVIEW', 'PENDING_RES'];
+const reviewDefaultStatuses = ['REVIEW', 'IN_REVIEW', 'PENDING_RES', 'BLOCKED'];
+
+// Helper to get latest progress
+function getLatestProgress(task: Task) {
+  const updates = getProgressUpdates(task);
+  return updates.length > 0 ? updates[updates.length - 1] : null;
+}
+
 export const ExpandedCardView: React.FC<ExpandedCardViewProps> = ({
   task,
   onClose,
@@ -36,62 +57,44 @@ export const ExpandedCardView: React.FC<ExpandedCardViewProps> = ({
   onUnblockTask,
   onUpdateTask
 }) => {
-  const progressUpdates = getProgressUpdates(task) || [];
-  const latestProgress = progressUpdates.length > 0 ? progressUpdates[progressUpdates.length - 1] : null;
-  const canCancel = ['QUEUED', 'ASSIGNED', 'PENDING_ACK', 'PROCESSING', 'IN_PROGRESS'].includes(task.status);
-  const canRetry = ['FAILED', 'CANCELLED', 'ASSIGNED', 'QUEUED', 'PENDING_ACK'].includes(task.status);
-  const canApprove = ['REVIEW', 'IN_REVIEW', 'PENDING_RES'].includes(task.status);
+  // Computed permissions
+  const canCancel = canCancelStatuses.includes(task.status);
+  const canRetry = canRetryStatuses.includes(task.status);
+  const canApprove = canApproveStatuses.includes(task.status);
   const canUnblock = task.status === 'BLOCKED';
+  const defaultTab = reviewDefaultStatuses.includes(task.status) ? 'review' : 'prompt';
+  const latestProgress = getLatestProgress(task);
 
-  // Image preview state
+  // Use custom hooks for state management
+  const { messagesWidth, isDragging, startDragging } = useResizableWidth();
+  const navigator = useDropdownState();
+  const unblockModal = useModalWithField('');
+  const rejectModal = useModalWithField('');
+
+  // Preview and file state
   const [previewImage, setPreviewImage] = useState<string | null>(null);
-
-  // Unblock modal state
-  const [showUnblockModal, setShowUnblockModal] = useState(false);
-  const [unblockReason, setUnblockReason] = useState('');
-
-  // Reject modal state
-  const [showRejectModal, setShowRejectModal] = useState(false);
-  const [rejectFeedback, setRejectFeedback] = useState('');
-
-  // Resizable messenger width (persisted)
-  const [messagesWidth, setMessagesWidth] = useState(() => {
-    const saved = localStorage.getItem('waaah-messages-width');
-    return saved ? Math.max(300, Math.min(700, parseInt(saved, 10))) : 400;
-  });
-  const [isDragging, setIsDragging] = useState(false);
-
-  useEffect(() => {
-    if (!isDragging) return;
-    const handleMouseMove = (e: MouseEvent) => {
-      const newWidth = window.innerWidth - e.clientX - 20;
-      setMessagesWidth(Math.max(300, Math.min(700, newWidth)));
-    };
-    const handleMouseUp = () => {
-      setIsDragging(false);
-      localStorage.setItem('waaah-messages-width', String(messagesWidth));
-    };
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [isDragging, messagesWidth]);
-
-  // File navigator state
-  const [fileStats, setFileStats] = useState<import('@/utils/diffParser').FileStats[]>([]);
+  const [fileStats, setFileStats] = useState<FileStats[]>([]);
   const [jumpToFile, setJumpToFile] = useState<((path: string) => void) | null>(null);
-  const [navigatorOpen, setNavigatorOpen] = useState(false);
 
-  // Close navigator when clicking outside (simple version)
-  useEffect(() => {
-    if (navigatorOpen) {
-      const close = () => setNavigatorOpen(false);
-      document.addEventListener('click', close);
-      return () => document.removeEventListener('click', close);
+  // Modal handlers
+  const handleUnblockConfirm = useCallback(() => {
+    if (unblockModal.value.trim() && onUnblockTask) {
+      onUnblockTask(task.id, unblockModal.value.trim());
+      unblockModal.close();
+      onClose();
     }
-  }, [navigatorOpen]);
+  }, [unblockModal, onUnblockTask, task.id, onClose]);
+
+  const handleRejectConfirm = useCallback(() => {
+    onRejectTask(task.id, rejectModal.value.trim() || 'Changes requested');
+    rejectModal.close();
+    onClose();
+  }, [rejectModal, onRejectTask, task.id, onClose]);
+
+  const handleJumpToFile = useCallback((path: string) => {
+    jumpToFile?.(path);
+    navigator.close();
+  }, [jumpToFile, navigator]);
 
   return (
     <div
@@ -99,142 +102,44 @@ export const ExpandedCardView: React.FC<ExpandedCardViewProps> = ({
       className="absolute inset-0 z-20 bg-card border-2 border-primary flex flex-col animate-in zoom-in-95 duration-200 fill-mode-forwards shadow-lg shadow-primary/30"
       onClick={(e) => e.stopPropagation()}
     >
-      {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b-2 border-primary/30 bg-primary/10 flex-shrink-0">
-        <div className="flex items-center gap-3">
-          <Badge className={getStatusBadgeClass(task.status)}>{task.status}</Badge>
-          <span className="font-mono text-xs text-primary/70">{task.id}</span>
-        </div>
-        <div className="flex items-center gap-2">
-          {task.assignedTo && (
-            <Badge variant="outline" className="text-xs border-primary/50">
-              <User className="h-3 w-3 mr-1" />
-              {task.assignedTo}
-            </Badge>
-          )}
-          {task.createdAt && (
-            <Badge variant="outline" className="text-xs border-primary/30">
-              <Clock className="h-3 w-3 mr-1" />
-              {getTaskDuration(task)}
-            </Badge>
-          )}
-          {/* Action buttons in header */}
-          {canApprove && (
-            <Button variant="default" size="sm" className="h-8 gap-1 text-xs bg-green-600 hover:bg-green-700 text-white uppercase"
-              onClick={(e) => { onApproveTask(e, task.id); onClose(); }}>
-              <CheckCircle className="h-3 w-3" /> APPROVE
-            </Button>
-          )}
-          {canApprove && (
-            <Button variant="default" size="sm" className="h-8 gap-1 text-xs bg-purple-600 hover:bg-purple-700 text-white uppercase"
-              onClick={() => setShowRejectModal(true)}>
-              <RotateCcw className="h-3 w-3" /> REJECT
-            </Button>
-          )}
-          {canUnblock && onUnblockTask && (
-            <Button variant="default" size="sm" className="h-8 gap-1 text-xs bg-orange-600 hover:bg-orange-700 text-white uppercase"
-              onClick={() => setShowUnblockModal(true)}>
-              <RefreshCw className="h-3 w-3" /> UNBLOCK
-            </Button>
-          )}
-          {canRetry && (
-            <Button variant="outline" size="sm" className="h-8 gap-1 text-xs border-primary text-primary hover:bg-primary hover:text-black uppercase"
-              onClick={(e) => { onRetryTask(e, task.id); onClose(); }}>
-              <RefreshCw className="h-3 w-3" /> RETRY
-            </Button>
-          )}
-          {canCancel && (
-            <Button variant="destructive" size="sm" className="h-8 gap-1 text-xs bg-red-600 hover:bg-red-700 uppercase"
-              onClick={(e) => { onCancelTask(e, task.id); onClose(); }}>
-              <XCircle className="h-3 w-3" /> CANCEL
-            </Button>
-          )}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 text-primary hover:text-red-500 hover:bg-red-500/10"
-            onClick={onClose}
-          >
-            <X className="h-5 w-5" />
-          </Button>
-        </div>
-      </div>
+      <ExpandedCardHeader task={task}>
+        <TaskActionButtons
+          task={task}
+          canApprove={canApprove}
+          canUnblock={canUnblock}
+          canRetry={canRetry}
+          canCancel={canCancel}
+          onApprove={(e) => { onApproveTask(e, task.id); onClose(); }}
+          onReject={rejectModal.open}
+          onUnblock={unblockModal.open}
+          onRetry={(e) => { onRetryTask(e, task.id); onClose(); }}
+          onCancel={(e) => { onCancelTask(e, task.id); onClose(); }}
+          onClose={onClose}
+          hasUnblockHandler={!!onUnblockTask}
+        />
+      </ExpandedCardHeader>
 
-      {/* Progress Bar */}
-      {latestProgress && (
-        <div className="px-4 py-2 bg-primary/5 border-b border-primary/20 flex-shrink-0">
-          <div className="flex items-center justify-between text-xs mb-1">
-            <span className="text-primary/70">
-              {['COMPLETED', 'FAILED', 'CANCELLED'].includes(task.status)
-                ? (task.status === 'COMPLETED' ? 'Complete' : task.status)
-                : ((latestProgress.metadata as Record<string, unknown>)?.phase as string || 'In Progress')}
-            </span>
-            <span className="font-mono text-primary">
-              {['COMPLETED', 'FAILED', 'CANCELLED'].includes(task.status) ? '100' : (Number((latestProgress.metadata as Record<string, unknown>)?.percentage) || 0)}%
-            </span>
-          </div>
-          <div className="h-1 bg-primary/20 rounded-full overflow-hidden">
-            <div
-              className={`h-full transition-all duration-500 ease-out ${task.status === 'COMPLETED' ? 'bg-green-500' :
-                ['FAILED', 'CANCELLED'].includes(task.status) ? 'bg-red-500' : 'bg-primary'}`}
-              style={{ width: `${['COMPLETED', 'FAILED', 'CANCELLED'].includes(task.status) ? 100 : ((latestProgress.metadata as Record<string, unknown>)?.percentage || 0)}%` }}
-            />
-          </div>
-        </div>
-      )}
+      <TaskProgressBar task={task} latestProgress={latestProgress} />
 
-      {/* Bilateral Layout */}
       <div className="flex-1 flex flex-row min-h-0">
-        {/* Left Column: Tabs */}
-        <Tabs
-          defaultValue={['REVIEW', 'IN_REVIEW', 'PENDING_RES', 'BLOCKED'].includes(task.status) ? 'review' : 'prompt'}
-          className="flex-1 flex flex-col min-h-0 min-w-0"
-        >
+        <Tabs defaultValue={defaultTab} className="flex-1 flex flex-col min-h-0 min-w-0">
           <TabsList className="bg-transparent border-b border-primary/20 w-full justify-start rounded-none p-0 h-auto gap-0 flex-shrink-0">
             <TabsTrigger value="prompt" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-primary/10 px-4 py-2 text-sm flex items-center gap-2">
               <FileText className="h-4 w-4" /> PROMPT
             </TabsTrigger>
-
             <TabsTrigger value="timeline" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-primary/10 px-4 py-2 text-sm flex items-center gap-2">
               <Clock className="h-4 w-4" /> TIMELINE
             </TabsTrigger>
-
             <div className="relative flex items-stretch has-[[data-state=active]]:bg-primary/10">
               <TabsTrigger value="review" className="peer rounded-none border-b-2 border-transparent bg-transparent px-4 py-2 text-sm flex items-center gap-2 data-[state=active]:bg-transparent data-[state=active]:border-transparent">
                 <CheckCircle className="h-4 w-4" /> REVIEW {fileStats.length > 0 && <span className="text-xs opacity-70">({fileStats.length})</span>}
               </TabsTrigger>
-              {fileStats.length > 1 && (
-                <>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setNavigatorOpen(!navigatorOpen); }}
-                    className="w-9 border-l border-r border-primary/20 flex items-center justify-center hover:bg-primary/20 text-primary/70 hover:text-primary transition-colors focus:outline-none"
-                  >
-                    <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${navigatorOpen ? 'rotate-180' : ''}`} />
-                  </button>
-                  {navigatorOpen && (
-                    <div className="absolute top-full left-0 mt-0 w-64 bg-popover/95 backdrop-blur z-50 shadow-xl border border-primary/20 rounded-b-md overflow-hidden flex flex-col max-h-[60vh] animate-in slide-in-from-top-2 fade-in zoom-in-95 duration-200">
-                      <div className="overflow-y-auto p-1 bg-background">
-                        {fileStats.map(stat => (
-                          <button
-                            key={stat.path}
-                            className="w-full text-left px-2 py-1.5 hover:bg-primary/10 flex items-center gap-2 group border-b border-primary/10 last:border-0"
-                            onClick={() => { jumpToFile?.(stat.path); setNavigatorOpen(false); }}
-                          >
-                            <div className="flex-1 min-w-0">
-                              <p className="text-xs font-mono text-primary truncate" title={stat.path}>{stat.path.split('/').pop()}</p>
-                              <p className="text-compact text-primary/40 truncate">{stat.path}</p>
-                            </div>
-                            <div className="flex items-center gap-1 shrink-0">
-                              {stat.additions > 0 && <span className="text-compact text-green-400">+{stat.additions}</span>}
-                              {stat.deletions > 0 && <span className="text-compact text-red-400">−{stat.deletions}</span>}
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </>
-              )}
+              <FileNavigator
+                fileStats={fileStats}
+                navigatorOpen={navigator.isOpen}
+                onToggle={navigator.toggle}
+                onJumpToFile={handleJumpToFile}
+              />
               <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-primary hidden peer-data-[state=active]:block pointer-events-none" />
             </div>
             <TabsTrigger value="context" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-primary/10 px-4 py-2 text-sm flex items-center gap-2">
@@ -243,7 +148,6 @@ export const ExpandedCardView: React.FC<ExpandedCardViewProps> = ({
           </TabsList>
 
           <div className="flex-1 overflow-y-auto">
-            {/* PROMPT TAB */}
             <TabsContent value="prompt" className="m-0 p-4 h-full flex flex-col">
               <div className="flex-1 flex flex-col space-y-3 min-h-0">
                 <div className="shrink-0">
@@ -257,14 +161,10 @@ export const ExpandedCardView: React.FC<ExpandedCardViewProps> = ({
               </div>
             </TabsContent>
 
-
-
-            {/* TIMELINE TAB - Interleaved chronological view */}
             <TabsContent value="timeline" className="m-0 p-4 h-full">
               <TimelineTab task={task} />
             </TabsContent>
 
-            {/* REVIEW TAB */}
             <TabsContent value="review" className="m-0 p-4 h-full overflow-y-auto">
               <div className="space-y-4">
                 <div>
@@ -285,100 +185,37 @@ export const ExpandedCardView: React.FC<ExpandedCardViewProps> = ({
               </div>
             </TabsContent>
 
-            {/* CONTEXT TAB */}
             <TabsContent value="context" className="m-0 p-4 h-full flex flex-col">
               <ContextTab task={task} onUpdateTask={onUpdateTask} />
             </TabsContent>
           </div>
         </Tabs>
 
-        {/* Drag Handle */}
-        <div className={`w-1 bg-primary/20 hover:bg-primary/50 cursor-ew-resize flex-shrink-0 ${isDragging ? 'bg-primary' : ''}`} onMouseDown={() => setIsDragging(true)} />
+        <div
+          className={`w-1 bg-primary/20 hover:bg-primary/50 cursor-ew-resize flex-shrink-0 ${isDragging ? 'bg-primary' : ''}`}
+          onMouseDown={startDragging}
+        />
 
-        {/* Right Column: Message Thread */}
         <MessageThread task={task} width={messagesWidth} onSendComment={onSendComment} onPreviewImage={setPreviewImage} />
       </div>
 
       <ImagePreviewModal imageUrl={previewImage} onClose={() => setPreviewImage(null)} />
 
-      {/* Unblock Modal */}
-      {showUnblockModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-          <div className="bg-card border-2 border-orange-500 p-6 rounded-lg shadow-lg max-w-md w-full">
-            <h3 className="text-lg font-bold text-orange-500 mb-4">Unblock Task</h3>
-            <p className="text-sm text-primary/70 mb-4">
-              Provide clarification or answer to help the agent proceed:
-            </p>
-            <textarea
-              value={unblockReason}
-              onChange={(e) => setUnblockReason(e.target.value)}
-              placeholder="Enter reason for unblocking (required)..."
-              className="w-full h-24 p-3 text-sm bg-black/30 border border-primary/30 text-foreground placeholder:text-primary/40 focus:outline-none focus:border-orange-500 resize-none"
-              autoFocus
-            />
-            <div className="flex gap-3 mt-4 justify-end">
-              <button
-                onClick={() => { setShowUnblockModal(false); setUnblockReason(''); }}
-                className="px-4 py-2 text-sm border border-primary/30 text-primary/70 hover:bg-primary/10"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  if (unblockReason.trim() && onUnblockTask) {
-                    onUnblockTask(task.id, unblockReason.trim());
-                    setShowUnblockModal(false);
-                    setUnblockReason('');
-                    onClose();
-                  }
-                }}
-                disabled={!unblockReason.trim()}
-                className="px-4 py-2 text-sm bg-orange-600 text-white hover:bg-orange-700 disabled:opacity-50"
-              >
-                Unblock Task
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <UnblockModal
+        show={unblockModal.show}
+        reason={unblockModal.value}
+        onReasonChange={unblockModal.setValue}
+        onConfirm={handleUnblockConfirm}
+        onCancel={unblockModal.close}
+      />
 
-      {/* Reject Modal (Request Changes) */}
-      {showRejectModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-          <div className="bg-card border-2 border-purple-500 p-6 rounded-lg shadow-lg max-w-md w-full">
-            <h3 className="text-lg font-bold text-purple-500 mb-4">REQUEST CHANGES</h3>
-            <p className="text-sm text-primary/70 mb-4">
-              Provide feedback on what needs to be fixed (optional if review comments exist).
-            </p>
-            <textarea
-              value={rejectFeedback}
-              onChange={(e) => setRejectFeedback(e.target.value)}
-              placeholder="What's wrong? What needs to be fixed? (optional)..."
-              className="w-full h-32 p-3 text-sm bg-black/30 border border-primary/30 text-foreground placeholder:text-primary/40 focus:outline-none focus:border-purple-500 resize-none"
-              autoFocus
-            />
-            <div className="flex gap-3 mt-4 justify-end">
-              <button
-                onClick={() => { setShowRejectModal(false); setRejectFeedback(''); }}
-                className="px-4 py-2 text-sm border border-primary/30 text-primary/70 hover:bg-primary/10 uppercase"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  onRejectTask(task.id, rejectFeedback.trim() || 'Changes requested');
-                  setShowRejectModal(false);
-                  setRejectFeedback('');
-                  onClose();
-                }}
-                className="px-4 py-2 text-sm bg-purple-600 text-white hover:bg-purple-700 uppercase"
-              >
-                REQUEST CHANGES
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <RejectModal
+        show={rejectModal.show}
+        feedback={rejectModal.value}
+        onFeedbackChange={rejectModal.setValue}
+        onConfirm={handleRejectConfirm}
+        onCancel={rejectModal.close}
+      />
     </div>
   );
 };
