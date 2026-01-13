@@ -22,6 +22,7 @@ interface KanbanBoardProps {
   onViewHistory?: () => void;
   onTaskClick?: (task: Task) => void;
   onUpdateTask?: (taskId: string, updates: Record<string, any>) => Promise<void>;
+  onExpandChange?: (isExpanded: boolean) => void;
   onLoadMoreCompleted?: () => void;
   onLoadMoreCancelled?: () => void;
   hasMoreCompleted?: boolean;
@@ -66,7 +67,8 @@ export const KanbanBoard = React.memo(function KanbanBoard({
   hasMoreCancelled,
   loadingMore,
   onUpdateTask,
-  searchQuery = ''
+  searchQuery = '',
+  onExpandChange
 }: KanbanBoardProps) {
   // Expanded card state
   const [expandedTask, setExpandedTask] = useState<Task | null>(null);
@@ -136,11 +138,13 @@ export const KanbanBoard = React.memo(function KanbanBoard({
   // Handlers
   const handleCardClick = useCallback((task: Task) => {
     setExpandedTask(task);
-  }, []);
+    onExpandChange?.(true);
+  }, [onExpandChange]);
 
   const handleCloseExpanded = useCallback(() => {
     setExpandedTask(null);
-  }, []);
+    onExpandChange?.(false);
+  }, [onExpandChange]);
 
 
 
