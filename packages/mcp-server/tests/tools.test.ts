@@ -318,4 +318,241 @@ describe('ToolHandler', () => {
       expect(result.content[0].text).toContain('String error');
     });
   });
+
+  describe('wait_for_task', () => {
+    it('returns error for invalid args', async () => {
+      const result = await tools.wait_for_task({});
+      expect(result.isError).toBe(true);
+    });
+
+    it('returns NOT_FOUND for non-existent task', async () => {
+      const result = await tools.wait_for_task({ taskId: 'nonexistent-task-xyz', timeout: 1 });
+      expect(result.isError).toBe(true);
+      const data = JSON.parse(result.content[0].text);
+      expect(data.status).toBe('NOT_FOUND');
+    });
+
+    it('returns task completion status', async () => {
+      const taskId = `task-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+      queue.enqueue({
+        id: taskId,
+        command: 'execute_prompt',
+        prompt: 'Test',
+        from: { type: 'user', id: 'u', name: 'U' },
+        to: { agentId: 'test-dev' },
+        priority: 'normal',
+        status: 'COMPLETED',
+        createdAt: Date.now()
+      });
+
+      const result = await tools.wait_for_task({ taskId, timeout: 1 });
+      const data = JSON.parse(result.content[0].text);
+      expect(data.taskId).toBe(taskId);
+      expect(data.completed).toBe(true);
+    });
+  });
+
+  describe('broadcast_system_prompt', () => {
+    it('returns error for invalid args', async () => {
+      const result = await tools.broadcast_system_prompt({});
+      expect(result.isError).toBe(true);
+    });
+
+    it('broadcasts to agents', async () => {
+      const agentId = uid();
+      registry.register({ id: agentId, displayName: '@BroadcastTest', capabilities: ['code-writing'] });
+
+      const result = await tools.broadcast_system_prompt({
+        promptType: 'SYSTEM_MESSAGE',
+        message: 'Test broadcast',
+        broadcast: true
+      });
+
+      const data = JSON.parse(result.content[0].text);
+      expect(data.success).toBe(true);
+      expect(data.targetCount).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  describe('scaffold_plan', () => {
+    it('returns error for invalid args', async () => {
+      const result = await tools.scaffold_plan({});
+      expect(result.isError).toBe(true);
+    });
+
+    it('returns plan template for any taskId', async () => {
+      // scaffold_plan just returns a template - doesn't validate task exists
+      const result = await tools.scaffold_plan({ taskId: 'any-task-id' });
+      expect(result.content[0].text).toContain('Implementation Plan');
+      expect(result.content[0].text).toContain('any-task-id');
+    });
+  });
+
+  describe('get_review_comments', () => {
+    it('returns error for invalid args', async () => {
+      const result = await tools.get_review_comments({}, ctx.db);
+      expect(result.isError).toBe(true);
+    });
+
+    it('returns empty array for task with no comments', async () => {
+      const taskId = `task-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+      queue.enqueue({
+        id: taskId,
+        command: 'execute_prompt',
+        prompt: 'Test',
+        from: { type: 'user', id: 'u', name: 'U' },
+        to: { agentId: 'test-dev' },
+        priority: 'normal',
+        status: 'ASSIGNED',
+        createdAt: Date.now()
+      });
+
+      const result = await tools.get_review_comments({ taskId }, ctx.db);
+      const comments = JSON.parse(result.content[0].text);
+      expect(comments).toEqual([]);
+    });
+  });
+
+  describe('resolve_review_comment', () => {
+    it('returns error for invalid args', async () => {
+      const result = await tools.resolve_review_comment({}, ctx.db);
+      expect(result.isError).toBe(true);
+    });
+
+    it('resolves nonexistent comment (no-op)', async () => {
+      // UPDATE affects 0 rows but doesn't error
+      const result = await tools.resolve_review_comment({
+        taskId: 'task-123',
+        commentId: 'nonexistent-comment'
+      }, ctx.db);
+      expect(result.content[0].text).toContain('resolved');
+    });
+  });
+
+  describe('update_progress', () => {
+    it('returns error for invalid args', async () => {
+      const result = await tools.update_progress({});
+      expect(result.isError).toBe(true);
+    });
+
+    it('records progress update', async () => {
+      const agentId = uid();
+      const taskId = `task-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+      registry.register({ id: agentId, displayName: '@ProgressTest', capabilities: ['code-writing'] });
+
+      queue.enqueue({
+        id: taskId,
+        command: 'execute_prompt',
+        prompt: 'Test',
+        from: { type: 'user', id: 'u', name: 'U' },
+        to: { agentId },
+        priority: 'normal',
+        status: 'ASSIGNED',
+        createdAt: Date.now()
+      });
+
+      const result = await tools.update_progress({
+        taskId,
+        agentId,
+        message: 'Working on implementation',
+        phase: 'BUILDING',
+        percentage: 50
+      });
+
+      const data = JSON.parse(result.content[0].text);
+      expect(data.recorded).toBe(true);
+    });
+  });
+
+  describe('block_task', () => {
+    it('returns error for invalid args', async () => {
+      const result = await tools.block_task({});
+      expect(result.isError).toBe(true);
+    });
+
+    it('blocks an assigned task', async () => {
+      const taskId = `task-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+      queue.enqueue({
+        id: taskId,
+        command: 'execute_prompt',
+        prompt: 'Test',
+        from: { type: 'user', id: 'u', name: 'U' },
+        to: { agentId: 'test-dev' },
+        priority: 'normal',
+        status: 'ASSIGNED',
+        createdAt: Date.now()
+      });
+
+      const result = await tools.block_task({
+        taskId,
+        reason: 'clarification',
+        question: 'Need more info',
+        summary: 'Work in progress'
+      });
+
+      expect(result.content[0].text).toContain('blocked');
+      expect(queue.getTask(taskId)?.status).toBe('BLOCKED');
+    });
+  });
+
+  describe('answer_task', () => {
+    it('returns error for invalid args', async () => {
+      const result = await tools.answer_task({});
+      expect(result.isError).toBe(true);
+    });
+
+    it('answers a blocked task', async () => {
+      const taskId = `task-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+      queue.enqueue({
+        id: taskId,
+        command: 'execute_prompt',
+        prompt: 'Test',
+        from: { type: 'user', id: 'u', name: 'U' },
+        to: { agentId: 'test-dev' },
+        priority: 'normal',
+        status: 'BLOCKED',
+        createdAt: Date.now()
+      });
+
+      const result = await tools.answer_task({
+        taskId,
+        answer: 'Here is the clarification'
+      });
+
+      expect(result.content[0].text).toContain('unblocked');
+      expect(queue.getTask(taskId)?.status).toBe('QUEUED');
+    });
+  });
+
+  describe('get_task_context', () => {
+    it('returns error for invalid args', async () => {
+      const result = await tools.get_task_context({});
+      expect(result.isError).toBe(true);
+    });
+
+    it('returns error for non-existent task', async () => {
+      const result = await tools.get_task_context({ taskId: 'nonexistent-task' });
+      expect(result.isError).toBe(true);
+    });
+
+    it('returns task context', async () => {
+      const taskId = `task-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+      queue.enqueue({
+        id: taskId,
+        command: 'execute_prompt',
+        prompt: 'Test context',
+        from: { type: 'user', id: 'u', name: 'U' },
+        to: { agentId: 'test-dev' },
+        priority: 'normal',
+        status: 'ASSIGNED',
+        createdAt: Date.now()
+      });
+
+      const result = await tools.get_task_context({ taskId });
+
+      const data = JSON.parse(result.content[0].text);
+      expect(data.taskId).toBe(taskId);
+      expect(data.prompt).toBe('Test context');
+    });
+  });
 });

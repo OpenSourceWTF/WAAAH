@@ -133,5 +133,55 @@ describe('ReviewHandlers', () => {
       // Should have calls for both update and insert
       expect(runFn).toHaveBeenCalled();
     });
+
+    it('handles missing parent comment gracefully', async () => {
+      const runFn = vi.fn();
+      const mockDb = {
+        prepare: vi.fn().mockReturnValue({
+          run: runFn,
+          get: vi.fn().mockReturnValue(null) // No parent comment found
+        })
+      };
+
+      const result = await handlers.resolve_review_comment({
+        taskId: 'task-1',
+        commentId: 'nonexistent',
+        response: 'Response to missing comment'
+      }, mockDb);
+
+      // Should still resolve, just won't insert reply
+      expect(result.content[0].text).toContain('resolved');
+    });
+
+    it('handles invalid args', async () => {
+      const mockDb = { prepare: vi.fn() };
+      const result = await handlers.resolve_review_comment({}, mockDb);
+      expect((result as any).isError).toBe(true);
+    });
+  });
+
+  describe('get_review_comments error handling', () => {
+    it('handles database errors', async () => {
+      const mockDb = {
+        prepare: vi.fn().mockImplementation(() => {
+          throw new Error('DB connection failed');
+        })
+      };
+
+      const result = await handlers.get_review_comments({ taskId: 'task-1' }, mockDb);
+      expect((result as any).isError).toBe(true);
+    });
+  });
+
+  describe('handleError', () => {
+    it('logs errors and returns MCP error format', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      // Trigger error through invalid input
+      const result = await handlers.scaffold_plan({ invalidField: true });
+
+      expect((result as any).isError).toBe(true);
+      consoleSpy.mockRestore();
+    });
   });
 });

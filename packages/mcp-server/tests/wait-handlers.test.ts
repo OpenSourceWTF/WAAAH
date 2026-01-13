@@ -43,6 +43,54 @@ describe('WaitHandlers', () => {
 
       expect((result as any).isError).toBe(true);
     });
+
+    it('returns NOT_FOUND when task does not exist', async () => {
+      const mockRegistry: any = { get: vi.fn() };
+      const mockQueue: any = { waitForTaskCompletion: vi.fn().mockResolvedValue(null) };
+
+      const handlers = new WaitHandlers(mockRegistry, mockQueue);
+      const result = await handlers.wait_for_task({ taskId: 'nonexistent' });
+
+      expect((result as any).isError).toBe(true);
+      const parsed = JSON.parse((result as any).content[0].text);
+      expect(parsed.status).toBe('NOT_FOUND');
+    });
+
+    it('returns task completion status for COMPLETED task', async () => {
+      const mockRegistry: any = { get: vi.fn() };
+      const mockQueue: any = {
+        waitForTaskCompletion: vi.fn().mockResolvedValue({
+          id: 'task-1',
+          status: 'COMPLETED',
+          response: 'Done'
+        })
+      };
+
+      const handlers = new WaitHandlers(mockRegistry, mockQueue);
+      const result = await handlers.wait_for_task({ taskId: 'task-1' });
+
+      const parsed = JSON.parse((result as any).content[0].text);
+      expect(parsed.taskId).toBe('task-1');
+      expect(parsed.status).toBe('COMPLETED');
+      expect(parsed.completed).toBe(true);
+    });
+
+    it('returns task status for non-terminal task', async () => {
+      const mockRegistry: any = { get: vi.fn() };
+      const mockQueue: any = {
+        waitForTaskCompletion: vi.fn().mockResolvedValue({
+          id: 'task-1',
+          status: 'IN_PROGRESS',
+          response: null
+        })
+      };
+
+      const handlers = new WaitHandlers(mockRegistry, mockQueue);
+      const result = await handlers.wait_for_task({ taskId: 'task-1' });
+
+      const parsed = JSON.parse((result as any).content[0].text);
+      expect(parsed.completed).toBe(false);
+    });
   });
 
   describe('broadcast_system_prompt', () => {
@@ -54,6 +102,89 @@ describe('WaitHandlers', () => {
       const result = await handlers.broadcast_system_prompt({});
 
       expect((result as any).isError).toBe(true);
+    });
+
+    it('broadcasts to all agents when broadcast=true', async () => {
+      const mockRegistry: any = {
+        getAll: vi.fn().mockReturnValue([
+          { id: 'agent-1', capabilities: [] },
+          { id: 'agent-2', capabilities: [] }
+        ])
+      };
+      const mockQueue: any = { queueSystemPrompt: vi.fn() };
+
+      const handlers = new WaitHandlers(mockRegistry, mockQueue);
+      const result = await handlers.broadcast_system_prompt({
+        promptType: 'SYSTEM_MESSAGE',
+        message: 'Test broadcast',
+        broadcast: true
+      });
+
+      const parsed = JSON.parse((result as any).content[0].text);
+      expect(parsed.success).toBe(true);
+      expect(parsed.targetCount).toBe(2);
+      expect(mockQueue.queueSystemPrompt).toHaveBeenCalledTimes(2);
+    });
+
+    it('broadcasts to agents with specific capability', async () => {
+      const mockRegistry: any = {
+        getAll: vi.fn().mockReturnValue([
+          { id: 'agent-1', capabilities: ['code-writing'] },
+          { id: 'agent-2', capabilities: ['spec-writing'] },
+          { id: 'agent-3', capabilities: ['code-writing'] }
+        ])
+      };
+      const mockQueue: any = { queueSystemPrompt: vi.fn() };
+
+      const handlers = new WaitHandlers(mockRegistry, mockQueue);
+      const result = await handlers.broadcast_system_prompt({
+        promptType: 'WORKFLOW_UPDATE',
+        message: 'Code update',
+        targetCapability: 'code-writing'
+      });
+
+      const parsed = JSON.parse((result as any).content[0].text);
+      expect(parsed.success).toBe(true);
+      expect(parsed.targetCount).toBe(2);
+      expect(parsed.targets).toContain('agent-1');
+      expect(parsed.targets).toContain('agent-3');
+    });
+
+    it('sends to specific agent when targetAgentId provided', async () => {
+      const mockRegistry: any = { getAll: vi.fn().mockReturnValue([]) };
+      const mockQueue: any = { queueSystemPrompt: vi.fn() };
+
+      const handlers = new WaitHandlers(mockRegistry, mockQueue);
+      const result = await handlers.broadcast_system_prompt({
+        promptType: 'EVICTION_NOTICE',
+        message: 'Please shutdown',
+        targetAgentId: 'specific-agent'
+      });
+
+      const parsed = JSON.parse((result as any).content[0].text);
+      expect(parsed.success).toBe(true);
+      expect(parsed.targetCount).toBe(1);
+      expect(parsed.targets).toContain('specific-agent');
+    });
+
+    it('returns error when no agents matched', async () => {
+      const mockRegistry: any = {
+        getAll: vi.fn().mockReturnValue([
+          { id: 'agent-1', capabilities: ['spec-writing'] }
+        ])
+      };
+      const mockQueue: any = {};
+
+      const handlers = new WaitHandlers(mockRegistry, mockQueue);
+      const result = await handlers.broadcast_system_prompt({
+        promptType: 'SYSTEM_MESSAGE',
+        message: 'Test',
+        targetCapability: 'code-writing'  // valid capability but no agent has it
+      });
+
+      const parsed = JSON.parse((result as any).content[0].text);
+      expect(parsed.success).toBe(false);
+      expect(parsed.error).toContain('No agents');
     });
   });
 });

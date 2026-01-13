@@ -142,6 +142,34 @@ describe('Admin Agents Routes', () => {
       const data = await res.json();
       expect(Array.isArray(data)).toBe(true);
     });
+
+    it('includes workspaces from registered agents', async () => {
+      // Register agent with workspace context
+      await fetch(`${baseUrl}/mcp/tools/register_agent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          agentId: 'workspace-test-agent',
+          displayName: '@WorkspaceTest',
+          capabilities: ['code-writing'],
+          workspaceContext: {
+            type: 'local',
+            path: '/test/workspace/path',
+            repoId: 'test/repo'
+          }
+        })
+      });
+
+      const res = await fetch(`${baseUrl}/admin/workspaces`);
+      const workspaces = await res.json();
+
+      // Should include the workspace from the registered agent
+      const testWorkspace = workspaces.find((w: any) =>
+        w.path === '/test/workspace/path' || w.path === 'test/repo'
+      );
+      expect(testWorkspace).toBeDefined();
+      expect(testWorkspace.agentCount).toBeGreaterThanOrEqual(1);
+    });
   });
 
   describe('GET /admin/workspaces/:workspaceId/capabilities', () => {
@@ -149,6 +177,59 @@ describe('Admin Agents Routes', () => {
       const encodedPath = encodeURIComponent('/nonexistent/workspace');
       const res = await fetch(`${baseUrl}/admin/workspaces/${encodedPath}/capabilities`);
       expect(res.status).toBe(404);
+    });
+
+    it('returns capabilities for workspace with agents', async () => {
+      // Register agent with workspace context and capabilities
+      await fetch(`${baseUrl}/mcp/tools/register_agent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          agentId: 'cap-test-agent',
+          displayName: '@CapTest',
+          capabilities: ['code-writing', 'spec-writing', 'test-writing'],
+          workspaceContext: {
+            type: 'local',
+            path: '/capabilities/test/workspace',
+            repoId: 'cap/repo'
+          }
+        })
+      });
+
+      const encodedPath = encodeURIComponent('/capabilities/test/workspace');
+      const res = await fetch(`${baseUrl}/admin/workspaces/${encodedPath}/capabilities`);
+
+      expect(res.ok).toBe(true);
+      const data = await res.json();
+
+      expect(data.capabilities).toContain('code-writing');
+      expect(data.capabilities).toContain('spec-writing');
+      expect(data.hasCodeWriting).toBe(true);
+      expect(data.hasSpecWriting).toBe(true);
+    });
+
+    it('works with repoId as workspace identifier', async () => {
+      // Register agent using repoId
+      await fetch(`${baseUrl}/mcp/tools/register_agent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          agentId: 'repoid-test-agent',
+          displayName: '@RepoIdTest',
+          capabilities: ['doc-writing'],
+          workspaceContext: {
+            type: 'github',
+            repoId: 'owner/repo-name'
+          }
+        })
+      });
+
+      const encodedPath = encodeURIComponent('owner/repo-name');
+      const res = await fetch(`${baseUrl}/admin/workspaces/${encodedPath}/capabilities`);
+
+      expect(res.ok).toBe(true);
+      const data = await res.json();
+      expect(data.hasSpecWriting).toBe(true); // doc-writing counts as spec-writing
     });
   });
 });

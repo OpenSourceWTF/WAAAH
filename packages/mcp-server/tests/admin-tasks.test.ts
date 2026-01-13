@@ -251,6 +251,15 @@ describe('Admin Tasks Routes', () => {
       expect(data.error).toContain('Reason');
     });
 
+    it('rejects empty reason', async () => {
+      const res = await fetch(`${baseUrl}/admin/tasks/any-task/unblock`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: '   ' })
+      });
+      expect(res.status).toBe(400);
+    });
+
     it('returns 404 for unknown task', async () => {
       const res = await fetch(`${baseUrl}/admin/tasks/nonexistent/unblock`, {
         method: 'POST',
@@ -258,6 +267,101 @@ describe('Admin Tasks Routes', () => {
         body: JSON.stringify({ reason: 'Test reason' })
       });
       expect(res.status).toBe(404);
+    });
+
+    it('returns 400 when task is not BLOCKED', async () => {
+      // Create a task (starts in QUEUED status)
+      const createRes = await fetch(`${baseUrl}/admin/enqueue`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: 'Unblock non-blocked test', workspaceId: 'OpenSourceWTF/WAAAH' })
+      });
+      const { taskId } = await createRes.json();
+
+      // Try to unblock a QUEUED task (should fail)
+      const res = await fetch(`${baseUrl}/admin/tasks/${taskId}/unblock`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: 'Test reason' })
+      });
+      expect(res.status).toBe(400);
+      const data = await res.json();
+      expect(data.error).toContain('not BLOCKED');
+    });
+
+    it('successfully unblocks a BLOCKED task', async () => {
+      // Register an agent
+      await fetch(`${baseUrl}/mcp/tools/register_agent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          agentId: 'unblock-test-agent',
+          displayName: '@UnblockTest',
+          capabilities: ['code-writing'],
+          workspaceContext: { type: 'github', repoId: 'OpenSourceWTF/WAAAH' }
+        })
+      });
+
+      // Create and enqueue a task
+      const createRes = await fetch(`${baseUrl}/admin/enqueue`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: 'Unblock success test',
+          workspaceId: 'OpenSourceWTF/WAAAH',
+          requiredCapabilities: ['code-writing']
+        })
+      });
+      const { taskId } = await createRes.json();
+
+      // Start wait_for_prompt, get task assigned, ack it
+      // Simpler: Directly block the task via send_response with BLOCKED status
+      // First, we need to get the task to ASSIGNED state
+
+      // Wait for prompt to get task assignment
+      const waitRes = await fetch(`${baseUrl}/mcp/tools/wait_for_prompt`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agentId: 'unblock-test-agent', timeout: 1 })
+      });
+      const waitData = await waitRes.json();
+
+      if (waitData.content?.[0]?.text?.includes(taskId)) {
+        // Got the task, ack it
+        await fetch(`${baseUrl}/mcp/tools/ack_task`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ taskId, agentId: 'unblock-test-agent' })
+        });
+
+        // Block the task
+        await fetch(`${baseUrl}/mcp/tools/block_task`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            taskId,
+            reason: 'clarification',
+            question: 'Need more info',
+            summary: 'Work in progress'
+          })
+        });
+
+        // Now unblock it
+        const unblockRes = await fetch(`${baseUrl}/admin/tasks/${taskId}/unblock`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reason: 'Got the clarification' })
+        });
+
+        expect(unblockRes.ok).toBe(true);
+        const unblockData = await unblockRes.json();
+        expect(unblockData.success).toBe(true);
+
+        // Verify task is now QUEUED
+        const taskRes = await fetch(`${baseUrl}/admin/tasks/${taskId}`);
+        const task = await taskRes.json();
+        expect(task.status).toBe('QUEUED');
+      }
     });
   });
 

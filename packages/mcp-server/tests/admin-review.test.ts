@@ -205,5 +205,52 @@ describe('Admin Review Routes', () => {
 
       expect(res.body.success).toBe(true);
     });
+
+    it('handles resolve when parent comment missing gracefully', async () => {
+      // Try to resolve a non-existent comment with response
+      const res = await request(app)
+        .post('/admin/tasks/task-1/review-comments/nonexistent-comment/resolve')
+        .send({ response: 'Fixed' })
+        .expect(200);
+
+      // Still succeeds (no-op update)
+      expect(res.body.success).toBe(true);
+    });
+  });
+
+  describe('Error handling', () => {
+    it('handles approve error (500)', async () => {
+      // Mock queue methods to throw
+      mockQueue.addMessage = () => { throw new Error('DB write failed'); };
+
+      const res = await request(app)
+        .post('/admin/tasks/existing-task/approve')
+        .expect(500);
+
+      expect(res.body.error).toContain('Failed to approve');
+    });
+
+    it('handles reject error (500)', async () => {
+      mockQueue.addMessage = () => { throw new Error('DB write failed'); };
+
+      const res = await request(app)
+        .post('/admin/tasks/existing-task/reject')
+        .send({ feedback: 'Rejected' })
+        .expect(500);
+
+      expect(res.body.error).toContain('Failed to reject');
+    });
+
+    it('handles review comment creation error (500)', async () => {
+      // Close DB to cause error
+      db.close();
+
+      const res = await request(app)
+        .post('/admin/tasks/task-1/review-comments')
+        .send({ filePath: 'src/file.ts', lineNumber: 10, content: 'Comment' })
+        .expect(500);
+
+      expect(res.body.error).toContain('Failed to add');
+    });
   });
 });
