@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { useToast } from "@/components/ui/ToastProvider";
+import { useToast, NotificationCenter } from "@/components/ui/ToastProvider";
 import { Skull, Sun, Moon, Search, Plus } from "lucide-react";
 import { KanbanBoard } from './KanbanBoard';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -305,11 +305,11 @@ export function Dashboard() {
             <Button variant="ghost" size="icon" className={`h-8 w-8 ${theme === 'DARK' ? 'bg-primary text-primary-foreground' : 'text-primary'}`} onClick={() => setTheme('DARK')} title="Dark Mode"><Moon className="h-4 w-4" /></Button>
             <Button variant="ghost" size="icon" className={`h-8 w-8 ${theme === 'WAAAH' ? 'bg-primary text-primary-foreground' : 'text-primary'}`} onClick={() => setTheme('WAAAH')} title="WAAAH Mode"><Skull className="h-4 w-4" /></Button>
           </div>
+          <NotificationCenter />
           <Badge variant={connected ? "default" : "destructive"} className="gap-2 text-sm px-3 py-1 border border-primary/50">
             <span className={`inline-block h-2 w-2 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500'} ${connected ? 'animate-pulse' : ''}`}></span>
             {connected ? 'CONNECTED' : 'DISCONNECTED'}
           </Badge>
-
         </div>
       </header>
 
