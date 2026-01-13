@@ -25,6 +25,11 @@ interface ToastContextValue {
   setConfig: (config: Partial<ToastConfig>) => void;
   // Alias for compatibility
   showToast: (message: string, type?: ToastType) => void;
+  // Notification history
+  history: Toast[];
+  unreadCount: number;
+  clearHistory: () => void;
+  markAllRead: () => void;
 }
 
 interface ToastConfig {
@@ -110,7 +115,7 @@ function ToastContainer({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id
   if (toasts.length === 0) return null;
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-md">
+    <div className="fixed bottom-4 right-4 z-[100] flex flex-col gap-2 max-w-md">
       {toasts.map((toast) => (
         <ToastItem
           key={toast.id}
@@ -131,9 +136,13 @@ interface ToastProviderProps {
  *
  * Automatically subscribes to Socket.io events and shows relevant toasts.
  */
+const MAX_HISTORY = 20;
+
 export function ToastProvider({ children }: ToastProviderProps) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [config, setConfigState] = useState<ToastConfig>(defaultConfig);
+  const [history, setHistory] = useState<Toast[]>([]);
+  const [lastReadTime, setLastReadTime] = useState<number>(Date.now());
 
   // Generate unique ID for each toast
   const generateId = () => `toast-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -148,6 +157,8 @@ export function ToastProvider({ children }: ToastProviderProps) {
       createdAt: Date.now(),
     };
     setToasts((prev) => [...prev, toast]);
+    // Also add to history (keep last MAX_HISTORY items, newest first)
+    setHistory((prev) => [toast, ...prev].slice(0, MAX_HISTORY));
     return id;
   }, []);
 
@@ -226,6 +237,20 @@ export function ToastProvider({ children }: ToastProviderProps) {
     };
   }, [config.enabledEvents, addToast]);
 
+  // Clear all notification history
+  const clearHistory = useCallback(() => {
+    setHistory([]);
+    setLastReadTime(Date.now());
+  }, []);
+
+  // Mark all notifications as read
+  const markAllRead = useCallback(() => {
+    setLastReadTime(Date.now());
+  }, []);
+
+  // Count unread notifications (created after lastReadTime)
+  const unreadCount = history.filter((t) => t.createdAt > lastReadTime).length;
+
   const value: ToastContextValue = {
     toasts,
     addToast,
@@ -233,6 +258,10 @@ export function ToastProvider({ children }: ToastProviderProps) {
     config,
     setConfig,
     showToast: addToast, // Alias for compatibility
+    history,
+    unreadCount,
+    clearHistory,
+    markAllRead,
   };
 
   return (
@@ -240,6 +269,130 @@ export function ToastProvider({ children }: ToastProviderProps) {
       {children}
       <ToastContainer toasts={toasts} onDismiss={removeToast} />
     </ToastContext.Provider>
+  );
+}
+
+/**
+ * NotificationCenter - Dropdown to show notification history
+ */
+export function NotificationCenter() {
+  const { history, unreadCount, clearHistory, markAllRead } = useToast();
+  const [isOpen, setIsOpen] = useState(false);
+
+  // Format relative time for notifications
+  const formatTime = (timestamp: number) => {
+    const diff = Date.now() - timestamp;
+    const minutes = Math.floor(diff / 60000);
+    if (minutes < 1) return 'now';
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    return `${Math.floor(hours / 24)}d ago`;
+  };
+
+  // Close dropdown when clicking outside
+  const handleClickOutside = useCallback(() => {
+    if (isOpen) {
+      setIsOpen(false);
+      markAllRead();
+    }
+  }, [isOpen, markAllRead]);
+
+  return (
+    <div className="relative">
+      {/* Bell button */}
+      <button
+        onClick={() => {
+          setIsOpen(!isOpen);
+          if (!isOpen) markAllRead();
+        }}
+        className="relative w-10 h-10 flex items-center justify-center border border-primary/30 hover:bg-primary/20 transition-colors"
+        title="Notifications"
+      >
+        <svg
+          className="h-5 w-5 text-primary"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={2}
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+        </svg>
+        {/* Unread badge */}
+        {unreadCount > 0 && (
+          <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] flex items-center justify-center text-[10px] font-bold bg-red-500 text-white rounded-full px-1">
+            {unreadCount > 9 ? '9+' : unreadCount}
+          </span>
+        )}
+      </button>
+
+      {/* Dropdown */}
+      {isOpen && (
+        <>
+          {/* Backdrop */}
+          <div className="fixed inset-0 z-40" onClick={handleClickOutside} />
+
+          {/* Dropdown panel */}
+          <div className="absolute right-0 top-full mt-2 w-80 max-h-96 overflow-hidden bg-card border-2 border-primary z-50 shadow-lg animate-card-expand">
+            {/* Header */}
+            <div className="flex items-center justify-between px-3 py-2 border-b border-primary/30 bg-primary/10">
+              <span className="text-xs font-bold tracking-widest text-primary">NOTIFICATIONS</span>
+              {history.length > 0 && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    clearHistory();
+                  }}
+                  className="text-[10px] font-bold text-primary/60 hover:text-primary uppercase"
+                >
+                  Clear All
+                </button>
+              )}
+            </div>
+
+            {/* Notification list */}
+            <div className="overflow-y-auto max-h-80 scrollbar-none">
+              {history.length === 0 ? (
+                <div className="p-4 text-center text-primary/40 text-sm">
+                  No notifications
+                </div>
+              ) : (
+                history.slice(0, 10).map((notification) => (
+                  <div
+                    key={notification.id}
+                    className="px-3 py-2 border-b border-primary/10 hover:bg-primary/5 transition-colors"
+                  >
+                    <div className="flex items-start gap-2">
+                      {/* Type icon */}
+                      <span className={`flex-shrink-0 text-sm ${
+                        notification.type === 'success' ? 'text-green-500' :
+                        notification.type === 'warning' ? 'text-amber-500' :
+                        notification.type === 'error' ? 'text-red-500' :
+                        'text-slate-400'
+                      }`}>
+                        {notification.type === 'success' && '✓'}
+                        {notification.type === 'warning' && '⚠'}
+                        {notification.type === 'error' && '✕'}
+                        {notification.type === 'info' && 'ℹ'}
+                      </span>
+                      {/* Message */}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-foreground font-mono truncate lowercase">
+                          {notification.message}
+                        </p>
+                        <p className="text-[10px] text-primary/40 mt-0.5">
+                          {formatTime(notification.createdAt)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
