@@ -3,8 +3,10 @@
  *
  * Fields: Title (optional), Prompt (required), Priority, Workspace, Capabilities, Images
  */
-import { useState, useEffect, FormEvent, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { apiFetch } from '../lib/api';
+import { useFormSubmission } from '../hooks/useFormSubmission';
+import { FormActions } from './FormActions';
 import './SpecSubmissionForm.css';
 
 interface Agent {
@@ -47,21 +49,47 @@ const MAX_IMAGES = 5;
 const MAX_IMAGE_SIZE_MB = 5;
 const MAX_IMAGE_SIZE_BYTES = MAX_IMAGE_SIZE_MB * 1024 * 1024;
 
+const initialFormData: TaskFormData = {
+  title: '',
+  prompt: '',
+  priority: 'normal',
+  workspaceId: '',
+  capabilities: [],
+  images: [],
+};
+
 export function TaskCreationForm({ onSubmit, onCancel }: TaskCreationFormProps) {
-  const [formData, setFormData] = useState<TaskFormData>({
-    title: '',
-    prompt: '',
-    priority: 'normal',
-    workspaceId: '',
-    capabilities: [],
-    images: [],
-  });
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errors, setErrors] = useState<Partial<Record<keyof TaskFormData, string>>>({});
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [loadingWorkspaces, setLoadingWorkspaces] = useState(true);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const validate = useCallback((data: TaskFormData): Partial<Record<keyof TaskFormData, string>> => {
+    const errors: Partial<Record<keyof TaskFormData, string>> = {};
+
+    if (!data.workspaceId) {
+      errors.workspaceId = 'Workspace selection is required';
+    }
+    if (!data.prompt.trim()) {
+      errors.prompt = 'Prompt is required';
+    }
+
+    return errors;
+  }, []);
+
+  const {
+    formData,
+    setFormData,
+    errors,
+    setErrors,
+    isSubmitting,
+    handleSubmit,
+    handleFieldChange,
+  } = useFormSubmission({
+    initialData: initialFormData,
+    validate,
+    onSubmit,
+  });
 
   // Fetch workspaces and their capabilities on mount
   useEffect(() => {
@@ -110,48 +138,16 @@ export function TaskCreationForm({ onSubmit, onCancel }: TaskCreationFormProps) 
       }
     };
     fetchWorkspaces();
-  }, []);
+  }, [setFormData]);
 
   // Get capabilities for selected workspace
   const selectedWorkspace = workspaces.find(ws => ws.id === formData.workspaceId);
   const availableCapabilities = selectedWorkspace?.capabilities || [];
 
-  const validateForm = (): boolean => {
-    const newErrors: Partial<Record<keyof TaskFormData, string>> = {};
-
-    if (!formData.workspaceId) {
-      newErrors.workspaceId = 'Workspace selection is required';
-    }
-    if (!formData.prompt.trim()) {
-      newErrors.prompt = 'Prompt is required';
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-
-    if (!validateForm()) {
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      await onSubmit(formData);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   const handleTextChange = (field: 'title' | 'prompt') => (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
-    setFormData(prev => ({ ...prev, [field]: e.target.value }));
-    if (errors[field]) {
-      setErrors(prev => ({ ...prev, [field]: undefined }));
-    }
+    handleFieldChange(field, e.target.value as TaskFormData[typeof field]);
   };
 
   const handleCapabilityToggle = (capability: string) => {
@@ -213,7 +209,7 @@ export function TaskCreationForm({ onSubmit, onCancel }: TaskCreationFormProps) 
       }));
       setErrors(prev => ({ ...prev, images: undefined }));
     }
-  }, [formData.images.length]);
+  }, [formData.images.length, setFormData, setErrors]);
 
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -313,10 +309,7 @@ export function TaskCreationForm({ onSubmit, onCancel }: TaskCreationFormProps) 
           name="priority"
           className="spec-form__select"
           value={formData.priority}
-          onChange={(e) => setFormData(prev => ({
-            ...prev,
-            priority: e.target.value as 'normal' | 'high' | 'critical'
-          }))}
+          onChange={(e) => handleFieldChange('priority', e.target.value as 'normal' | 'high' | 'critical')}
         >
           <option value="normal">Normal</option>
           <option value="high">High</option>
@@ -340,9 +333,6 @@ export function TaskCreationForm({ onSubmit, onCancel }: TaskCreationFormProps) 
               workspaceId: e.target.value,
               capabilities: [] // Reset capabilities when workspace changes
             }));
-            if (errors.workspaceId) {
-              setErrors(prev => ({ ...prev, workspaceId: undefined }));
-            }
           }}
           disabled={loadingWorkspaces}
           aria-required="true"
@@ -444,34 +434,12 @@ export function TaskCreationForm({ onSubmit, onCancel }: TaskCreationFormProps) 
         )}
       </div>
 
-      {/* Actions */}
-      <div className="spec-form__actions">
-        {onCancel && (
-          <button
-            type="button"
-            className="spec-form__button spec-form__button--secondary"
-            onClick={onCancel}
-            disabled={isSubmitting}
-          >
-            Cancel
-          </button>
-        )}
-        <button
-          type="submit"
-          className="spec-form__button spec-form__button--primary"
-          disabled={isSubmitting}
-          aria-busy={isSubmitting}
-        >
-          {isSubmitting ? (
-            <>
-              <span className="spec-form__spinner" aria-hidden="true" />
-              Creating...
-            </>
-          ) : (
-            'Create Task'
-          )}
-        </button>
-      </div>
+      <FormActions
+        isSubmitting={isSubmitting}
+        submitLabel="Create Task"
+        submittingLabel="Creating..."
+        onCancel={onCancel}
+      />
     </form>
   );
 }

@@ -1,11 +1,13 @@
 /**
  * SpecSubmissionForm - Form component for submitting new spec requests
- * 
+ *
  * Fields: Problem, Users, Requirements, Success Metrics, Out of Scope
  * Required: Problem, Requirements
  */
-import { useState, useEffect, FormEvent } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { apiFetch } from '../lib/api';
+import { useFormSubmission } from '../hooks/useFormSubmission';
+import { FormActions } from './FormActions';
 import './SpecSubmissionForm.css';
 
 interface Workspace {
@@ -27,19 +29,47 @@ interface SpecSubmissionFormProps {
   onCancel?: () => void;
 }
 
+const initialFormData: SpecFormData = {
+  workspace: '',
+  problem: '',
+  users: '',
+  requirements: '',
+  successMetrics: '',
+  outOfScope: '',
+};
+
 export function SpecSubmissionForm({ onSubmit, onCancel }: SpecSubmissionFormProps) {
-  const [formData, setFormData] = useState<SpecFormData>({
-    workspace: '',
-    problem: '',
-    users: '',
-    requirements: '',
-    successMetrics: '',
-    outOfScope: '',
-  });
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errors, setErrors] = useState<Partial<Record<keyof SpecFormData, string>>>({});
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [loadingWorkspaces, setLoadingWorkspaces] = useState(true);
+
+  const validate = useCallback((data: SpecFormData): Partial<Record<keyof SpecFormData, string>> => {
+    const errors: Partial<Record<keyof SpecFormData, string>> = {};
+
+    if (!data.workspace) {
+      errors.workspace = 'Workspace selection is required';
+    }
+    if (!data.problem.trim()) {
+      errors.problem = 'Problem statement is required';
+    }
+    if (!data.requirements.trim()) {
+      errors.requirements = 'Requirements are required';
+    }
+
+    return errors;
+  }, []);
+
+  const {
+    formData,
+    setFormData,
+    errors,
+    isSubmitting,
+    handleSubmit,
+    handleFieldChange,
+  } = useFormSubmission({
+    initialData: initialFormData,
+    validate,
+    onSubmit,
+  });
 
   // Fetch workspaces on mount
   useEffect(() => {
@@ -58,48 +88,12 @@ export function SpecSubmissionForm({ onSubmit, onCancel }: SpecSubmissionFormPro
       }
     };
     fetchWorkspaces();
-  }, []);
+  }, [setFormData]);
 
-  const validateForm = (): boolean => {
-    const newErrors: Partial<Record<keyof SpecFormData, string>> = {};
-
-    if (!formData.workspace) {
-      newErrors.workspace = 'Workspace selection is required';
-    }
-    if (!formData.problem.trim()) {
-      newErrors.problem = 'Problem statement is required';
-    }
-    if (!formData.requirements.trim()) {
-      newErrors.requirements = 'Requirements are required';
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-
-    if (!validateForm()) {
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      await onSubmit(formData);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleChange = (field: keyof SpecFormData) => (
+  const handleTextareaChange = (field: keyof SpecFormData) => (
     e: React.ChangeEvent<HTMLTextAreaElement>
   ) => {
-    setFormData(prev => ({ ...prev, [field]: e.target.value }));
-    // Clear error when user starts typing
-    if (errors[field]) {
-      setErrors(prev => ({ ...prev, [field]: undefined }));
-    }
+    handleFieldChange(field, e.target.value);
   };
 
   return (
@@ -120,7 +114,7 @@ export function SpecSubmissionForm({ onSubmit, onCancel }: SpecSubmissionFormPro
           name="workspace"
           className={`spec-form__select ${errors.workspace ? 'spec-form__select--error' : ''}`}
           value={formData.workspace}
-          onChange={(e) => setFormData(prev => ({ ...prev, workspace: e.target.value }))}
+          onChange={(e) => handleFieldChange('workspace', e.target.value)}
           disabled={loadingWorkspaces}
           aria-required="true"
           aria-invalid={!!errors.workspace}
@@ -151,7 +145,7 @@ export function SpecSubmissionForm({ onSubmit, onCancel }: SpecSubmissionFormPro
           name="problem"
           className={`spec-form__textarea ${errors.problem ? 'spec-form__textarea--error' : ''}`}
           value={formData.problem}
-          onChange={handleChange('problem')}
+          onChange={handleTextareaChange('problem')}
           placeholder="Describe the problem you're trying to solve..."
           aria-required="true"
           aria-invalid={!!errors.problem}
@@ -174,7 +168,7 @@ export function SpecSubmissionForm({ onSubmit, onCancel }: SpecSubmissionFormPro
           name="users"
           className="spec-form__textarea"
           value={formData.users}
-          onChange={handleChange('users')}
+          onChange={handleTextareaChange('users')}
           placeholder="Who will use this feature?"
           aria-label="Target Users"
           rows={2}
@@ -190,7 +184,7 @@ export function SpecSubmissionForm({ onSubmit, onCancel }: SpecSubmissionFormPro
           name="requirements"
           className={`spec-form__textarea ${errors.requirements ? 'spec-form__textarea--error' : ''}`}
           value={formData.requirements}
-          onChange={handleChange('requirements')}
+          onChange={handleTextareaChange('requirements')}
           placeholder="List the functional requirements..."
           aria-required="true"
           aria-invalid={!!errors.requirements}
@@ -213,7 +207,7 @@ export function SpecSubmissionForm({ onSubmit, onCancel }: SpecSubmissionFormPro
           name="successMetrics"
           className="spec-form__textarea"
           value={formData.successMetrics}
-          onChange={handleChange('successMetrics')}
+          onChange={handleTextareaChange('successMetrics')}
           placeholder="How will we measure success?"
           aria-label="Success Metrics"
           rows={3}
@@ -229,40 +223,19 @@ export function SpecSubmissionForm({ onSubmit, onCancel }: SpecSubmissionFormPro
           name="outOfScope"
           className="spec-form__textarea"
           value={formData.outOfScope}
-          onChange={handleChange('outOfScope')}
+          onChange={handleTextareaChange('outOfScope')}
           placeholder="What specifically is NOT included?"
           aria-label="Out of Scope"
           rows={3}
         />
       </div>
 
-      <div className="spec-form__actions">
-        {onCancel && (
-          <button
-            type="button"
-            className="spec-form__button spec-form__button--secondary"
-            onClick={onCancel}
-            disabled={isSubmitting}
-          >
-            Cancel
-          </button>
-        )}
-        <button
-          type="submit"
-          className="spec-form__button spec-form__button--primary"
-          disabled={isSubmitting}
-          aria-busy={isSubmitting}
-        >
-          {isSubmitting ? (
-            <>
-              <span className="spec-form__spinner" aria-hidden="true" />
-              Submitting...
-            </>
-          ) : (
-            'Submit Spec Request'
-          )}
-        </button>
-      </div>
+      <FormActions
+        isSubmitting={isSubmitting}
+        submitLabel="Submit Spec Request"
+        submittingLabel="Submitting..."
+        onCancel={onCancel}
+      />
     </form>
   );
 }
