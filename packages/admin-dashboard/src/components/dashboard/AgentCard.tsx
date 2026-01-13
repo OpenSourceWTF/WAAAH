@@ -1,6 +1,7 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Clock, Pin, Cpu, Power, ChevronDown, ChevronUp } from 'lucide-react';
+import { getAgentDisplayStyle } from '@/lib/agentStatus';
 
 export interface Agent {
   id: string;
@@ -48,13 +49,9 @@ export function AgentCard({
   const currentTask = agent.currentTasks && agent.currentTasks.length > 0
     ? agent.currentTasks[agent.currentTasks.length - 1] : null;
 
-  const statusColorClass = agent.status === 'PROCESSING' ? 'text-cyan-400' :
-    agent.status === 'WAITING' ? 'text-green-500' :
-      agent.status === 'OFFLINE' ? 'text-gray-500' : 'text-yellow-500';
-
-  const stripeClass = agent.status === 'PROCESSING' ? 'bg-cyan-400 animate-pulse' :
-    agent.status === 'WAITING' ? 'bg-green-500' :
-      agent.status === 'OFFLINE' ? 'bg-gray-600' : 'bg-yellow-500';
+  // Use centralized status styling
+  const style = getAgentDisplayStyle(agent.status);
+  const stripeClass = `${style.stripeColor} ${style.animation || ''}`.trim();
 
   return (
     <div
@@ -79,7 +76,7 @@ export function AgentCard({
           <div className="flex items-center gap-2 mt-1 text-compact">
             {agent.role && <span className="text-primary/50 font-mono">[{agent.role}]</span>}
             {getSourceBadge(agent.source)}
-            <span className={`font-bold ${statusColorClass}`}>{agent.status}</span>
+            <span className={`font-bold ${style.textColor}`}>{agent.status}</span>
             <span className="text-primary/40 ml-auto">{getRelativeTime(agent.lastSeen)}</span>
           </div>
         </div>

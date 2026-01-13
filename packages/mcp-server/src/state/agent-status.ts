@@ -2,7 +2,8 @@
  * Agent Status Utilities
  * 
  * Shared helpers for determining agent connection status.
- * Extracted to eliminate code duplication across server.ts and tools.ts.
+ * Simplified to use only task assignment and waiting state.
+ * Staleness is handled at the TASK level (lastProgressAt), not agent level.
  */
 import type { Task, AgentConnectionStatus } from '@opensourcewtf/waaah-types';
 
@@ -11,15 +12,14 @@ import type { Task, AgentConnectionStatus } from '@opensourcewtf/waaah-types';
  * 
  * @param assignedTasks - Tasks currently assigned to the agent
  * @param isWaiting - Whether the agent is actively waiting for tasks
- * @param isRecent - Whether the agent was recently seen (within offline threshold)
  * @returns The agent's connection status: 'PROCESSING', 'WAITING', or 'OFFLINE'
  */
 export function determineAgentStatus(
   assignedTasks: Task[],
-  isWaiting: boolean,
-  isRecent: boolean
+  isWaiting: boolean
 ): AgentConnectionStatus {
   if (assignedTasks.length > 0) return 'PROCESSING';
-  if (isWaiting || isRecent) return 'WAITING';
+  if (isWaiting) return 'WAITING';
   return 'OFFLINE';
 }
+

@@ -5,7 +5,6 @@
 import { Router } from 'express';
 import { AgentRepository } from '../state/persistence/agent-repository.js';
 import { TaskQueue } from '../state/queue.js';
-import { AGENT_OFFLINE_THRESHOLD_MS } from '@opensourcewtf/waaah-types';
 import { determineAgentStatus } from '../state/agent-status.js';
 
 interface AgentRoutesConfig {
@@ -27,9 +26,8 @@ export function createAgentRoutes({ registry, queue }: AgentRoutesConfig): Route
     const result = agents.map(agent => {
       const assignedTasks = queue.getAssignedTasksForAgent(agent.id);
       const lastSeen = registry.getLastSeen(agent.id);
-      const isRecent = Boolean(lastSeen && (Date.now() - lastSeen) < AGENT_OFFLINE_THRESHOLD_MS);
       const isWaiting = waitingAgents.has(agent.id);
-      const status = determineAgentStatus(assignedTasks, isWaiting, isRecent);
+      const status = determineAgentStatus(assignedTasks, isWaiting);
 
       return {
         id: agent.id,

@@ -11,7 +11,6 @@ import {
   listAgentsSchema,
   getAgentStatusSchema,
   adminUpdateAgentSchema,
-  AGENT_OFFLINE_THRESHOLD_MS,
   toMCPError
 } from '@opensourcewtf/waaah-types';
 
@@ -89,9 +88,8 @@ export class AgentHandlers {
       const result = inputs.map(agent => {
         const assignedTasks = this.queue.getAssignedTasksForAgent(agent.id);
         const lastSeen = this.registry.getLastSeen(agent.id);
-        const isRecent = Boolean(lastSeen && (Date.now() - lastSeen) < AGENT_OFFLINE_THRESHOLD_MS);
         const isWaiting = waitingAgents.has(agent.id);
-        const status = determineAgentStatus(assignedTasks, isWaiting, isRecent);
+        const status = determineAgentStatus(assignedTasks, isWaiting);
 
         return {
           id: agent.id,
@@ -128,8 +126,7 @@ export class AgentHandlers {
       const isWaiting = this.queue.isAgentWaiting(params.agentId);
       const assignedTasks = this.queue.getAssignedTasksForAgent(params.agentId);
       const lastSeen = this.registry.getLastSeen(params.agentId);
-      const isRecent = Boolean(lastSeen && (Date.now() - lastSeen) < AGENT_OFFLINE_THRESHOLD_MS);
-      const status = determineAgentStatus(assignedTasks, isWaiting, isRecent);
+      const status = determineAgentStatus(assignedTasks, isWaiting);
 
       return {
         content: [{

@@ -62,14 +62,13 @@ export function useAgentData() {
       setAgents(prev => {
         const agentIndex = prev.findIndex(a => a.id === data.id);
         if (agentIndex >= 0) {
-          // Update existing agent with new lastSeen (recalculate status)
+          // Update existing agent with new lastSeen
+          // Status is determined by backend, don't override here
           const updated = [...prev];
           const agent = updated[agentIndex];
           updated[agentIndex] = {
             ...agent,
-            lastSeen: data.lastSeen,
-            // For heartbeat, agent is active so at least WAITING
-            status: agent.status === 'OFFLINE' ? 'WAITING' : agent.status
+            lastSeen: data.lastSeen
           };
           return updated;
         }
@@ -95,12 +94,15 @@ export function useAgentData() {
 
   /**
    * Get the status color for an agent (for indicator bar)
+   * Uses simple status-based mapping, no lastSeen degradation
    */
   const getAgentStatusColor = useCallback((agent: Agent): AgentStatusColor => {
-    if (agent.status === 'OFFLINE') return 'gray';
-    if (agent.status === 'PROCESSING') return 'yellow';
-    const lastSeenMs = agent.lastSeen ? Date.now() - agent.lastSeen : Infinity;
-    return lastSeenMs > 60000 ? 'red' : 'green';
+    switch (agent.status) {
+      case 'PROCESSING': return 'yellow';  // Indicates active work
+      case 'WAITING': return 'green';      // Ready for work
+      case 'OFFLINE': return 'gray';        // Disconnected
+      default: return 'gray';
+    }
   }, []);
 
   /**
