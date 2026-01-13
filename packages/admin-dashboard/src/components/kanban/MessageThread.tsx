@@ -110,8 +110,8 @@ export const MessageThread: React.FC<MessageThreadProps> = ({
         <div className="flex gap-2 justify-start">
           <div className={`max-w-[90%] p-3 text-xs bg-amber-600 text-white shadow-sm ${rounds}`}>
             <div className="flex items-center gap-2 mb-2">
-              <Badge className={`bg-amber-800 text-white text-[10px] px-1.5 py-0.5 ${rounds}`}>PROMPT</Badge>
-              <span className="text-[10px] opacity-70">
+              <Badge className={`bg-amber-800 text-white text-compact px-1.5 py-0.5 ${rounds}`}>PROMPT</Badge>
+              <span className="text-compact opacity-70">
                 {new Date(task.createdAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </span>
             </div>
@@ -162,7 +162,7 @@ export const MessageThread: React.FC<MessageThreadProps> = ({
               const evt = item.data;
               return (
                 <div key={`status-${idx}`} className="flex justify-center my-1">
-                  <div className={`flex items-center gap-1.5 text-[9px] text-primary/40 px-2 py-0.5 ${roundsFull}`}>
+                  <div className={`flex items-center gap-1.5 text-compact text-primary/40 px-2 py-0.5 ${roundsFull}`}>
                     <span className={`h-1 w-1 bg-primary/30 ${roundsFull}`} />
                     <span className="font-mono uppercase tracking-wider">{evt.status}</span>
                     <span className="opacity-60">{new Date(evt.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
@@ -186,8 +186,8 @@ export const MessageThread: React.FC<MessageThreadProps> = ({
                 <div key={`response-${idx}`} className="flex gap-2 justify-start">
                   <div className={`max-w-[90%] p-3 text-xs ${bgColor} text-white shadow-sm ${rounds}`}>
                     <div className="flex items-center gap-2 mb-2">
-                      <Badge className={`${badgeBgColor} text-white text-[10px] px-1.5 py-0.5 ${rounds}`}>{badgeText}</Badge>
-                      <span className="text-[10px] opacity-70">
+                      <Badge className={`${badgeBgColor} text-white text-compact px-1.5 py-0.5 ${rounds}`}>{badgeText}</Badge>
+                      <span className="text-compact opacity-70">
                         {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </span>
                     </div>
@@ -227,7 +227,7 @@ export const MessageThread: React.FC<MessageThreadProps> = ({
                     } ${replyToId === msg.id ? 'ring-2 ring-yellow-400' : ''}`}
                 >
                   {parentMsg && (
-                    <div className="flex items-center gap-1 mb-2 text-[10px] opacity-70 bg-black/20 px-2 py-1 -mx-1">
+                    <div className="flex items-center gap-1 mb-2 text-compact opacity-70 bg-black/20 px-2 py-1 -mx-1">
                       <CornerDownRight className="h-2.5 w-2.5 shrink-0" />
                       <span className="truncate italic">Re: {parentMsg.content.slice(0, 40)}...</span>
                     </div>
@@ -236,14 +236,14 @@ export const MessageThread: React.FC<MessageThreadProps> = ({
                     <span className={`font-bold ${msg.role === 'user' ? 'text-primary' : 'text-blue-400'}`}>
                       {msg.role === 'user' ? 'YOU' : (msg.metadata?.agentId as string || task.assignedTo || 'AGENT')}
                     </span>
-                    <span className="text-[10px] opacity-50">
+                    <span className="text-compact opacity-50">
                       {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
                     {msg.role === 'user' && msg.isRead === false && (
-                      <Badge className={`bg-amber-500 text-white text-[10px] px-1 py-0 ${rounds}`}>PENDING</Badge>
+                      <Badge className={`bg-amber-500 text-white text-compact px-1 py-0 ${rounds}`}>PENDING</Badge>
                     )}
                     {msg.role === 'user' && msg.isRead === true && !hasAgentReply && (
-                      <Badge className={`bg-yellow-500 text-black text-[10px] px-1 py-0 ${rounds}`}>PENDING</Badge>
+                      <Badge className={`bg-yellow-500 text-black text-compact px-1 py-0 ${rounds}`}>PENDING</Badge>
                     )}
                     {msg.role === 'user' && hasAgentReply && (
                       <span title="Replied"><CheckCircle className="h-3 w-3 text-green-500" /></span>
@@ -265,7 +265,7 @@ export const MessageThread: React.FC<MessageThreadProps> = ({
                     </div>
                   )}
                   {msg.id && msg.role === 'agent' && (
-                    <button onClick={() => handleReply(msg.id!)} className="mt-1 flex items-center gap-1 text-[10px] text-primary/50 hover:text-primary">
+                    <button onClick={() => handleReply(msg.id!)} className="mt-1 flex items-center gap-1 text-compact text-primary/50 hover:text-primary">
                       <Reply className="h-3 w-3" /> Reply
                     </button>
                   )}
@@ -282,7 +282,7 @@ export const MessageThread: React.FC<MessageThreadProps> = ({
         {replyToId && replyToMsg && (
           <div className="flex items-center gap-2 px-3 py-1.5 bg-primary/10 border-b border-primary/20">
             <CornerDownRight className="h-3 w-3 text-primary/60" />
-            <span className="text-[10px] text-primary/60 truncate flex-1">
+            <span className="text-compact text-primary/60 truncate flex-1">
               Replying: {replyToMsg.content.slice(0, 50)}...
             </span>
             <button onClick={handleCancelReply} className="text-primary/40 hover:text-primary text-xs">×</button>
