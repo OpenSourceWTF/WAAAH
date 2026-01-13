@@ -267,9 +267,6 @@ export const KanbanBoard = React.memo(function KanbanBoard({
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1">
                         <Badge className={getStatusBadgeClass(task.status)}>{formatStatusLabel(task.status)}</Badge>
-                        {task.status === 'BLOCKED' && (
-                          <Badge className="bg-orange-500 text-white text-compact px-1.5 py-0.5 border border-orange-700">⛔ BLOCKED</Badge>
-                        )}
                       </div>
                       <div className="flex items-center gap-1">
                         {unreadCount > 0 && (
