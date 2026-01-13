@@ -89,7 +89,7 @@ export function AgentSidebar({ agents, getRelativeTime, getStatusBadgeClass, onE
 
       {/* Expanded View: Cards */}
       {isExpanded && (
-        <div className="flex-1 overflow-y-auto scrollbar-none p-3">
+        <div className="flex-1 overflow-y-auto scrollbar-none p-3 animate-sidebar-content">
           <div className="space-y-2">
             {agents.length === 0 && (
               <div className="w-full p-3 border-2 border-dashed border-primary/30 rounded-sm flex items-center justify-center">

@@ -50,7 +50,7 @@ const STATUS_BADGE_MAP: Record<string, string> = {
   REJECTED: 'bg-red-500 text-white border-red-700',
 };
 
-const STATUS_BADGE_BASE = 'text-xs font-bold px-1.5 py-0.5 border';
+const STATUS_BADGE_BASE = 'text-xs font-bold px-1.5 py-0.5 border animate-status-badge';
 
 /**
  * Get the badge class for a task status

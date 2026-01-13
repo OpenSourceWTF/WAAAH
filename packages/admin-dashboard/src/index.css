@@ -12,6 +12,12 @@
   --text-heading: 15px;   /* section headers, titles */
   --text-display: 20px;   /* page title only */
 
+  /* Animation Tokens */
+  --duration-fast: 150ms;
+  --duration-normal: 200ms;
+  --duration-slow: 300ms;
+  --ease-out: cubic-bezier(0.33, 1, 0.68, 1);
+
   /* DEFAULT THEME: DARK (Professional) */
   --background: 0 0% 5%;
   --foreground: 0 0% 95%;
@@ -292,4 +298,93 @@ body,
 .text-display {
   font-size: var(--text-display);
   line-height: 1.2;
+}
+
+/* ========== ANIMATION UTILITIES ========== */
+
+/* Card expand/collapse animation */
+@keyframes card-expand {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-card-expand {
+  animation: card-expand var(--duration-normal) var(--ease-out) forwards;
+}
+
+/* Tab content fade */
+@keyframes tab-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-tab-fade {
+  animation: tab-fade var(--duration-fast) var(--ease-out) forwards;
+}
+
+/* Message slide in from bottom */
+@keyframes message-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-message-in {
+  animation: message-slide-in var(--duration-normal) var(--ease-out) forwards;
+}
+
+/* Staggered message delays */
+.animate-message-in:nth-child(1) { animation-delay: 0ms; }
+.animate-message-in:nth-child(2) { animation-delay: 50ms; }
+.animate-message-in:nth-child(3) { animation-delay: 100ms; }
+.animate-message-in:nth-child(4) { animation-delay: 150ms; }
+.animate-message-in:nth-child(5) { animation-delay: 200ms; }
+.animate-message-in:nth-child(n+6) { animation-delay: 250ms; }
+
+/* Status badge color transition */
+.animate-status-badge {
+  transition: background-color var(--duration-normal) var(--ease-out),
+              color var(--duration-normal) var(--ease-out),
+              border-color var(--duration-normal) var(--ease-out);
+}
+
+/* Sidebar content fade */
+.animate-sidebar-content {
+  transition: opacity var(--duration-slow) var(--ease-out);
+}
+
+/* ========== REDUCED MOTION ========== */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .animate-card-expand,
+  .animate-tab-fade,
+  .animate-message-in,
+  .animate-status-badge,
+  .animate-sidebar-content,
+  .animate-working-pulse {
+    animation: none !important;
+    transition: none !important;
+  }
 }
