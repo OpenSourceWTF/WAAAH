@@ -5,6 +5,7 @@ import type { AgentMatchingService } from './agent-matching-service.js';
 import type { IEvictionService } from '../eviction-service.js';
 import type { TypedEventEmitter } from '../queue-events.js';
 import type { WaitResult } from '../queue.interface.js';
+import { createPollingPromise } from './polling-utils.js';
 
 export class PollingService {
   constructor(
@@ -55,43 +56,13 @@ export class PollingService {
       return match;
     }
 
-    return new Promise((resolve) => {
-      let resolved = false;
-      let timeoutTimer: NodeJS.Timeout;
-
-      const finish = (result: WaitResult) => {
-        if (resolved) return;
-        resolved = true;
-
-        this.emitter.off('task', onTask);
-        this.emitter.off('eviction', onEviction);
-        if (timeoutTimer) clearTimeout(timeoutTimer);
-
-        // Clear waiting state in DB
-        this.persistence.clearAgentWaiting(agentId);
-
-        resolve(result);
-      };
-
-      const onTask = (task: Task, intendedAgentId?: string) => {
-        if (intendedAgentId === agentId) {
-          finish(task);
-        }
-      };
-
-      const onEviction = (targetId: string) => {
-        if (targetId === agentId) {
-          const ev = this.evictionService.popEviction(agentId);
-          if (ev) finish(ev);
-        }
-      };
-
-      this.emitter.on('task', onTask);
-      this.emitter.on('eviction', onEviction);
-
-      timeoutTimer = setTimeout(() => {
-        finish(null);
-      }, timeoutMs);
+    // Use shared polling utility
+    return createPollingPromise({
+      agentId,
+      emitter: this.emitter,
+      timeoutMs,
+      popEviction: (id) => this.evictionService.popEviction(id),
+      onCleanup: () => this.persistence.clearAgentWaiting(agentId)
     });
   }
 

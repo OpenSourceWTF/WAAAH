@@ -17,6 +17,7 @@
 import type { Task, TaskStatus, StandardCapability, AgentIdentity, WorkspaceContext } from '@opensourcewtf/waaah-types';
 import type { TypedEventEmitter } from './queue-events.js';
 import { areDependenciesMet } from './services/task-lifecycle-service.js';
+import { createPollingPromise } from './services/polling-utils.js';
 import * as fs from 'fs';
 
 const DEBUG_LOG_PATH = '/home/dtai/.gemini/antigravity/brain/aa449a4d-0305-4535-b102-cf765aa4cee1/debug_scheduler.log';
@@ -282,10 +283,40 @@ export function findAndReserveAgent(queue: IMatcherQueue, task: Task): string | 
   return bestAgent.agentId;
 }
 
+// ===== Shared Utilities =====
+
+/**
+ * Priority scores for task sorting.
+ */
+const PRIORITY_SCORES: Record<string, number> = { critical: 3, high: 2, normal: 1 };
+
+/**
+ * Sorts tasks by: 1) Agent affinity, 2) Priority, 3) Age (oldest first).
+ * Shared utility used by both agent-matcher and AgentMatchingService.
+ */
+export function sortTasksByPriority(tasks: Task[], agentId?: string): Task[] {
+  return [...tasks].sort((a: Task, b: Task) => {
+    // Agent affinity first - tasks previously assigned to this agent get priority
+    if (agentId) {
+      const aAffinity = a.assignedTo === agentId ? 1 : 0;
+      const bAffinity = b.assignedTo === agentId ? 1 : 0;
+      if (aAffinity !== bAffinity) return bAffinity - aAffinity;
+    }
+
+    const scoreA = PRIORITY_SCORES[a.priority] || 1;
+    const scoreB = PRIORITY_SCORES[b.priority] || 1;
+    if (scoreA !== scoreB) return scoreB - scoreA; // Higher priority first
+    return a.createdAt - b.createdAt; // Older first
+  });
+}
+
 /**
  * Finds a pending task suitable for an agent.
  * Skips tasks with unsatisfied dependencies.
  * Prioritizes tasks that were previously assigned to this agent (affinity on feedback).
+ *
+ * @deprecated Use AgentMatchingService.findPendingTaskForAgent() instead.
+ * This function is maintained for legacy compatibility with IMatcherQueue.
  */
 export function findPendingTaskForAgent(
   queue: IMatcherQueue,
@@ -302,19 +333,8 @@ export function findPendingTaskForAgent(
     return areDependenciesMet(task, getTask);
   });
 
-  // Sort by: 1) Agent affinity (previously assigned to this agent), 2) Priority, 3) Age
-  eligibleCandidates.sort((a: Task, b: Task) => {
-    // Agent affinity first - tasks previously assigned to this agent get priority
-    const aAffinity = a.assignedTo === agentId ? 1 : 0;
-    const bAffinity = b.assignedTo === agentId ? 1 : 0;
-    if (aAffinity !== bAffinity) return bAffinity - aAffinity; // Affinity first
-
-    const pScores: Record<string, number> = { critical: 3, high: 2, normal: 1 };
-    const scoreA = pScores[a.priority] || 1;
-    const scoreB = pScores[b.priority] || 1;
-    if (scoreA !== scoreB) return scoreB - scoreA; // Higher priority first
-    return a.createdAt - b.createdAt; // Older first
-  });
+  // Use shared sorting utility
+  const sortedCandidates = sortTasksByPriority(eligibleCandidates, agentId);
 
   const agent: WaitingAgent = {
     agentId,
@@ -324,7 +344,7 @@ export function findPendingTaskForAgent(
   };
 
   // Find first task this agent is eligible for
-  for (const task of eligibleCandidates) {
+  for (const task of sortedCandidates) {
     const score = scoreAgent(task, agent);
     if (score.eligible) {
       return task;
@@ -337,6 +357,9 @@ export function findPendingTaskForAgent(
 /**
  * Long-polling implementation for agents to wait for tasks.
  * Uses capability-based matching.
+ *
+ * @deprecated Use PollingService.waitForTask() instead.
+ * This function is maintained for legacy compatibility with IMatcherQueue.
  */
 export async function waitForTask(
   queue: IMatcherQueue,
@@ -368,40 +391,12 @@ export async function waitForTask(
     return pendingTask;
   }
 
-  return new Promise((resolve) => {
-    let resolved = false;
-    let timeoutTimer: NodeJS.Timeout;
-
-    const finish = (result: WaitForTaskResult) => {
-      if (resolved) return;
-      resolved = true;
-
-      queue.off('task', onTask);
-      queue.off('eviction', onEviction);
-      if (timeoutTimer) clearTimeout(timeoutTimer);
-
-      queue.removeWaitingAgent(agentId);
-      resolve(result);
-    };
-
-    const onTask = (task: Task, intendedAgentId?: string) => {
-      if (intendedAgentId === agentId) {
-        finish(task);
-      }
-    };
-
-    const onEviction = (targetId: string) => {
-      if (targetId === agentId) {
-        const ev = queue.popEviction(agentId);
-        if (ev) finish({ controlSignal: 'EVICT', ...ev });
-      }
-    };
-
-    queue.on('task', onTask);
-    queue.on('eviction', onEviction);
-
-    timeoutTimer = setTimeout(() => {
-      finish(null);
-    }, timeoutMs);
+  // Use shared polling utility
+  return createPollingPromise({
+    agentId,
+    emitter: queue,
+    timeoutMs,
+    popEviction: (id) => queue.popEviction(id),
+    onCleanup: () => queue.removeWaitingAgent(agentId)
   });
 }

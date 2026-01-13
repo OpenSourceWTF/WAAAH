@@ -6,7 +6,7 @@ import {
 } from '@opensourcewtf/waaah-types';
 import { QueuePersistence } from '../persistence/queue-persistence.js';
 import { ITaskRepository } from '../persistence/task-repository.js';
-import { isTaskForAgent, findBestAgent, WaitingAgent, scoreAgent } from '../agent-matcher.js';
+import { findBestAgent, WaitingAgent, scoreAgent, sortTasksByPriority } from '../agent-matcher.js';
 import { areDependenciesMet } from './task-lifecycle-service.js';
 
 export class AgentMatchingService {
@@ -31,19 +31,8 @@ export class AgentMatchingService {
     const getTaskFn = (id: string) => this.repo.getById(id) ?? undefined;
     const eligibleCandidates = candidates.filter(task => areDependenciesMet(task, getTaskFn));
 
-    // Sort by: 1) Agent affinity (previously assigned to this agent), 2) Priority, 3) Age
-    eligibleCandidates.sort((a: Task, b: Task) => {
-      // Agent affinity first - tasks previously assigned to this agent get priority
-      const aAffinity = a.assignedTo === agentId ? 1 : 0;
-      const bAffinity = b.assignedTo === agentId ? 1 : 0;
-      if (aAffinity !== bAffinity) return bAffinity - aAffinity; // Affinity first
-
-      const pScores: Record<string, number> = { critical: 3, high: 2, normal: 1 };
-      const scoreA = pScores[a.priority] || 1;
-      const scoreB = pScores[b.priority] || 1;
-      if (scoreA !== scoreB) return scoreB - scoreA;
-      return a.createdAt - b.createdAt;
-    });
+    // Use shared sorting utility from agent-matcher
+    const sortedCandidates = sortTasksByPriority(eligibleCandidates, agentId);
 
     // Create temporary agent object for scoring
     const agent: WaitingAgent = {
@@ -54,8 +43,7 @@ export class AgentMatchingService {
     };
 
     // Find first task this agent is eligible for (using shared scorer)
-    for (const task of eligibleCandidates) {
-      // Use the centralized scorer which handles capabilities AND workspace affinity
+    for (const task of sortedCandidates) {
       const score = scoreAgent(task, agent);
       if (score.eligible) {
         return task;
