@@ -352,6 +352,25 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue {
     }
   }
 
+  /** Get task's last progress timestamp from database - implements ISchedulerQueue */
+  getTaskLastProgress(taskId: string): number | undefined {
+    try {
+      const row = this.db.prepare('SELECT lastProgressAt FROM tasks WHERE id = ?').get(taskId) as any;
+      return row?.lastProgressAt ?? undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** Update task's last progress timestamp - called on progress updates */
+  touchTask(taskId: string): void {
+    try {
+      this.db.prepare('UPDATE tasks SET lastProgressAt = ? WHERE id = ?').run(Date.now(), taskId);
+    } catch (e: unknown) {
+      console.error(`[Queue] Failed to touch task ${taskId}: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
   clear(): void {
     try {
       this.repo.clearAll();

@@ -11,7 +11,7 @@
  */
 
 import type { Task, TaskStatus, WorkspaceContext, StandardCapability } from '@opensourcewtf/waaah-types';
-import { ACK_TIMEOUT_MS, SCHEDULER_INTERVAL_MS, ORPHAN_TIMEOUT_MS } from './constants.js';
+import { ACK_TIMEOUT_MS, SCHEDULER_INTERVAL_MS, STALE_TASK_TIMEOUT_MS } from './constants.js';
 import { areDependenciesMet } from './services/task-lifecycle-service.js';
 
 /**
@@ -40,6 +40,10 @@ export interface ISchedulerQueue {
   getAssignedTasksForAgent(agentId: string): Task[];
   /** Database access for agent staleness check */
   getAgentLastSeen(agentId: string): number | undefined;
+  /** Get task's last progress timestamp */
+  getTaskLastProgress(taskId: string): number | undefined;
+  /** Update task's last progress timestamp */
+  touchTask(taskId: string): void;
 }
 
 /**
@@ -83,7 +87,7 @@ export class HybridScheduler {
       this.requeueStuckTasks();
       this.checkBlockedTasks();
       this.assignPendingTasks();
-      this.rebalanceOrphanedTasks();
+      this.rebalanceStaleTasks();
     } catch (e: unknown) {
       console.error(`[Scheduler] Cycle error: ${e instanceof Error ? e.message : String(e)}`);
     }
@@ -174,32 +178,27 @@ export class HybridScheduler {
   }
 
   /**
-   * Step 3: Rebalance tasks from offline agents
+   * Step 3: Rebalance stale tasks (no activity for STALE_TASK_TIMEOUT_MS)
+   * Uses task-level activity tracking instead of agent online status.
    */
-  private rebalanceOrphanedTasks(): void {
-    const busyAgentIds = this.queue.getBusyAgentIds();
-    if (busyAgentIds.length === 0) return;
+  private rebalanceStaleTasks(): void {
+    // Check tasks that are actively being worked on
+    const activeTasks = this.queue.getByStatuses(['IN_PROGRESS', 'ASSIGNED']);
+    if (activeTasks.length === 0) return;
 
     const now = Date.now();
-    const offlineAgents = new Set<string>();
 
-    for (const agentId of busyAgentIds) {
-      const lastSeen = this.queue.getAgentLastSeen(agentId);
-      if (!lastSeen || (now - lastSeen > ORPHAN_TIMEOUT_MS)) {
-        offlineAgents.add(agentId);
-      }
-    }
+    for (const task of activeTasks) {
+      const lastProgress = this.queue.getTaskLastProgress(task.id);
+      // Use createdAt as fallback if no progress recorded yet
+      const lastActivity = lastProgress || task.createdAt;
 
-    if (offlineAgents.size === 0) return;
-
-    for (const agentId of offlineAgents) {
-      const tasks = this.queue.getAssignedTasksForAgent(agentId);
-      for (const task of tasks) {
-        console.log(`[Scheduler] Agent ${agentId} appears offline/orphaned. Requeuing task ${task.id}`);
+      if (now - lastActivity > STALE_TASK_TIMEOUT_MS) {
+        console.log(`[Scheduler] Task ${task.id} stale (no activity for 30+ min). Requeuing...`);
         this.queue.forceRetry(task.id);
       }
     }
   }
 }
 
-export { SCHEDULER_INTERVAL_MS, ACK_TIMEOUT_MS, ORPHAN_TIMEOUT_MS };
+export { SCHEDULER_INTERVAL_MS, ACK_TIMEOUT_MS, STALE_TASK_TIMEOUT_MS };

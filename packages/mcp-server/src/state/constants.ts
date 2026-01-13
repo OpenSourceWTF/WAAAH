@@ -24,11 +24,12 @@ export const ACK_TIMEOUT_MS = 30000;
 /** Scheduler interval for periodic tasks. 10 seconds. */
 export const SCHEDULER_INTERVAL_MS = 10000;
 
-/** Agent considered orphaned after this time offline. 5 minutes. */
-export const ORPHAN_TIMEOUT_MS = 5 * 60 * 1000;
-
-/** Task considered stale if no progress update for this long. 15 minutes. */
-export const ASSIGNED_TIMEOUT_MS = 15 * 60 * 1000;
+/**
+ * Task staleness timeout. Tasks with no activity (ACK, progress, response)
+ * for this duration are considered stale and will be requeued. 30 minutes.
+ * This replaces the old agent-based ORPHAN_TIMEOUT_MS (5 min) with task-level tracking.
+ */
+export const STALE_TASK_TIMEOUT_MS = 30 * 60 * 1000;
 
 // ===== Database Constants =====
 

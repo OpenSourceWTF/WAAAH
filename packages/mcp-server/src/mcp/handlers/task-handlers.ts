@@ -64,6 +64,8 @@ export class TaskHandlers {
       if (task?.to.agentId) {
         this.registry.heartbeat(task.to.agentId);
       }
+      // Touch task to reset staleness timer
+      this.queue.touchTask(params.taskId);
 
       // S17: Validate diff for IN_REVIEW status (code/test tasks only)
       if (params.status === 'IN_REVIEW') {
@@ -242,6 +244,8 @@ fi
     try {
       const params = ackTaskSchema.parse(args);
       this.registry.heartbeat(params.agentId);
+      // Touch task to reset staleness timer on ACK
+      this.queue.touchTask(params.taskId);
       const result = this.queue.ackTask(params.taskId, params.agentId);
 
       if (!result.success) {
@@ -371,6 +375,8 @@ fi
       const params = updateProgressSchema.parse(args);
 
       this.registry.heartbeat(params.agentId);
+      // Touch task to reset staleness timer on progress update
+      this.queue.touchTask(params.taskId);
       this.queue.addMessage(params.taskId, 'agent', params.message, {
         phase: params.phase,
         percentage: params.percentage,
