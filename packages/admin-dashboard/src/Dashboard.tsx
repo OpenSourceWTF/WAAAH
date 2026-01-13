@@ -8,6 +8,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useTaskData, useAgentData } from './hooks';
 import { AgentSidebar } from './components/dashboard/AgentSidebar';
 import { apiFetch } from './lib/api';
+import { getStatusBadgeClass } from './lib/statusColors';
 import { TaskCreationForm } from './components/TaskCreationForm';
 import type { TaskFormData } from './components/TaskCreationForm';
 
@@ -232,31 +233,14 @@ export function Dashboard() {
   }, [fetchData]);
 
   // Status badge styles - lookup map
-  const STATUS_BADGE_CLASSES: Record<string, string> = {
-    COMPLETED: 'bg-green-600 text-white border-green-800',
-    FAILED: 'bg-red-600 text-white border-red-800',
-    CANCELLED: 'bg-red-600 text-white border-red-800',
-    ASSIGNED: 'bg-blue-600 text-white border-blue-800',
-    IN_PROGRESS: 'bg-blue-600 text-white border-blue-800',
-    PROCESSING: 'bg-blue-600 text-white border-blue-800',
-    QUEUED: 'bg-yellow-500 text-black border-yellow-700',
-    PENDING_ACK: 'bg-yellow-500 text-black border-yellow-700',
-    WAITING: 'bg-yellow-500 text-black border-yellow-700',
-    BLOCKED: 'bg-white text-black border-gray-400',
-    PENDING: 'bg-white text-black border-gray-400',
-    PENDING_RES: 'bg-white text-black border-gray-400',
-    REVIEW: 'bg-white text-black border-gray-400',
-    IN_REVIEW: 'bg-white text-black border-gray-400',
-  };
-  const getStatusBadgeClass = useCallback((status: string) =>
-    `text-xs font-bold px-2 py-1 border border-black ${STATUS_BADGE_CLASSES[status] || 'bg-gray-600 text-white'}`, []);
+  // Status badge styling is now centralized in lib/statusColors.ts
 
   return (
     <div className="flex flex-col h-screen bg-background text-primary uppercase font-mono tracking-wider">
       {/* 1. Header (Sticky Top) - slides up when task expanded */}
       <header className={`flex-none flex items-center justify-between px-8 py-6 border-b-2 border-primary bg-background z-10 sticky top-0 shadow-[0_0_15px_hsl(var(--glow)/0.3)] transition-all duration-300 ease-out ${isTaskExpanded
-          ? '-translate-y-full opacity-0 pointer-events-none'
-          : 'translate-y-0 opacity-100'
+        ? '-translate-y-full opacity-0 pointer-events-none'
+        : 'translate-y-0 opacity-100'
         }`}>
         <div className="flex items-center gap-4">
           <div className="bg-primary text-primary-foreground p-2 font-bold text-2xl animate-pulse">
