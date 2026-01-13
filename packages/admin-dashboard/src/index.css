@@ -6,6 +6,12 @@
 @custom-variant waaah (&:where(.waaah, .waaah *));
 
 :root {
+  /* Typography Scale - Minimum 11px for readability */
+  --text-compact: 11px;   /* labels, timestamps, badges */
+  --text-body: 13px;      /* card content, messages */
+  --text-heading: 15px;   /* section headers, titles */
+  --text-display: 20px;   /* page title only */
+
   /* DEFAULT THEME: DARK (Professional) */
   --background: 0 0% 5%;
   --foreground: 0 0% 95%;
@@ -265,4 +271,25 @@ body,
 
 .animate-working-pulse {
   animation: working-pulse 1.5s ease-in-out infinite;
+}
+
+/* Typography Scale Utilities */
+.text-compact {
+  font-size: var(--text-compact);
+  line-height: 1.4;
+}
+
+.text-body {
+  font-size: var(--text-body);
+  line-height: 1.5;
+}
+
+.text-heading {
+  font-size: var(--text-heading);
+  line-height: 1.3;
+}
+
+.text-display {
+  font-size: var(--text-display);
+  line-height: 1.2;
 }

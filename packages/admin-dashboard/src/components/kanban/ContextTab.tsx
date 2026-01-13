@@ -88,7 +88,7 @@ export const ContextTab: React.FC<ContextTabProps> = ({ task, onUpdateTask }) =>
         <div className="flex items-center justify-between mb-1">
           <h3 className="text-sm font-bold text-primary/70">WORKSPACE CONTEXT</h3>
           {isEditingContext && (
-            <Button variant="default" size="sm" className="h-6 gap-1 text-[10px] bg-green-600 hover:bg-green-700" onClick={handleSaveContext}>
+            <Button variant="default" size="sm" className="h-6 gap-1 text-compact bg-green-600 hover:bg-green-700" onClick={handleSaveContext}>
               <Save className="h-3 w-3" /> Save Changes
             </Button>
           )}
@@ -98,7 +98,7 @@ export const ContextTab: React.FC<ContextTabProps> = ({ task, onUpdateTask }) =>
           <div className="bg-black/30 p-3 border border-primary/30 space-y-2">
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="text-[10px] text-primary/50 block mb-1">Type</label>
+                <label className="text-compact text-primary/50 block mb-1">Type</label>
                 <select
                   className="w-full bg-black border border-primary/30 p-1 text-xs"
                   value={editedWorkspace.type || 'local'}
@@ -109,7 +109,7 @@ export const ContextTab: React.FC<ContextTabProps> = ({ task, onUpdateTask }) =>
                 </select>
               </div>
               <div>
-                <label className="text-[10px] text-primary/50 block mb-1">Repo ID</label>
+                <label className="text-compact text-primary/50 block mb-1">Repo ID</label>
                 <input
                   className="w-full bg-black border border-primary/30 p-1 text-xs"
                   value={editedWorkspace.repoId || ''}
@@ -118,7 +118,7 @@ export const ContextTab: React.FC<ContextTabProps> = ({ task, onUpdateTask }) =>
                 />
               </div>
               <div>
-                <label className="text-[10px] text-primary/50 block mb-1">Branch</label>
+                <label className="text-compact text-primary/50 block mb-1">Branch</label>
                 <input
                   className="w-full bg-black border border-primary/30 p-1 text-xs"
                   value={editedWorkspace.branch || ''}
@@ -127,7 +127,7 @@ export const ContextTab: React.FC<ContextTabProps> = ({ task, onUpdateTask }) =>
                 />
               </div>
               <div>
-                <label className="text-[10px] text-primary/50 block mb-1">Path</label>
+                <label className="text-compact text-primary/50 block mb-1">Path</label>
                 <input
                   className="w-full bg-black border border-primary/30 p-1 text-xs"
                   value={editedWorkspace.path || ''}

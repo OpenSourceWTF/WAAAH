@@ -63,7 +63,7 @@ export const DiffLine = React.memo(function DiffLine({ line, lineNum, lineCommen
       {/* Comment indicator */}
       {lineComments.length > 0 && (
         <div className="px-2 flex items-center">
-          <Badge variant="outline" className="text-[10px] h-5">
+          <Badge variant="outline" className="text-compact h-5">
             <MessageSquare className="h-3 w-3 mr-1" />
             {lineComments.length}
           </Badge>

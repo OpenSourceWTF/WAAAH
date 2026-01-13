@@ -16,14 +16,14 @@ interface AgentIndicatorProps {
 export function SourceBadge({ source }: { source?: 'cli' | 'ide' }) {
   if (source === 'cli') {
     return (
-      <span className="inline-flex items-center gap-0.5 text-[9px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 border border-blue-500/30 font-bold">
+      <span className="inline-flex items-center gap-0.5 text-compact bg-blue-500/20 text-blue-400 px-1.5 py-0.5 border border-blue-500/30 font-bold">
         <Terminal className="h-2.5 w-2.5" />CLI
       </span>
     );
   }
   if (source === 'ide') {
     return (
-      <span className="inline-flex items-center gap-0.5 text-[9px] bg-purple-500/20 text-purple-400 px-1.5 py-0.5 border border-purple-500/30 font-bold">
+      <span className="inline-flex items-center gap-0.5 text-compact bg-purple-500/20 text-purple-400 px-1.5 py-0.5 border border-purple-500/30 font-bold">
         <Monitor className="h-2.5 w-2.5" />IDE
       </span>
     );
@@ -58,17 +58,17 @@ export function AgentIndicator({
             <span className="font-bold text-sm text-primary truncate">{agent.displayName || agent.id}</span>
             <div className="flex items-center gap-1">
               {getSourceBadge(agent.source)}
-              <Badge className={`${getStatusBadgeClass(agent.status)} text-[10px] shrink-0`}>{agent.status}</Badge>
+              <Badge className={`${getStatusBadgeClass(agent.status)} text-compact shrink-0`}>{agent.status}</Badge>
             </div>
           </div>
           <div className="text-xs text-primary/60 font-mono mb-2">[{agent.role}]</div>
           {currentTask && (
             <div className="border-t border-primary/20 pt-2 mt-2">
-              <div className="text-[10px] text-primary/50 uppercase mb-1">Current Task:</div>
+              <div className="text-compact text-primary/50 uppercase mb-1">Current Task:</div>
               <div className="text-xs text-foreground font-mono truncate">{currentTask}</div>
             </div>
           )}
-          <div className="text-[10px] text-primary/40 mt-2 flex items-center gap-1">
+          <div className="text-compact text-primary/40 mt-2 flex items-center gap-1">
             <Clock className="h-3 w-3" />{getRelativeTime(agent.lastSeen)}
           </div>
         </div>

@@ -76,7 +76,7 @@ export function AgentCard({
           </div>
 
           {/* Row 2: Role + Source + Status + Time */}
-          <div className="flex items-center gap-2 mt-1 text-[10px]">
+          <div className="flex items-center gap-2 mt-1 text-compact">
             {agent.role && <span className="text-primary/50 font-mono">[{agent.role}]</span>}
             {getSourceBadge(agent.source)}
             <span className={`font-bold ${statusColorClass}`}>{agent.status}</span>
@@ -89,7 +89,7 @@ export function AgentCard({
       <div className={`overflow-hidden transition-all duration-300 ${isExpanded ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'}`}>
         <div className="px-2 pb-2 pt-1 border-t border-primary/20 bg-primary/5 space-y-2">
           {/* Time Info */}
-          <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-primary/70">
+          <div className="flex flex-wrap gap-x-3 gap-y-1 text-compact text-primary/70">
             <div className="flex items-center gap-1">
               <Clock className="h-3 w-3" />
               <span>Created: {agent.createdAt ? new Date(agent.createdAt).toLocaleDateString() : 'Unknown'}</span>
@@ -101,26 +101,26 @@ export function AgentCard({
 
           {/* Capabilities */}
           <div>
-            <div className="flex items-center gap-1 text-[10px] text-primary/50 mb-1">
+            <div className="flex items-center gap-1 text-compact text-primary/50 mb-1">
               <Cpu className="h-3 w-3" /><span>CAPABILITIES:</span>
             </div>
             {agent.capabilities && agent.capabilities.length > 0 ? (
               <div className="flex flex-wrap gap-1">
                 {agent.capabilities.slice(0, 5).map(cap => (
-                  <span key={cap} className="text-[9px] bg-primary/10 text-primary px-1.5 py-0.5 border border-primary/20">{cap}</span>
+                  <span key={cap} className="text-compact bg-primary/10 text-primary px-1.5 py-0.5 border border-primary/20">{cap}</span>
                 ))}
-                {agent.capabilities.length > 5 && <span className="text-[9px] text-primary/50">+{agent.capabilities.length - 5} more</span>}
+                {agent.capabilities.length > 5 && <span className="text-compact text-primary/50">+{agent.capabilities.length - 5} more</span>}
               </div>
             ) : (
-              <span className="text-[10px] text-primary/40 italic">None listed</span>
+              <span className="text-compact text-primary/40 italic">None listed</span>
             )}
           </div>
 
           {/* Workspace */}
           {agent.workspaceContext && (agent.workspaceContext.repoId || agent.workspaceContext.workspaceId || agent.workspaceContext.root || agent.workspaceContext.path) && (
             <div>
-              <div className="text-[10px] text-primary/50 uppercase mb-1">Workspace:</div>
-              <div className="text-[9px] font-mono text-primary/70 bg-black/20 px-1.5 py-1 border border-primary/20 truncate">
+              <div className="text-compact text-primary/50 uppercase mb-1">Workspace:</div>
+              <div className="text-compact font-mono text-primary/70 bg-black/20 px-1.5 py-1 border border-primary/20 truncate">
                 {agent.workspaceContext.repoId || agent.workspaceContext.workspaceId || agent.workspaceContext.root || agent.workspaceContext.path}
               </div>
             </div>
@@ -129,7 +129,7 @@ export function AgentCard({
           {/* Current Task */}
           {currentTask && (
             <div>
-              <div className="text-[10px] text-primary/50 uppercase mb-1">Current Task:</div>
+              <div className="text-compact text-primary/50 uppercase mb-1">Current Task:</div>
               <div className="text-xs text-foreground font-mono bg-black/20 p-2 border border-primary/20 truncate">{currentTask}</div>
             </div>
           )}
@@ -139,7 +139,7 @@ export function AgentCard({
             <Button
               variant="destructive"
               size="sm"
-              className="h-6 gap-1 text-[10px] font-mono uppercase bg-red-600 hover:bg-red-700"
+              className="h-6 gap-1 text-compact font-mono uppercase bg-red-600 hover:bg-red-700"
               onClick={onEvict}
             >
               <Power className="h-3 w-3" /> Kill

@@ -222,11 +222,11 @@ export const ExpandedCardView: React.FC<ExpandedCardViewProps> = ({
                           >
                             <div className="flex-1 min-w-0">
                               <p className="text-xs font-mono text-primary truncate" title={stat.path}>{stat.path.split('/').pop()}</p>
-                              <p className="text-[10px] text-primary/40 truncate">{stat.path}</p>
+                              <p className="text-compact text-primary/40 truncate">{stat.path}</p>
                             </div>
                             <div className="flex items-center gap-1 shrink-0">
-                              {stat.additions > 0 && <span className="text-[10px] text-green-400">+{stat.additions}</span>}
-                              {stat.deletions > 0 && <span className="text-[10px] text-red-400">−{stat.deletions}</span>}
+                              {stat.additions > 0 && <span className="text-compact text-green-400">+{stat.additions}</span>}
+                              {stat.deletions > 0 && <span className="text-compact text-red-400">−{stat.deletions}</span>}
                             </div>
                           </button>
                         ))}

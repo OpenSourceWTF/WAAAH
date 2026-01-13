@@ -16,11 +16,11 @@ export function CommentThread({ comment, replies }: CommentThreadProps) {
           <span className={`text-xs font-bold ${comment.authorRole === 'user' ? 'text-primary' : 'text-blue-400'}`}>
             {comment.authorRole === 'user' ? 'You' : comment.authorId || 'Agent'}
           </span>
-          <span className="text-[10px] text-primary/40">
+          <span className="text-compact text-primary/40">
             {new Date(comment.createdAt).toLocaleString()}
           </span>
           {comment.resolved && (
-            <Badge className="bg-green-600 text-white text-[10px] h-4">
+            <Badge className="bg-green-600 text-white text-compact h-4">
               <Check className="h-2 w-2 mr-1" /> Resolved
             </Badge>
           )}
@@ -32,7 +32,7 @@ export function CommentThread({ comment, replies }: CommentThreadProps) {
           <div key={reply.id} className="mt-2 pl-3 border-l border-primary/20">
             <div className="flex items-center gap-2 mb-1">
               <span className="text-xs font-bold text-blue-400">Agent</span>
-              <span className="text-[10px] text-primary/40">
+              <span className="text-compact text-primary/40">
                 {new Date(reply.createdAt).toLocaleString()}
               </span>
             </div>
