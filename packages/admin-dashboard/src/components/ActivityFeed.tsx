@@ -147,7 +147,7 @@ export function ActivityFeed() {
           </div>
         </ScrollArea>
         {!autoScroll && (
-          <div className="absolute bottom-2 right-2 bg-primary text-black font-bold text-[10px] px-2 py-1 border border-black shadow-lg pointer-events-none opacity-90 uppercase">
+          <div className="absolute bottom-2 right-2 bg-primary text-black font-bold text-compact px-2 py-1 border border-black shadow-lg pointer-events-none opacity-90 uppercase">
             SCROLL PAUSED
           </div>
         )}

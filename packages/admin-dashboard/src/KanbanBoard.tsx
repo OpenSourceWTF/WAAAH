@@ -268,16 +268,16 @@ export const KanbanBoard = React.memo(function KanbanBoard({
                       <div className="flex items-center gap-1">
                         <Badge className={getStatusBadgeClass(task.status)}>{formatStatusLabel(task.status)}</Badge>
                         {task.status === 'BLOCKED' && (
-                          <Badge className="bg-orange-500 text-white text-[10px] px-1.5 py-0.5 border border-orange-700">⛔ BLOCKED</Badge>
+                          <Badge className="bg-orange-500 text-white text-compact px-1.5 py-0.5 border border-orange-700">⛔ BLOCKED</Badge>
                         )}
                       </div>
                       <div className="flex items-center gap-1">
                         {unreadCount > 0 && (
-                          <Badge className="bg-amber-500 text-white text-[10px] px-1.5 py-0.5">{unreadCount} PENDING</Badge>
+                          <Badge className="bg-amber-500 text-white text-compact px-1.5 py-0.5">{unreadCount} PENDING</Badge>
                         )}
                         {/* Source badge */}
                         {task.source && (
-                          <Badge className={`text-[10px] px-1.5 py-0.5 ${task.source === 'UI' ? 'bg-blue-500 text-white border border-blue-700' :
+                          <Badge className={`text-compact px-1.5 py-0.5 ${task.source === 'UI' ? 'bg-blue-500 text-white border border-blue-700' :
                             task.source === 'CLI' ? 'bg-green-500 text-white border border-green-700' :
                               'bg-purple-500 text-white border border-purple-700'
                             }`}>{task.source}</Badge>
@@ -286,7 +286,7 @@ export const KanbanBoard = React.memo(function KanbanBoard({
                     </div>
                     {/* Row 2: Agent (if assigned) */}
                     {task.assignedTo && (
-                      <div className="text-[10px] text-primary/60 flex items-center gap-1">
+                      <div className="text-compact text-primary/60 flex items-center gap-1">
                         <User className="h-2.5 w-2.5" />
                         {task.assignedTo}
                       </div>
@@ -310,7 +310,7 @@ export const KanbanBoard = React.memo(function KanbanBoard({
                     )}
 
                     {/* Task ID - full row */}
-                    <div className="font-mono text-[10px] text-primary/50 truncate">
+                    <div className="font-mono text-compact text-primary/50 truncate">
                       {task.id}
                     </div>
 
@@ -318,24 +318,24 @@ export const KanbanBoard = React.memo(function KanbanBoard({
                     {task.to?.requiredCapabilities && task.to.requiredCapabilities.length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-1">
                         {task.to.requiredCapabilities.slice(0, 3).map(cap => (
-                          <span key={cap} className="text-[9px] bg-primary/10 text-primary px-1.5 py-0.5 border border-primary/20">{cap}</span>
+                          <span key={cap} className="text-compact bg-primary/10 text-primary px-1.5 py-0.5 border border-primary/20">{cap}</span>
                         ))}
                         {task.to.requiredCapabilities.length > 3 && (
-                          <span className="text-[9px] text-primary/50">+{task.to.requiredCapabilities.length - 3}</span>
+                          <span className="text-compact text-primary/50">+{task.to.requiredCapabilities.length - 3}</span>
                         )}
                       </div>
                     )}
 
                     {/* Workspace - same style as AgentCard */}
                     {(task.workspaceContext?.repoId || task.to?.workspaceId) && (
-                      <div className="text-[9px] font-mono text-primary/70 bg-black/20 px-1.5 py-0.5 border border-primary/20 truncate mt-1">
+                      <div className="text-compact font-mono text-primary/70 bg-black/20 px-1.5 py-0.5 border border-primary/20 truncate mt-1">
                         {task.workspaceContext?.repoId || task.to?.workspaceId}
                       </div>
                     )}
 
                     {/* Created at + Duration on same line */}
                     {task.createdAt && (
-                      <div className="flex items-center justify-between text-[10px] mt-1">
+                      <div className="flex items-center justify-between text-compact mt-1">
                         <span className="text-primary/40">
                           {formatDate(task.createdAt)}
                         </span>

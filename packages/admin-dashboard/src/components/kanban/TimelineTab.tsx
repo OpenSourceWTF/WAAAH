@@ -59,7 +59,7 @@ export const TimelineTab: React.FC<TimelineTabProps> = ({ task }) => {
         return (
           <div key={`progress-${idx}`} className="text-sm p-2 border-l-2 border-green-500 bg-green-500/10">
             <div className="flex items-center gap-2 mb-1">
-              <Badge variant="outline" className="text-[10px] border-green-500 text-green-400">PROGRESS</Badge>
+              <Badge variant="outline" className="text-compact border-green-500 text-green-400">PROGRESS</Badge>
               <span className="text-primary/40 font-mono">{time}</span>
               <span className="text-green-400 font-bold">{percentage}%</span>
             </div>
