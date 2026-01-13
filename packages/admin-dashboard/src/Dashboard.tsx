@@ -24,6 +24,9 @@ export function Dashboard() {
   // Task creation form visibility
   const [showTaskForm, setShowTaskForm] = useState(false);
 
+  // Task expansion state for header visibility
+  const [isTaskExpanded, setIsTaskExpanded] = useState(false);
+
   // Use custom hooks for data fetching with deduplication (prevents animation interruption)
   const {
     activeTasks,
@@ -250,8 +253,11 @@ export function Dashboard() {
 
   return (
     <div className="flex flex-col h-screen bg-background text-primary uppercase font-mono tracking-wider">
-      {/* 1. Header (Sticky Top) */}
-      <header className="flex-none flex items-center justify-between px-8 py-6 border-b-2 border-primary bg-background z-10 sticky top-0 shadow-[0_0_15px_hsl(var(--glow)/0.3)]">
+      {/* 1. Header (Sticky Top) - slides up when task expanded */}
+      <header className={`flex-none flex items-center justify-between px-8 py-6 border-b-2 border-primary bg-background z-10 sticky top-0 shadow-[0_0_15px_hsl(var(--glow)/0.3)] transition-all duration-300 ease-out ${isTaskExpanded
+          ? '-translate-y-full opacity-0 pointer-events-none'
+          : 'translate-y-0 opacity-100'
+        }`}>
         <div className="flex items-center gap-4">
           <div className="bg-primary text-primary-foreground p-2 font-bold text-2xl animate-pulse">
             <Skull className="h-8 w-8" />
@@ -349,6 +355,7 @@ export function Dashboard() {
               hasMoreCancelled={hasMoreCancelled}
               loadingMore={loadingMore}
               searchQuery={searchQuery}
+              onExpandChange={setIsTaskExpanded}
             />
           </div>
         </div>
