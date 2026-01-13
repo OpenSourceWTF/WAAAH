@@ -105,17 +105,17 @@ export const MessageThread: React.FC<MessageThreadProps> = ({
       </div>
 
       {/* Message List with Interleaved Timeline */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-2 bg-black/20">
+      <div className="flex-1 overflow-y-auto p-3 space-y-3 bg-black/20">
         {/* Prompt Injection */}
         <div className="flex gap-2 justify-start">
-          <div className={`max-w-[90%] p-2 text-xs bg-amber-600 text-white ${rounds}`}>
-            <div className="flex items-center gap-2 mb-1">
-              <Badge className={`bg-amber-800 text-white text-compact px-1 py-0 ${rounds}`}>PROMPT</Badge>
-              <span className="text-compact opacity-70">
+          <div className={`max-w-[90%] p-3 text-xs bg-amber-600 text-white shadow-sm ${rounds}`}>
+            <div className="flex items-center gap-2 mb-2">
+              <Badge className={`bg-amber-800 text-white text-[10px] px-1.5 py-0.5 ${rounds}`}>PROMPT</Badge>
+              <span className="text-[10px] opacity-70">
                 {new Date(task.createdAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </span>
             </div>
-            <div className="whitespace-pre-wrap break-words">{task.prompt}</div>
+            <div className="whitespace-pre-wrap break-words font-mono">{task.prompt}</div>
           </div>
         </div>
 
@@ -158,15 +158,14 @@ export const MessageThread: React.FC<MessageThreadProps> = ({
 
           return items.map((item, idx) => {
             if (item.type === 'status') {
-              // Status event indicator
+              // Status event indicator - subtle and compact
               const evt = item.data;
               return (
-                <div key={`status-${idx}`} className="flex justify-center">
-                  <div className={`flex items-center gap-2 text-compact text-primary/50 bg-primary/10 px-2 py-1 border border-primary/20 ${roundsFull}`}>
-                    <span className={`h-1.5 w-1.5 bg-primary/50 ${roundsFull}`} />
-                    <span className="font-mono">{evt.status}</span>
-                    {evt.agentId && <span>• {evt.agentId}</span>}
-                    <span>{new Date(evt.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                <div key={`status-${idx}`} className="flex justify-center my-1">
+                  <div className={`flex items-center gap-1.5 text-[9px] text-primary/40 px-2 py-0.5 ${roundsFull}`}>
+                    <span className={`h-1 w-1 bg-primary/30 ${roundsFull}`} />
+                    <span className="font-mono uppercase tracking-wider">{evt.status}</span>
+                    <span className="opacity-60">{new Date(evt.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                   </div>
                 </div>
               );
@@ -185,10 +184,10 @@ export const MessageThread: React.FC<MessageThreadProps> = ({
 
               return (
                 <div key={`response-${idx}`} className="flex gap-2 justify-start">
-                  <div className={`max-w-[90%] p-2 text-xs ${bgColor} text-white ${rounds}`}>
-                    <div className="flex items-center gap-2 mb-1">
-                      <Badge className={`${badgeBgColor} text-white text-compact px-1 py-0 ${rounds}`}>{badgeText}</Badge>
-                      <span className="text-compact opacity-70">
+                  <div className={`max-w-[90%] p-3 text-xs ${bgColor} text-white shadow-sm ${rounds}`}>
+                    <div className="flex items-center gap-2 mb-2">
+                      <Badge className={`${badgeBgColor} text-white text-[10px] px-1.5 py-0.5 ${rounds}`}>{badgeText}</Badge>
+                      <span className="text-[10px] opacity-70">
                         {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </span>
                     </div>
@@ -222,29 +221,29 @@ export const MessageThread: React.FC<MessageThreadProps> = ({
                 className={`flex gap-2 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
                 <div
-                  className={`max-w-[80%] p-2 text-xs ${rounds} ${msg.role === 'user'
+                  className={`max-w-[80%] p-3 text-xs shadow-sm ${rounds} ${msg.role === 'user'
                     ? 'bg-blue-600 text-white'
-                    : 'bg-slate-700 text-slate-100'
+                    : 'bg-slate-800 text-slate-100 border border-slate-700'
                     } ${replyToId === msg.id ? 'ring-2 ring-yellow-400' : ''}`}
                 >
                   {parentMsg && (
-                    <div className="flex items-center gap-1 mb-1 text-compact opacity-60">
-                      <CornerDownRight className="h-2.5 w-2.5" />
-                      <span className="truncate">↳ {parentMsg.content.slice(0, 30)}...</span>
+                    <div className="flex items-center gap-1 mb-2 text-[10px] opacity-70 bg-black/20 px-2 py-1 -mx-1">
+                      <CornerDownRight className="h-2.5 w-2.5 shrink-0" />
+                      <span className="truncate italic">Re: {parentMsg.content.slice(0, 40)}...</span>
                     </div>
                   )}
-                  <div className="flex items-center gap-2 mb-1">
+                  <div className="flex items-center gap-2 mb-2">
                     <span className={`font-bold ${msg.role === 'user' ? 'text-primary' : 'text-blue-400'}`}>
                       {msg.role === 'user' ? 'YOU' : (msg.metadata?.agentId as string || task.assignedTo || 'AGENT')}
                     </span>
-                    <span className="text-compact opacity-50">
-                      {new Date(msg.timestamp).toLocaleTimeString()}
+                    <span className="text-[10px] opacity-50">
+                      {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
                     {msg.role === 'user' && msg.isRead === false && (
-                      <Badge className={`bg-amber-500 text-white text-compact px-1 py-0 ${rounds}`}>PENDING</Badge>
+                      <Badge className={`bg-amber-500 text-white text-[10px] px-1 py-0 ${rounds}`}>PENDING</Badge>
                     )}
                     {msg.role === 'user' && msg.isRead === true && !hasAgentReply && (
-                      <Badge className={`bg-yellow-500 text-black text-compact px-1 py-0 ${rounds}`}>PENDING</Badge>
+                      <Badge className={`bg-yellow-500 text-black text-[10px] px-1 py-0 ${rounds}`}>PENDING</Badge>
                     )}
                     {msg.role === 'user' && hasAgentReply && (
                       <span title="Replied"><CheckCircle className="h-3 w-3 text-green-500" /></span>
@@ -266,7 +265,7 @@ export const MessageThread: React.FC<MessageThreadProps> = ({
                     </div>
                   )}
                   {msg.id && msg.role === 'agent' && (
-                    <button onClick={() => handleReply(msg.id!)} className="mt-1 flex items-center gap-1 text-compact text-primary/50 hover:text-primary">
+                    <button onClick={() => handleReply(msg.id!)} className="mt-1 flex items-center gap-1 text-[10px] text-primary/50 hover:text-primary">
                       <Reply className="h-3 w-3" /> Reply
                     </button>
                   )}
@@ -283,7 +282,7 @@ export const MessageThread: React.FC<MessageThreadProps> = ({
         {replyToId && replyToMsg && (
           <div className="flex items-center gap-2 px-3 py-1.5 bg-primary/10 border-b border-primary/20">
             <CornerDownRight className="h-3 w-3 text-primary/60" />
-            <span className="text-compact text-primary/60 truncate flex-1">
+            <span className="text-[10px] text-primary/60 truncate flex-1">
               Replying: {replyToMsg.content.slice(0, 50)}...
             </span>
             <button onClick={handleCancelReply} className="text-primary/40 hover:text-primary text-xs">×</button>
@@ -303,7 +302,7 @@ export const MessageThread: React.FC<MessageThreadProps> = ({
           </div>
         )}
         <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleFileSelect} className="hidden" />
-        <div className="flex items-start gap-2 p-2">
+        <div className="flex items-end gap-2 p-3">
           <textarea
             rows={1}
             value={inputMessage}
@@ -322,16 +321,22 @@ export const MessageThread: React.FC<MessageThreadProps> = ({
               if (e.key === 'Escape' && replyToId) handleCancelReply();
             }}
             placeholder={replyToId ? "Type a reply..." : "Type a comment..."}
-            className={`flex-1 min-h-[32px] px-3 py-1.5 text-sm bg-black/30 border border-primary/30 text-foreground placeholder:text-primary/40 focus:outline-none focus:border-primary resize-none overflow-hidden ${rounds}`}
+            className={`flex-1 min-h-[36px] px-3 py-2 text-sm bg-black/30 border border-primary/30 text-foreground placeholder:text-primary/40 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/50 resize-none overflow-hidden font-mono ${rounds}`}
             style={{ maxHeight: '120px' }}
           />
-          <Button variant="ghost" size="sm" className={`h-8 w-8 p-0 text-primary/60 hover:text-primary ${rounds}`} onClick={() => fileInputRef.current?.click()}>
+          <Button variant="ghost" size="sm" className={`h-9 w-9 p-0 text-primary/60 hover:text-primary hover:bg-primary/10 ${rounds}`} onClick={() => fileInputRef.current?.click()}>
             <ImagePlus className="h-4 w-4" />
           </Button>
-          <Button variant="default" size="sm" className={`h-8 w-8 p-0 bg-primary hover:bg-primary/80 ${rounds}`} onClick={handleSendMessage} disabled={!inputMessage.trim() && pendingImages.length === 0}>
+          <Button
+            variant="default"
+            size="sm"
+            className={`h-9 px-4 bg-primary hover:bg-primary/90 text-black font-bold gap-1.5 shadow-md hover:shadow-lg transition-shadow ${rounds}`}
+            onClick={handleSendMessage}
+            disabled={!inputMessage.trim() && pendingImages.length === 0}
+          >
             <Send className="h-4 w-4" />
+            <span className="text-xs uppercase tracking-wider">Send</span>
           </Button>
-
         </div>
       </div>
     </div>
