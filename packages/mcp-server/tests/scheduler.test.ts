@@ -22,7 +22,9 @@ function createMockQueue(): ISchedulerQueue {
     getByStatuses: vi.fn().mockReturnValue([]),
     getBusyAgentIds: vi.fn().mockReturnValue([]),
     getAssignedTasksForAgent: vi.fn().mockReturnValue([]),
-    getAgentLastSeen: vi.fn().mockReturnValue(Date.now())
+    getAgentLastSeen: vi.fn().mockReturnValue(Date.now()),
+    getTaskLastProgress: vi.fn().mockReturnValue(undefined),
+    touchTask: vi.fn()
   };
 }
 
@@ -77,8 +79,7 @@ describe('HybridScheduler', () => {
       scheduler.runCycle();
 
       expect(mockQueue.getPendingAcks).toHaveBeenCalled();
-      expect(mockQueue.getByStatuses).toHaveBeenCalled();
-      expect(mockQueue.getBusyAgentIds).toHaveBeenCalled();
+      expect(mockQueue.getByStatuses).toHaveBeenCalled(); // Used by checkBlockedTasks and rebalanceStaleTasks
     });
 
     it('handles errors gracefully', () => {
@@ -204,31 +205,29 @@ describe('HybridScheduler', () => {
     });
   });
 
-  describe('rebalanceOrphanedTasks', () => {
-    it('requeues tasks from offline agents', () => {
-      const offlineAgentId = 'offline-agent';
-      const task = createTask('orphan-1', 'ASSIGNED');
+  describe('rebalanceStaleTasks', () => {
+    it('requeues stale tasks with no recent activity', () => {
+      const staleTime = Date.now() - (31 * 60 * 1000); // 31 min ago (> 30 min timeout)
+      const task = createTask('stale-1', 'IN_PROGRESS', { createdAt: staleTime });
 
-      (mockQueue.getBusyAgentIds as any).mockReturnValue([offlineAgentId]);
-      (mockQueue.getAgentLastSeen as any).mockReturnValue(Date.now() - 360000); // 6 min ago (> 5 min timeout)
-      (mockQueue.getAssignedTasksForAgent as any).mockReturnValue([task]);
+      (mockQueue.getByStatuses as any).mockReturnValue([task]);
+      (mockQueue.getTaskLastProgress as any).mockReturnValue(undefined); // No progress recorded
 
       scheduler.runCycle();
 
-      expect(mockQueue.forceRetry).toHaveBeenCalledWith('orphan-1');
+      expect(mockQueue.forceRetry).toHaveBeenCalledWith('stale-1');
     });
 
-    it('does not rebalance tasks from online agents', () => {
-      const onlineAgentId = 'online-agent';
-      const task = createTask('active-1', 'ASSIGNED');
+    it('does not rebalance active tasks with recent progress', () => {
+      const oldCreateTime = Date.now() - (31 * 60 * 1000); // Created 31 min ago
+      const recentProgress = Date.now() - (5 * 60 * 1000); // Progress 5 min ago
+      const task = createTask('active-1', 'IN_PROGRESS', { createdAt: oldCreateTime });
 
-      (mockQueue.getBusyAgentIds as any).mockReturnValue([onlineAgentId]);
-      (mockQueue.getAgentLastSeen as any).mockReturnValue(Date.now() - 5000); // 5s ago (recent)
-      (mockQueue.getAssignedTasksForAgent as any).mockReturnValue([task]);
+      (mockQueue.getByStatuses as any).mockReturnValue([task]);
+      (mockQueue.getTaskLastProgress as any).mockReturnValue(recentProgress);
 
       scheduler.runCycle();
 
-      // forceRetry should only be called for stuck PENDING_ACK, not for this task
       expect(mockQueue.forceRetry).not.toHaveBeenCalledWith('active-1');
     });
   });

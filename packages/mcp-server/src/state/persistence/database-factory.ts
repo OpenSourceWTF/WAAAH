@@ -216,7 +216,9 @@ function runMigrations(db: Database.Database): void {
     // Images JSON column
     { column: 'images', sql: 'ALTER TABLE tasks ADD COLUMN images TEXT' },
     // Workspace context (V8)
-    { column: 'workspaceContext', sql: 'ALTER TABLE tasks ADD COLUMN workspaceContext TEXT' }
+    { column: 'workspaceContext', sql: 'ALTER TABLE tasks ADD COLUMN workspaceContext TEXT' },
+    // Task staleness tracking (V9) - tracks last activity for timeout detection
+    { column: 'lastProgressAt', sql: 'ALTER TABLE tasks ADD COLUMN lastProgressAt INTEGER' }
   ];
 
   for (const migration of taskMigrations) {

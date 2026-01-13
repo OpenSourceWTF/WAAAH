@@ -19,7 +19,8 @@ const mockQueue = {
   ackTask: vi.fn(),
   addMessage: vi.fn(),
   getMessages: vi.fn(),
-  getUnreadComments: vi.fn()
+  getUnreadComments: vi.fn(),
+  touchTask: vi.fn()
 } as unknown as TaskQueue;
 
 describe('TaskHandlers: Orc Reliability', () => {

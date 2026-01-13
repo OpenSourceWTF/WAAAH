@@ -191,7 +191,7 @@ export class HybridScheduler {
     for (const task of activeTasks) {
       const lastProgress = this.queue.getTaskLastProgress(task.id);
       // Use createdAt as fallback if no progress recorded yet
-      const lastActivity = lastProgress || task.createdAt;
+      const lastActivity = lastProgress ?? task.createdAt ?? now;
 
       if (now - lastActivity > STALE_TASK_TIMEOUT_MS) {
         console.log(`[Scheduler] Task ${task.id} stale (no activity for 30+ min). Requeuing...`);
