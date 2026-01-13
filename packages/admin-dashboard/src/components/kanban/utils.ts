@@ -2,7 +2,7 @@
 import type { Task } from './types';
 
 export const getStatusBadgeClass = (status: string): string => {
-  const base = "text-xs font-bold px-2 py-1 border border-black";
+  const base = "text-xs font-bold px-2 py-1 border";
   switch (status) {
     case 'COMPLETED': return `${base} bg-green-600 text-white border-green-800`;
     case 'FAILED':
@@ -15,12 +15,13 @@ export const getStatusBadgeClass = (status: string): string => {
     case 'QUEUED':
     case 'PENDING':
     case 'PENDING_ACK':
-    case 'PENDING_RES':
     case 'WAITING': return `${base} bg-amber-500 text-black border-amber-700`;
+    // Attention required (needs human action)
     case 'BLOCKED':
+    case 'PENDING_RES': return `${base} bg-orange-500 text-white border-orange-700`;
     case 'IN_REVIEW':
-    case 'REVIEW': return `${base} bg-white text-black border-gray-400`;
-    case 'REJECTED': return `${base} bg-orange-500 text-white border-orange-700`;
+    case 'REVIEW': return `${base} bg-purple-500 text-white border-purple-700`;
+    case 'REJECTED': return `${base} bg-red-500 text-white border-red-700`;
     default: return `${base} bg-gray-600 text-white`;
   }
 };
