@@ -96,7 +96,7 @@ export const ExpandedCardView: React.FC<ExpandedCardViewProps> = ({
   return (
     <div
       key={task.id}
-      className="absolute inset-0 z-20 bg-card border-2 border-primary flex flex-col animate-in zoom-in-95 duration-200 fill-mode-forwards shadow-lg shadow-primary/30"
+      className="absolute inset-0 z-20 bg-card border-2 border-primary flex flex-col animate-card-expand shadow-lg shadow-primary/30"
       onClick={(e) => e.stopPropagation()}
     >
       {/* Header */}
@@ -244,7 +244,7 @@ export const ExpandedCardView: React.FC<ExpandedCardViewProps> = ({
 
           <div className="flex-1 overflow-y-auto">
             {/* PROMPT TAB */}
-            <TabsContent value="prompt" className="m-0 p-4 h-full flex flex-col">
+            <TabsContent value="prompt" className="m-0 p-4 h-full flex flex-col animate-tab-fade">
               <div className="flex-1 flex flex-col space-y-3 min-h-0">
                 <div className="shrink-0">
                   <h3 className="text-sm font-bold text-primary/70 mb-1">TASK TITLE</h3>
@@ -260,12 +260,12 @@ export const ExpandedCardView: React.FC<ExpandedCardViewProps> = ({
 
 
             {/* TIMELINE TAB - Interleaved chronological view */}
-            <TabsContent value="timeline" className="m-0 p-4 h-full">
+            <TabsContent value="timeline" className="m-0 p-4 h-full animate-tab-fade">
               <TimelineTab task={task} />
             </TabsContent>
 
             {/* REVIEW TAB */}
-            <TabsContent value="review" className="m-0 p-4 h-full overflow-y-auto">
+            <TabsContent value="review" className="m-0 p-4 h-full overflow-y-auto animate-tab-fade">
               <div className="space-y-4">
                 <div>
                   <h3 className="text-sm font-bold text-primary/70 mb-2">REVIEW STATUS</h3>
@@ -286,7 +286,7 @@ export const ExpandedCardView: React.FC<ExpandedCardViewProps> = ({
             </TabsContent>
 
             {/* CONTEXT TAB */}
-            <TabsContent value="context" className="m-0 p-4 h-full flex flex-col">
+            <TabsContent value="context" className="m-0 p-4 h-full flex flex-col animate-tab-fade">
               <ContextTab task={task} onUpdateTask={onUpdateTask} />
             </TabsContent>
           </div>

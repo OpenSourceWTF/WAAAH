@@ -218,7 +218,7 @@ export const MessageThread: React.FC<MessageThreadProps> = ({
             return (
               <div
                 key={`msg-${idx}`}
-                className={`flex gap-2 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                className={`flex gap-2 animate-message-in ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
                 <div
                   className={`max-w-[80%] p-3 text-xs shadow-sm ${rounds} ${msg.role === 'user'
