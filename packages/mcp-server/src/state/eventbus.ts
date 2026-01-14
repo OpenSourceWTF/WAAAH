@@ -10,6 +10,7 @@
  * - Request sync handler for reconnection recovery
  */
 import type { Server as SocketIOServer } from 'socket.io';
+import type { Task, AgentIdentity } from '@opensourcewtf/waaah-types';
 
 let io: SocketIOServer | null = null;
 let eventSeq = 0;
@@ -49,7 +50,7 @@ export function getEventSeq(): number {
 /**
  * Emit sync:full to a specific socket (on connection)
  */
-export function emitSyncFull(socketId: string, data: { tasks: any[]; agents: any[] }): void {
+export function emitSyncFull(socketId: string, data: { tasks: Task[]; agents: AgentIdentity[] }): void {
   if (!io) return;
   io.to(socketId).emit('sync:full', { ...data, seq: eventSeq });
   console.log(`[EventBus] sync:full to ${socketId} (${data.tasks.length} tasks, ${data.agents.length} agents, seq=${eventSeq})`);
@@ -58,7 +59,7 @@ export function emitSyncFull(socketId: string, data: { tasks: any[]; agents: any
 /**
  * Emit task created event
  */
-export function emitTaskCreated(task: any): void {
+export function emitTaskCreated(task: Task): void {
   if (!io) return;
   const seq = ++eventSeq;
   io.emit('task:created', { ...task, seq });

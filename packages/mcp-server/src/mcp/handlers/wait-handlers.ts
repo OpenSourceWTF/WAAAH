@@ -1,5 +1,6 @@
 import { AgentRepository } from '../../state/persistence/agent-repository.js';
 import { TaskQueue } from '../../state/queue.js';
+import type { Task } from '@opensourcewtf/waaah-types';
 import {
   waitForTaskSchema,
   createWaitForPromptSchema,
@@ -65,7 +66,7 @@ export class WaitHandlers {
         return { content: [{ type: 'text', text: JSON.stringify(result) }] };
       }
 
-      const task = result as any;
+      const task = result as Task;
       return {
         content: [{
           type: 'text', text: JSON.stringify({

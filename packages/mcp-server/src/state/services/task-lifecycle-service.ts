@@ -67,7 +67,7 @@ export class TaskLifecycleService {
     }
   }
 
-  updateStatus(taskId: string, status: TaskStatus, response?: any): Task | null {
+  updateStatus(taskId: string, status: TaskStatus, response?: Record<string, unknown>): Task | null {
     const task = this.repo.getById(taskId);
     if (!task) return null;
 
@@ -96,7 +96,8 @@ export class TaskLifecycleService {
     if (!RETRYABLE_STATES.includes(task.status)) return fail(`Task status ${task.status} is not retryable`);
 
     // Preserve any stored diff across retries
-    const preservedDiff = (task.response as any)?.artifacts?.diff;
+    const taskResp = task.response as { artifacts?: { diff?: string } } | undefined;
+    const preservedDiff = taskResp?.artifacts?.diff;
     task.assignedTo = task.completedAt = undefined;
     task.response = preservedDiff ? { artifacts: { diff: preservedDiff } } : undefined;
     task.status = 'QUEUED';

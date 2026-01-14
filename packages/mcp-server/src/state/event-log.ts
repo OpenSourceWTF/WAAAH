@@ -1,11 +1,31 @@
 /**
  * Event Log Implementation
- * 
+ *
  * Implements IEventLog for database-backed activity logging.
  * Replaces direct db access in events.ts.
  */
 import type { Database } from 'better-sqlite3';
 import type { IEventLog, LogEntry, ISecurityLog, SecurityEvent } from './interfaces.js';
+
+/** Database row type for logs table */
+interface LogRow {
+  id: number;
+  timestamp: number;
+  category: string;
+  message: string;
+  metadata: string | null;
+}
+
+/** Database row type for security_events table */
+interface SecurityEventRow {
+  id: number;
+  timestamp: number;
+  source: string;
+  fromId: string | null;
+  prompt: string;
+  flags: string;
+  action: string;
+}
 
 /**
  * SQLite implementation of IEventLog.
@@ -28,7 +48,7 @@ export class EventLog implements IEventLog {
   getRecent(limit: number): LogEntry[] {
     const rows = this.db.prepare(`
       SELECT * FROM logs ORDER BY timestamp DESC LIMIT ?
-    `).all(limit) as any[];
+    `).all(limit) as LogRow[];
 
     return rows.map(r => this.mapRow(r));
   }
@@ -36,7 +56,7 @@ export class EventLog implements IEventLog {
   getByCategory(category: string, limit: number = 100): LogEntry[] {
     const rows = this.db.prepare(`
       SELECT * FROM logs WHERE category = ? ORDER BY timestamp DESC LIMIT ?
-    `).all(category, limit) as any[];
+    `).all(category, limit) as LogRow[];
 
     return rows.map(r => this.mapRow(r));
   }
@@ -46,7 +66,7 @@ export class EventLog implements IEventLog {
     return result.changes;
   }
 
-  private mapRow(row: any): LogEntry {
+  private mapRow(row: LogRow): LogEntry {
     return {
       id: row.id,
       timestamp: row.timestamp,
@@ -80,7 +100,7 @@ export class SecurityLog implements ISecurityLog {
   getRecent(limit: number): SecurityEvent[] {
     const rows = this.db.prepare(`
       SELECT * FROM security_events ORDER BY timestamp DESC LIMIT ?
-    `).all(limit) as any[];
+    `).all(limit) as SecurityEventRow[];
 
     return rows.map(r => ({
       id: r.id,

@@ -8,6 +8,12 @@ import { exec } from 'child_process';
 import util from 'util';
 import type { Database } from 'better-sqlite3';
 
+/** DB row type for review comment parent query */
+interface ReviewCommentParentRow {
+  filePath: string;
+  lineNumber: number | null;
+}
+
 const execAsync = util.promisify(exec);
 
 interface ReviewRoutesConfig {
@@ -177,7 +183,7 @@ export function createReviewRoutes({ queue, db, workspaceRoot }: ReviewRoutesCon
 
       if (response) {
         const replyId = `rc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        const parentComment = db.prepare('SELECT filePath, lineNumber FROM review_comments WHERE id = ?').get(commentId) as any;
+        const parentComment = db.prepare('SELECT filePath, lineNumber FROM review_comments WHERE id = ?').get(commentId) as ReviewCommentParentRow | undefined;
 
         if (parentComment) {
           db.prepare(`

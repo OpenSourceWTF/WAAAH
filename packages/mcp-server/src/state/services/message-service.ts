@@ -46,7 +46,7 @@ export class MessageService {
   /**
    * Get unread user comments for a task (mailbox feature).
    */
-  getUnreadComments(taskId: string): Array<{ id: string; content: string; timestamp: number; metadata?: Record<string, any> }> {
+  getUnreadComments(taskId: string): Array<{ id: string; content: string; timestamp: number; metadata?: Record<string, unknown> }> {
     try {
       return this.repo.getUnreadComments(taskId);
     } catch (e: unknown) {
@@ -70,7 +70,7 @@ export class MessageService {
   /**
    * Get all messages for a task.
    */
-  getMessages(taskId: string): any[] {
+  getMessages(taskId: string): unknown[] {
     try {
       return this.repo.getMessages(taskId);
     } catch (e: unknown) {

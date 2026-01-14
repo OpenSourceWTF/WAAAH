@@ -127,7 +127,7 @@ export class QueuePersistence {
 
       // Only update mutable fields
       const updates = ['waitingSince = ?, capabilities = ?'];
-      const params: any[] = [Date.now(), JSON.stringify(capabilities)];
+      const params: (number | string)[] = [Date.now(), JSON.stringify(capabilities)];
 
       if (workspaceContext) {
         updates.push('workspaceContext = ?');

@@ -1,5 +1,14 @@
 import type { Database } from 'better-sqlite3';
 
+/** DB row type for system prompts query */
+interface SystemPromptRow {
+  id: number;
+  promptType: 'WORKFLOW_UPDATE' | 'EVICTION_NOTICE' | 'CONFIG_UPDATE' | 'SYSTEM_MESSAGE';
+  message: string;
+  payload: string | null;
+  priority: 'normal' | 'high' | 'critical';
+}
+
 export class SystemPromptService {
   constructor(private readonly db: Database) {}
 
@@ -26,13 +35,13 @@ export class SystemPromptService {
     // Try agent-specific prompt first
     let row = this.db.prepare(
       'SELECT id, promptType, message, payload, priority FROM system_prompts WHERE agentId = ? ORDER BY createdAt ASC LIMIT 1'
-    ).get(agentId) as any;
+    ).get(agentId) as SystemPromptRow | undefined;
 
     // Fall back to broadcast prompts
     if (!row) {
       row = this.db.prepare(
         'SELECT id, promptType, message, payload, priority FROM system_prompts WHERE agentId = ? ORDER BY createdAt ASC LIMIT 1'
-      ).get('*') as any;
+      ).get('*') as SystemPromptRow | undefined;
     }
 
     if (row) {

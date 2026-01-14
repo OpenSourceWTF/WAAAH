@@ -25,14 +25,17 @@ export class TypedEventEmitter extends EventEmitter {
   }
 
   on<K extends keyof TaskQueueEvents>(event: K, listener: (...args: TaskQueueEvents[K]) => void): this {
-    return super.on(event, listener as (...args: any[]) => void);
+    // Cast required for Node.js EventEmitter compatibility
+    return super.on(event, listener as (...args: unknown[]) => void);
   }
 
   once<K extends keyof TaskQueueEvents>(event: K, listener: (...args: TaskQueueEvents[K]) => void): this {
-    return super.once(event, listener as (...args: any[]) => void);
+    // Cast required for Node.js EventEmitter compatibility
+    return super.once(event, listener as (...args: unknown[]) => void);
   }
 
   off<K extends keyof TaskQueueEvents>(event: K, listener: (...args: TaskQueueEvents[K]) => void): this {
-    return super.off(event, listener as (...args: any[]) => void);
+    // Cast required for Node.js EventEmitter compatibility
+    return super.off(event, listener as (...args: unknown[]) => void);
   }
 }

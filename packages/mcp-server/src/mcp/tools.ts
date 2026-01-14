@@ -124,11 +124,11 @@ export class ToolHandler {
     return this.reviewHandlers.submit_review(args);
   }
 
-  async get_review_comments(args: unknown, db: any) {
+  async get_review_comments(args: unknown, db: import('better-sqlite3').Database) {
     return this.reviewHandlers.get_review_comments(args, db);
   }
 
-  async resolve_review_comment(args: unknown, db: any) {
+  async resolve_review_comment(args: unknown, db: import('better-sqlite3').Database) {
     return this.reviewHandlers.resolve_review_comment(args, db);
   }
 

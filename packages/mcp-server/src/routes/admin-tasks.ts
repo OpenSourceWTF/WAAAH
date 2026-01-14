@@ -211,8 +211,9 @@ export function createTaskRoutes({ queue, workspaceRoot }: TaskRoutesConfig): Ro
     try {
       // S17: Check for persisted raw diff first (supports remote agents)
       const task = queue.getTask(taskId) || queue.getTaskFromDB(taskId);
-      if (task?.response && (task.response as any).diff) {
-        res.json({ diff: (task.response as any).diff });
+      const taskResponse = task?.response as { diff?: string } | undefined;
+      if (taskResponse?.diff) {
+        res.json({ diff: taskResponse.diff });
         return;
       }
 

@@ -65,7 +65,7 @@ export interface ITaskQueue {
   addMessage(taskId: string, role: 'user' | 'agent' | 'system', content: string, metadata?: Record<string, unknown>): void;
 
   /** Get task message history */
-  getMessages(taskId: string): any[];
+  getMessages(taskId: string): unknown[];
 
   // ===== Agent Waiting / Long-Polling =====
 

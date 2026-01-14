@@ -149,7 +149,7 @@ export class AgentHandlers {
   async admin_update_agent(args: unknown) {
     try {
       const params = adminUpdateAgentSchema.parse(args);
-      const updates: any = {};
+      const updates: { status?: string; displayName?: string; color?: string } = {};
       if (params.status) updates.status = params.status;
       if (params.metadata?.displayName) updates.displayName = params.metadata.displayName as string;
       if (params.metadata?.color) updates.color = params.metadata.color as string;
@@ -174,7 +174,7 @@ export class AgentHandlers {
    */
   async admin_evict_agent(args: unknown) {
     try {
-      const params = args as any;
+      const params = args as { agentId?: string; reason?: string; action?: 'RESTART' | 'SHUTDOWN' };
       if (!params.agentId || !params.reason) {
         return {
           content: [{ type: 'text', text: 'Missing agentId or reason' }],

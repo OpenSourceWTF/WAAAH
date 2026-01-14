@@ -27,6 +27,7 @@ import {
 } from '@opensourcewtf/waaah-types';
 import type { Database } from 'better-sqlite3';
 import { ITaskQueue, QueueStats, WaitResult, HistoryOptions } from './queue.interface.js';
+import type { LogEntry } from './interfaces.js';
 // import { StateHashService } from './services/state-hash-service.js';
 import { TypedEventEmitter } from './queue-events.js';
 import { TaskRepository, type ITaskRepository } from './persistence/task-repository.js';
@@ -145,7 +146,7 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue {
   /**
    * Updates task status and optionally sets response.
    */
-  updateStatus(taskId: string, status: TaskStatus, response?: any): void {
+  updateStatus(taskId: string, status: TaskStatus, response?: Record<string, unknown>): void {
     const task = this.stateService.updateStatus(taskId, status, response);
     const isTerminal = task && ['COMPLETED', 'FAILED', 'BLOCKED'].includes(status);
     isTerminal && (this.emit('completion', task), console.log(`[Queue] Emitted completion: ${taskId} (${status})`));
@@ -219,7 +220,7 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue {
     return this.messageService.markCommentsAsRead(taskId);
   }
 
-  getMessages(taskId: string): any[] {
+  getMessages(taskId: string): unknown[] {
     return this.messageService.getMessages(taskId);
   }
 
@@ -345,7 +346,7 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue {
   /** Get agent's last seen timestamp from database */
   getAgentLastSeen(agentId: string): number | undefined {
     try {
-      const row = this.db.prepare('SELECT lastSeen FROM agents WHERE id = ?').get(agentId) as any;
+      const row = this.db.prepare('SELECT lastSeen FROM agents WHERE id = ?').get(agentId) as { lastSeen: number } | undefined;
       return row?.lastSeen;
     } catch {
       return undefined;
@@ -355,7 +356,7 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue {
   /** Get task's last progress timestamp from database - implements ISchedulerQueue */
   getTaskLastProgress(taskId: string): number | undefined {
     try {
-      const row = this.db.prepare('SELECT lastProgressAt FROM tasks WHERE id = ?').get(taskId) as any;
+      const row = this.db.prepare('SELECT lastProgressAt FROM tasks WHERE id = ?').get(taskId) as { lastProgressAt: number | null } | undefined;
       return row?.lastProgressAt ?? undefined;
     } catch {
       return undefined;
@@ -425,10 +426,20 @@ export class TaskQueue extends TypedEventEmitter implements ITaskQueue {
   /**
    * Fetch recent activity logs.
    */
-  getLogs(limit: number = 100): any[] {
-    const logs = this.db.prepare('SELECT * FROM logs ORDER BY timestamp DESC LIMIT ?').all(limit) as any[];
+  getLogs(limit: number = 100): LogEntry[] {
+    interface LogRow {
+      id: number;
+      timestamp: number;
+      category: string;
+      message: string;
+      metadata: string | null;
+    }
+    const logs = this.db.prepare('SELECT * FROM logs ORDER BY timestamp DESC LIMIT ?').all(limit) as LogRow[];
     return logs.reverse().map(l => ({
-      ...l,
+      id: l.id,
+      timestamp: l.timestamp,
+      category: l.category,
+      message: l.message,
       metadata: l.metadata ? JSON.parse(l.metadata) : undefined
     }));
   }

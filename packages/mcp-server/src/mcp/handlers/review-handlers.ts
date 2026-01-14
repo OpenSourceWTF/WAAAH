@@ -116,7 +116,7 @@ export class ReviewHandlers {
   /**
    * Gets review comments for a task (for code review workflow).
    */
-  async get_review_comments(args: unknown, db: any) {
+  async get_review_comments(args: unknown, db: import('better-sqlite3').Database) {
     try {
       const { getReviewCommentsSchema } = await import('@opensourcewtf/waaah-types');
       const params = getReviewCommentsSchema.parse(args);
@@ -140,7 +140,7 @@ export class ReviewHandlers {
   /**
    * Resolves a review comment (marks it as addressed).
    */
-  async resolve_review_comment(args: unknown, db: any) {
+  async resolve_review_comment(args: unknown, db: import('better-sqlite3').Database) {
     try {
       const { resolveReviewCommentSchema } = await import('@opensourcewtf/waaah-types');
       const params = resolveReviewCommentSchema.parse(args);
@@ -153,7 +153,7 @@ export class ReviewHandlers {
 
       if (params.response) {
         const replyId = `rc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        const parentComment = db.prepare('SELECT filePath, lineNumber FROM review_comments WHERE id = ?').get(params.commentId) as any;
+        const parentComment = db.prepare('SELECT filePath, lineNumber FROM review_comments WHERE id = ?').get(params.commentId) as { filePath?: string; lineNumber?: number } | undefined;
 
         if (parentComment) {
           db.prepare(`

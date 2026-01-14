@@ -10,6 +10,16 @@ import type { DatabaseOptions } from '../interfaces.js';
 import path from 'path';
 import fs from 'fs';
 
+/** PRAGMA table_info row structure */
+interface ColumnInfo {
+  cid: number;
+  name: string;
+  type: string;
+  notnull: number;
+  dflt_value: unknown;
+  pk: number;
+}
+
 /**
  * Creates a database instance based on options.
  * 
@@ -196,8 +206,8 @@ export function initializeSchema(db: Database.Database): void {
  * Each migration checks if already applied before executing.
  */
 function runMigrations(db: Database.Database): void {
-  const taskColumns = db.prepare('PRAGMA table_info(tasks)').all() as any[];
-  const agentColumns = db.prepare('PRAGMA table_info(agents)').all() as any[];
+  const taskColumns = db.prepare('PRAGMA table_info(tasks)').all() as ColumnInfo[];
+  const agentColumns = db.prepare('PRAGMA table_info(agents)').all() as ColumnInfo[];
 
   // Task migrations
   const taskMigrations = [
@@ -222,12 +232,12 @@ function runMigrations(db: Database.Database): void {
   ];
 
   for (const migration of taskMigrations) {
-    if (!taskColumns.some((c: any) => c.name === migration.column)) {
+    if (!taskColumns.some((c) => c.name === migration.column)) {
       try {
         db.prepare(migration.sql).run();
         console.log(`[DB] Migrated tasks: added ${migration.column}`);
-      } catch (e: any) {
-        if (!e.message.includes('duplicate column name')) {
+      } catch (e: unknown) {
+        if (!(e instanceof Error && e.message.includes('duplicate column name'))) {
           console.error(`[DB] Migration failed (${migration.column}):`, e instanceof Error ? e.message : String(e));
         }
       }
@@ -251,12 +261,12 @@ function runMigrations(db: Database.Database): void {
   ];
 
   for (const migration of agentMigrations) {
-    if (!agentColumns.some((c: any) => c.name === migration.column)) {
+    if (!agentColumns.some((c) => c.name === migration.column)) {
       try {
         db.prepare(migration.sql).run();
         console.log(`[DB] Migrated agents: added ${migration.column}`);
-      } catch (e: any) {
-        if (!e.message.includes('duplicate column name')) {
+      } catch (e: unknown) {
+        if (!(e instanceof Error && e.message.includes('duplicate column name'))) {
           console.error(`[DB] Migration failed (${migration.column}):`, e instanceof Error ? e.message : String(e));
         }
       }
