@@ -7,7 +7,16 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { apiFetch } from '../lib/api';
 import { useFormSubmission } from '../hooks/useFormSubmission';
 import { FormActions } from './FormActions';
+import { ChipInput } from './ui/ChipInput';
 import './SpecSubmissionForm.css';
+
+const DEFAULT_CAPABILITIES = [
+  'code-writing',
+  'test-writing',
+  'doc-writing',
+  'spec-writing',
+  'code-doctor',
+];
 
 interface Agent {
   id: string;
@@ -62,6 +71,7 @@ export function TaskCreationForm({ onSubmit, onCancel }: TaskCreationFormProps) 
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [loadingWorkspaces, setLoadingWorkspaces] = useState(true);
   const [isDragging, setIsDragging] = useState(false);
+  const [capabilitySuggestions, setCapabilitySuggestions] = useState<string[]>(DEFAULT_CAPABILITIES);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const validate = useCallback((data: TaskFormData): Partial<Record<keyof TaskFormData, string>> => {
@@ -90,6 +100,23 @@ export function TaskCreationForm({ onSubmit, onCancel }: TaskCreationFormProps) 
     validate,
     onSubmit,
   });
+
+  // Fetch capability suggestions from API
+  useEffect(() => {
+    const fetchCapabilities = async () => {
+      try {
+        const response = await apiFetch('/admin/capabilities');
+        const data = await response.json();
+        if (data.capabilities && Array.isArray(data.capabilities)) {
+          setCapabilitySuggestions(data.capabilities);
+        }
+      } catch (err) {
+        // Fallback to defaults - already set in initial state
+        console.warn('Failed to fetch capabilities, using defaults:', err);
+      }
+    };
+    fetchCapabilities();
+  }, []);
 
   // Fetch workspaces and their capabilities on mount
   useEffect(() => {
@@ -140,23 +167,14 @@ export function TaskCreationForm({ onSubmit, onCancel }: TaskCreationFormProps) 
     fetchWorkspaces();
   }, [setFormData]);
 
-  // Get capabilities for selected workspace
-  const selectedWorkspace = workspaces.find(ws => ws.id === formData.workspaceId);
-  const availableCapabilities = selectedWorkspace?.capabilities || [];
-
   const handleTextChange = (field: 'title' | 'prompt') => (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
     handleFieldChange(field, e.target.value as TaskFormData[typeof field]);
   };
 
-  const handleCapabilityToggle = (capability: string) => {
-    setFormData(prev => ({
-      ...prev,
-      capabilities: prev.capabilities.includes(capability)
-        ? prev.capabilities.filter(c => c !== capability)
-        : [...prev.capabilities, capability]
-    }));
+  const handleCapabilitiesChange = (capabilities: string[]) => {
+    setFormData(prev => ({ ...prev, capabilities }));
   };
 
   // Image handling
@@ -355,27 +373,21 @@ export function TaskCreationForm({ onSubmit, onCancel }: TaskCreationFormProps) 
         )}
       </div>
 
-      {/* Role/Capability Checkboxes */}
-      {formData.workspaceId && availableCapabilities.length > 0 && (
-        <div className="spec-form__field">
-          <label className="spec-form__label">
-            Required Capabilities (optional)
-          </label>
-          <div className="task-form__capabilities">
-            {availableCapabilities.map((cap) => (
-              <label key={cap} className="task-form__capability-label">
-                <input
-                  type="checkbox"
-                  checked={formData.capabilities.includes(cap)}
-                  onChange={() => handleCapabilityToggle(cap)}
-                  className="task-form__capability-checkbox"
-                />
-                <span className="task-form__capability-name">{cap}</span>
-              </label>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* Required Capabilities - ChipInput */}
+      <div className="spec-form__field">
+        <label className="spec-form__label">
+          Required Capabilities (optional)
+        </label>
+        <ChipInput
+          value={formData.capabilities}
+          onChange={handleCapabilitiesChange}
+          suggestions={capabilitySuggestions}
+          placeholder="Add capabilities..."
+        />
+        <span className="spec-form__hint">
+          Type to add custom capabilities or select from suggestions
+        </span>
+      </div>
 
       {/* Image Attachments */}
       <div className="spec-form__field">
