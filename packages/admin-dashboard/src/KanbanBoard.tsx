@@ -8,7 +8,6 @@ import { useInfiniteScroll, useFilteredTasks, useExpandedTask, useRejectModal, g
 interface KanbanBoardProps {
   tasks: Task[];
   completedTasks: Task[];
-  cancelledTasks: Task[];
   onDeleteTask: (id: string) => void;
   onRetryTask: (e: React.MouseEvent, id: string) => void;
   onApproveTask: (e: React.MouseEvent, id: string) => void;
@@ -21,10 +20,8 @@ interface KanbanBoardProps {
   onUpdateTask?: (taskId: string, updates: Record<string, unknown>) => Promise<void>;
   onExpandChange?: (isExpanded: boolean) => void;
   onLoadMoreCompleted?: () => void;
-  onLoadMoreCancelled?: () => void;
   hasMoreCompleted?: boolean;
-  hasMoreCancelled?: boolean;
-  loadingMore?: 'completed' | 'cancelled' | null;
+  loadingMore?: 'completed' | null;
   searchQuery?: string;
 }
 
@@ -37,19 +34,16 @@ function tasksFingerprint(tasks: Task[]): string {
 function arePropsEqual(prev: KanbanBoardProps, next: KanbanBoardProps): boolean {
   const tasksMatch = tasksFingerprint(prev.tasks) === tasksFingerprint(next.tasks);
   const completedMatch = tasksFingerprint(prev.completedTasks) === tasksFingerprint(next.completedTasks);
-  const cancelledMatch = tasksFingerprint(prev.cancelledTasks) === tasksFingerprint(next.cancelledTasks);
   const scrollMatch = prev.hasMoreCompleted === next.hasMoreCompleted;
-  const cancelledScrollMatch = prev.hasMoreCancelled === next.hasMoreCancelled;
   const loadingMatch = prev.loadingMore === next.loadingMore;
   const searchMatch = prev.searchQuery === next.searchQuery;
 
-  return tasksMatch && completedMatch && cancelledMatch && scrollMatch && cancelledScrollMatch && loadingMatch && searchMatch;
+  return tasksMatch && completedMatch && scrollMatch && loadingMatch && searchMatch;
 }
 
 export const KanbanBoard = React.memo(function KanbanBoard({
   tasks,
   completedTasks,
-  cancelledTasks,
   onDeleteTask,
   onRetryTask,
   onApproveTask,
@@ -58,9 +52,7 @@ export const KanbanBoard = React.memo(function KanbanBoard({
   onAddReviewComment,
   onUnblockTask,
   onLoadMoreCompleted,
-  onLoadMoreCancelled,
   hasMoreCompleted,
-  hasMoreCancelled,
   loadingMore,
   onUpdateTask,
   searchQuery = '',
@@ -70,23 +62,19 @@ export const KanbanBoard = React.memo(function KanbanBoard({
   const { expandedTask, handleCardClick, handleCloseExpanded } = useExpandedTask({
     tasks,
     completedTasks,
-    cancelledTasks,
     onExpandChange
   });
 
   const columns = useFilteredTasks({
     tasks,
     completedTasks,
-    cancelledTasks,
     searchQuery
   });
 
-  const { completedSentinelRef, cancelledSentinelRef } = useInfiniteScroll({
+  const { completedSentinelRef } = useInfiniteScroll({
     hasMoreCompleted,
-    hasMoreCancelled,
     loadingMore,
-    onLoadMoreCompleted,
-    onLoadMoreCancelled
+    onLoadMoreCompleted
   });
 
   const rejectModal = useRejectModal({
@@ -94,7 +82,7 @@ export const KanbanBoard = React.memo(function KanbanBoard({
     onCloseExpanded: handleCloseExpanded
   });
 
-  const scrollOptions = { hasMoreCompleted, hasMoreCancelled, loadingMore, completedSentinelRef, cancelledSentinelRef };
+  const scrollOptions = { hasMoreCompleted, loadingMore, completedSentinelRef };
 
   return (
     <div className="relative flex h-full gap-4 overflow-x-auto pb-4">
@@ -125,11 +113,11 @@ export const KanbanBoard = React.memo(function KanbanBoard({
 
       {/* Reject Modal */}
       <RejectModal
-        isOpen={rejectModal.showRejectModal}
+        show={rejectModal.showRejectModal}
         feedback={rejectModal.rejectFeedback}
         onFeedbackChange={rejectModal.setRejectFeedback}
         onConfirm={rejectModal.handleConfirmReject}
-        onClose={rejectModal.handleCloseRejectModal}
+        onCancel={rejectModal.handleCloseRejectModal}
       />
 
       {/* Kanban Columns */}

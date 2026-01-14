@@ -5,14 +5,12 @@ import { COLUMNS } from '@/components/kanban/types';
 interface UseFilteredTasksOptions {
   tasks: Task[];
   completedTasks: Task[];
-  cancelledTasks: Task[];
   searchQuery: string;
 }
 
 export function useFilteredTasks({
   tasks,
   completedTasks,
-  cancelledTasks,
   searchQuery
 }: UseFilteredTasksOptions) {
   return useMemo(() => {
@@ -35,13 +33,13 @@ export function useFilteredTasks({
       BLOCKED: [],
       REVIEW: [],
       APPROVED: [],
-      DONE: completedTasks.filter(matchesSearch),
-      CANCELLED: cancelledTasks.filter(matchesSearch)
+      DONE: completedTasks.filter(matchesSearch)
     };
 
     // Group active tasks into columns
+    // CANCELLED tasks are filtered out (soft-deleted, not shown in UI)
     tasks.filter(matchesSearch).forEach(task => {
-      if (!['COMPLETED', 'CANCELLED', 'FAILED'].includes(task.status)) {
+      if (!['COMPLETED', 'CANCELLED'].includes(task.status)) {
         const col = COLUMNS.find(c => c.statuses.includes(task.status));
         if (col) {
           cols[col.id].push(task);
@@ -49,13 +47,6 @@ export function useFilteredTasks({
       }
     });
 
-    // Add failed/cancelled tasks to CANCELLED column
-    tasks.filter(matchesSearch).forEach(task => {
-      if (['CANCELLED', 'FAILED'].includes(task.status)) {
-        cols['CANCELLED'].push(task);
-      }
-    });
-
     return cols;
-  }, [tasks, completedTasks, cancelledTasks, searchQuery]);
+  }, [tasks, completedTasks, searchQuery]);
 }

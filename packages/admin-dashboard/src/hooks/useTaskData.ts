@@ -3,6 +3,8 @@
  * 
  * Uses Socket.io events for real-time updates instead of polling.
  * REST is retained for pagination (loadMore).
+ * 
+ * NOTE: CANCELLED tasks are soft-deleted and hidden from the UI.
  */
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { apiFetch } from '../lib/api';
@@ -37,14 +39,11 @@ export function useTaskData(options: UseTaskDataOptions = {}) {
 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [recentCompleted, setRecentCompleted] = useState<Task[]>([]);
-  const [recentCancelled, setRecentCancelled] = useState<Task[]>([]);
   const [connected, setConnected] = useState(false);
 
   const [completedOffset, setCompletedOffset] = useState(0);
-  const [cancelledOffset, setCancelledOffset] = useState(0);
   const [hasMoreCompleted, setHasMoreCompleted] = useState(true);
-  const [hasMoreCancelled, setHasMoreCancelled] = useState(true);
-  const [loadingMore, setLoadingMore] = useState<'completed' | 'cancelled' | null>(null);
+  const [loadingMore, setLoadingMore] = useState<'completed' | null>(null);
 
   const [botCount, setBotCount] = useState(0);
   const [stats, setStats] = useState({ total: 0, completed: 0 });
@@ -72,46 +71,32 @@ export function useTaskData(options: UseTaskDataOptions = {}) {
     }
   }, []);
 
-  /** Generic loadMore for completed/cancelled swimlanes (REST-based) */
-  const loadMore = useCallback(async (
-    status: 'COMPLETED' | 'CANCELLED',
-    currentOffset: number,
-    setOffset: React.Dispatch<React.SetStateAction<number>>,
-    setItems: React.Dispatch<React.SetStateAction<Task[]>>,
-    setHasMore: React.Dispatch<React.SetStateAction<boolean>>
-  ) => {
-    setLoadingMore(status.toLowerCase() as 'completed' | 'cancelled');
-    const newOffset = currentOffset + pageSize;
+  /** Load more completed tasks (REST-based pagination) */
+  const loadMoreCompleted = useCallback(async () => {
+    if (loadingMore || !hasMoreCompleted) return;
+
+    setLoadingMore('completed');
+    const newOffset = completedOffset + pageSize;
     const searchParam = search.trim() ? `&q=${encodeURIComponent(search.trim())}` : '';
 
     try {
-      const res = await apiFetch(`/admin/tasks?limit=${pageSize}&offset=${newOffset}&status=${status}${searchParam}`);
+      const res = await apiFetch(`/admin/tasks?limit=${pageSize}&offset=${newOffset}&status=COMPLETED${searchParam}`);
       if (res.ok) {
         const data = await res.json();
         if (data.length > 0) {
-          setItems(prev => [...prev, ...data]);
-          setOffset(newOffset);
-          setHasMore(data.length >= pageSize);
+          setRecentCompleted(prev => [...prev, ...data]);
+          setCompletedOffset(newOffset);
+          setHasMoreCompleted(data.length >= pageSize);
         } else {
-          setHasMore(false);
+          setHasMoreCompleted(false);
         }
       }
     } catch (e) {
-      console.error(`Error loading more ${status} tasks:`, e);
+      console.error('Error loading more COMPLETED tasks:', e);
     } finally {
       setLoadingMore(null);
     }
-  }, [pageSize, search]);
-
-  const loadMoreCompleted = useCallback(() => {
-    if (loadingMore || !hasMoreCompleted) return;
-    loadMore('COMPLETED', completedOffset, setCompletedOffset, setRecentCompleted, setHasMoreCompleted);
-  }, [completedOffset, hasMoreCompleted, loadingMore, loadMore]);
-
-  const loadMoreCancelled = useCallback(() => {
-    if (loadingMore || !hasMoreCancelled) return;
-    loadMore('CANCELLED', cancelledOffset, setCancelledOffset, setRecentCancelled, setHasMoreCancelled);
-  }, [cancelledOffset, hasMoreCancelled, loadingMore, loadMore]);
+  }, [completedOffset, hasMoreCompleted, loadingMore, pageSize, search]);
 
   /** WebSocket event handling */
   useEffect(() => {
@@ -130,6 +115,7 @@ export function useTaskData(options: UseTaskDataOptions = {}) {
     };
 
     // Handle full sync (initial data from server)
+    // CANCELLED tasks are filtered out - they are soft-deleted and hidden from UI
     const handleSyncFull = (data: { tasks: Task[]; agents: unknown[]; seq?: number }) => {
       console.log('[useTaskData] Received sync:full with', data.tasks.length, 'tasks');
 
@@ -138,27 +124,25 @@ export function useTaskData(options: UseTaskDataOptions = {}) {
         import('../lib/socket').then(({ resetSequence }) => resetSequence(data.seq!));
       }
 
-      // Separate tasks by status
+      // Separate tasks by status - CANCELLED tasks are hidden
       const active: Task[] = [];
       const completed: Task[] = [];
-      const cancelled: Task[] = [];
 
       for (const task of data.tasks) {
         if (task.status === 'COMPLETED') {
           completed.push(task);
         } else if (task.status === 'CANCELLED') {
-          cancelled.push(task);
+          // Skip cancelled tasks - they are soft-deleted
+          continue;
         } else {
           active.push(task);
         }
       }
 
-      console.log(`[useTaskData] Categorized: ${active.length} active, ${completed.length} completed, ${cancelled.length} cancelled`);
+      console.log(`[useTaskData] Categorized: ${active.length} active, ${completed.length} completed (cancelled filtered out)`);
       setTasks(active);
       setRecentCompleted(completed.slice(0, pageSize));
-      setRecentCancelled(cancelled.slice(0, pageSize));
       setHasMoreCompleted(completed.length >= pageSize);
-      setHasMoreCancelled(cancelled.length >= pageSize);
       initialFetchDone.current = true;
     };
 
@@ -189,54 +173,40 @@ export function useTaskData(options: UseTaskDataOptions = {}) {
       // Check if status changed to completed/cancelled
       const newStatus = patch.status as string | undefined;
 
-      if (newStatus === 'COMPLETED' || newStatus === 'CANCELLED') {
-        // First check if task exists in active tasks
+      if (newStatus === 'COMPLETED') {
+        // Move from active to completed
         setTasks(prev => {
           const task = prev.find(t => t.id === patch.id);
           if (task) {
             const updatedTask = { ...task, ...patch } as Task;
-            if (newStatus === 'COMPLETED') {
-              setRecentCompleted(prevCompleted => {
-                // Avoid duplicates
-                if (prevCompleted.some(t => t.id === patch.id)) {
-                  return applyPatch(prevCompleted);
-                }
-                return [updatedTask, ...prevCompleted];
-              });
-            } else {
-              setRecentCancelled(prevCancelled => {
-                // Avoid duplicates
-                if (prevCancelled.some(t => t.id === patch.id)) {
-                  return applyPatch(prevCancelled);
-                }
-                return [updatedTask, ...prevCancelled];
-              });
-            }
+            setRecentCompleted(prevCompleted => {
+              // Avoid duplicates
+              if (prevCompleted.some(t => t.id === patch.id)) {
+                return applyPatch(prevCompleted);
+              }
+              return [updatedTask, ...prevCompleted];
+            });
             return prev.filter(t => t.id !== patch.id);
           }
           return prev;
         });
-
-        // Also update if already in completed/cancelled arrays (status might be re-sent)
-        if (newStatus === 'COMPLETED') {
-          setRecentCompleted(applyPatch);
-        } else {
-          setRecentCancelled(applyPatch);
-        }
+        setRecentCompleted(applyPatch);
+      } else if (newStatus === 'CANCELLED') {
+        // CANCELLED = soft-deleted, remove from all views
+        setTasks(prev => prev.filter(t => t.id !== patch.id));
+        setRecentCompleted(prev => prev.filter(t => t.id !== patch.id));
       } else {
-        // Non-terminal status - just update in place across all arrays
+        // Non-terminal status - just update in place
         setTasks(applyPatch);
         setRecentCompleted(applyPatch);
-        setRecentCancelled(applyPatch);
       }
     };
 
-    // Handle task deleted
+    // Handle task deleted (hard delete - also removes from views)
     const handleTaskDeleted = (data: { id: string }) => {
       console.log('[useTaskData] task:deleted', data.id);
       setTasks(prev => prev.filter(t => t.id !== data.id));
       setRecentCompleted(prev => prev.filter(t => t.id !== data.id));
-      setRecentCancelled(prev => prev.filter(t => t.id !== data.id));
     };
 
     // Subscribe to events
@@ -269,6 +239,7 @@ export function useTaskData(options: UseTaskDataOptions = {}) {
     };
   }, [fetchInitialData, pageSize]);
 
+  // Active tasks filter - excludes terminal states including CANCELLED
   const activeTasks = useMemo(() =>
     tasks.filter(t => !['COMPLETED', 'FAILED', 'CANCELLED'].includes(t.status)),
     [tasks]
@@ -287,8 +258,8 @@ export function useTaskData(options: UseTaskDataOptions = {}) {
   }, [fetchInitialData]);
 
   return {
-    tasks, activeTasks, recentCompleted, recentCancelled, botCount, stats, connected,
+    tasks, activeTasks, recentCompleted, botCount, stats, connected,
     refetch,
-    loadMoreCompleted, loadMoreCancelled, hasMoreCompleted, hasMoreCancelled, loadingMore
+    loadMoreCompleted, hasMoreCompleted, loadingMore
   };
 }

@@ -1,11 +1,9 @@
-import { RefObject } from 'react';
+import type { RefObject } from 'react';
 
 interface ColumnScrollPropsOptions {
   hasMoreCompleted?: boolean;
-  hasMoreCancelled?: boolean;
-  loadingMore?: 'completed' | 'cancelled' | null;
+  loadingMore?: 'completed' | null;
   completedSentinelRef: RefObject<HTMLDivElement | null>;
-  cancelledSentinelRef: RefObject<HTMLDivElement | null>;
 }
 
 export interface ColumnInfiniteScrollProps {
@@ -18,7 +16,7 @@ export function getColumnScrollProps(
   columnId: string,
   options: ColumnScrollPropsOptions
 ): ColumnInfiniteScrollProps {
-  const { hasMoreCompleted, hasMoreCancelled, loadingMore, completedSentinelRef, cancelledSentinelRef } = options;
+  const { hasMoreCompleted, loadingMore, completedSentinelRef } = options;
 
   switch (columnId) {
     case 'DONE':
@@ -26,12 +24,6 @@ export function getColumnScrollProps(
         hasMore: hasMoreCompleted,
         loadingMore: loadingMore === 'completed',
         sentinelRef: completedSentinelRef
-      };
-    case 'CANCELLED':
-      return {
-        hasMore: hasMoreCancelled,
-        loadingMore: loadingMore === 'cancelled',
-        sentinelRef: cancelledSentinelRef
       };
     default:
       return {};

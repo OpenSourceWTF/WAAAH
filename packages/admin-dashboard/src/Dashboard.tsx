@@ -32,15 +32,12 @@ export function Dashboard() {
   const {
     activeTasks,
     recentCompleted,
-    recentCancelled,
     stats,
     connected,
     refetch: refetchTasks,
     // Infinite scroll controls
     loadMoreCompleted,
-    loadMoreCancelled,
     hasMoreCompleted,
-    hasMoreCancelled,
     loadingMore
   } = useTaskData({ search: searchQuery });
 
@@ -323,7 +320,6 @@ export function Dashboard() {
             <KanbanBoard
               tasks={activeTasks}
               completedTasks={recentCompleted}
-              cancelledTasks={recentCancelled}
               onDeleteTask={handleDeleteTask}
               onRetryTask={handleRetryTask}
               onApproveTask={handleApproveTask}
@@ -333,9 +329,7 @@ export function Dashboard() {
               onUnblockTask={handleUnblockTask}
               onUpdateTask={handleUpdateTask}
               onLoadMoreCompleted={loadMoreCompleted}
-              onLoadMoreCancelled={loadMoreCancelled}
               hasMoreCompleted={hasMoreCompleted}
-              hasMoreCancelled={hasMoreCancelled}
               loadingMore={loadingMore}
               searchQuery={searchQuery}
               onExpandChange={setIsTaskExpanded}

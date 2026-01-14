@@ -83,8 +83,7 @@ export interface Agent {
 export interface KanbanBoardProps {
   tasks: Task[];
   completedTasks: Task[];
-  cancelledTasks: Task[];
-  onCancelTask: (e: React.MouseEvent, id: string) => void;
+  onDeleteTask: (id: string) => void;
   onRetryTask: (e: React.MouseEvent, id: string) => void;
   onApproveTask: (id: string) => void;
   onRejectTask: (id: string, feedback: string) => void;
@@ -94,17 +93,16 @@ export interface KanbanBoardProps {
   onTaskClick?: (task: Task) => void;
   onUnblockTask?: (taskId: string, reason: string) => void;
   onLoadMoreCompleted?: () => void;
-  onLoadMoreCancelled?: () => void;
   hasMoreCompleted?: boolean;
-  hasMoreCancelled?: boolean;
-  loadingMore?: 'completed' | 'cancelled' | null;
+  loadingMore?: 'completed' | null;
 }
 
+// CANCELLED column removed - deleted tasks are hidden from UI
+// FAILED/REJECTED now shown in REVIEW column for visibility
 export const COLUMNS = [
   { id: 'TODO', label: 'TODO', statuses: ['QUEUED', 'PENDING_ACK'] },
   { id: 'IN_PROGRESS', label: 'IN PROGRESS', statuses: ['ASSIGNED', 'IN_PROGRESS', 'PROCESSING', 'APPROVED_QUEUED', 'APPROVED_PENDING_ACK'] },
   { id: 'BLOCKED', label: 'BLOCKED', statuses: ['BLOCKED'] },
-  { id: 'REVIEW', label: 'IN REVIEW', statuses: ['PENDING_RES', 'REVIEW', 'IN_REVIEW', 'PENDING'] },
-  { id: 'DONE', label: 'DONE', statuses: ['COMPLETED'] },
-  { id: 'CANCELLED', label: 'CANCELLED', statuses: ['CANCELLED', 'FAILED', 'REJECTED'] }
+  { id: 'REVIEW', label: 'IN REVIEW', statuses: ['PENDING_RES', 'REVIEW', 'IN_REVIEW', 'PENDING', 'FAILED', 'REJECTED'] },
+  { id: 'DONE', label: 'DONE', statuses: ['COMPLETED'] }
 ];

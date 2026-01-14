@@ -151,8 +151,24 @@ export function createTaskRoutes({ queue, workspaceRoot }: TaskRoutesConfig): Ro
       return;
     }
 
+    res.json({ success: true, taskId });
+  });
 
+  /**
+   * DELETE /tasks/:taskId
+   * Soft-delete a task by marking it as CANCELLED.
+   * The task remains in the database but is hidden from the UI.
+   */
+  router.delete('/tasks/:taskId', async (req, res) => {
+    const { taskId } = req.params;
+    const result = queue.cancelTask(taskId);
 
+    if (!result.success) {
+      res.status(400).json({ error: result.error });
+      return;
+    }
+
+    console.log(`[API] Task ${taskId} soft-deleted (status: CANCELLED)`);
     res.json({ success: true, taskId });
   });
 
