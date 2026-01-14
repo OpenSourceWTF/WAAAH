@@ -20,6 +20,34 @@ describe('Admin Agents Routes', () => {
     await server.close();
   });
 
+  describe('GET /admin/capabilities', () => {
+    it('returns capabilities array', async () => {
+      const res = await fetch(`${baseUrl}/admin/capabilities`);
+      expect(res.ok).toBe(true);
+      const data = await res.json();
+      expect(data.capabilities).toBeDefined();
+      expect(Array.isArray(data.capabilities)).toBe(true);
+    });
+
+    it('includes default capability suggestions', async () => {
+      const res = await fetch(`${baseUrl}/admin/capabilities`);
+      const data = await res.json();
+
+      expect(data.capabilities).toContain('code-writing');
+      expect(data.capabilities).toContain('test-writing');
+      expect(data.capabilities).toContain('doc-writing');
+      expect(data.capabilities).toContain('spec-writing');
+      expect(data.capabilities).toContain('code-doctor');
+    });
+
+    it('returns exactly 5 default capabilities', async () => {
+      const res = await fetch(`${baseUrl}/admin/capabilities`);
+      const data = await res.json();
+
+      expect(data.capabilities.length).toBe(5);
+    });
+  });
+
   describe('GET /admin/agents/status', () => {
     it('returns array of agents', async () => {
       const res = await fetch(`${baseUrl}/admin/agents/status`);
