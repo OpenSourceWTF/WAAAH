@@ -92,7 +92,7 @@ interface ExpandedCardHeaderProps {
 }
 
 export const ExpandedCardHeader: React.FC<ExpandedCardHeaderProps> = ({ task, children }) => (
-  <div className="flex items-center justify-between p-4 border-b-2 border-primary/30 bg-primary/10 flex-shrink-0">
+  <div className="flex items-center justify-between py-2 px-4 border-b-2 border-primary/30 bg-primary/10 flex-shrink-0">
     <div className="flex items-center gap-3">
       <Badge className={getStatusBadgeClass(task.status)}>{task.status}</Badge>
       <span className="font-mono text-xs text-primary/70">{task.id}</span>
@@ -136,8 +136,8 @@ export const TaskProgressBar: React.FC<TaskProgressBarProps> = ({ task, latestPr
     ['FAILED', 'CANCELLED'].includes(task.status) ? 'bg-red-500' : 'bg-primary';
 
   return (
-    <div className="px-4 py-2 bg-primary/5 border-b border-primary/20 flex-shrink-0">
-      <div className="flex items-center justify-between text-xs mb-1">
+    <div className="px-4 py-1 bg-primary/5 border-b border-primary/20 flex-shrink-0">
+      <div className="flex items-center justify-between text-xs mb-0.5">
         <span className="text-primary/70">{phase}</span>
         <span className="font-mono text-primary">{percentage}%</span>
       </div>

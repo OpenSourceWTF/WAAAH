@@ -148,34 +148,34 @@ export const ExpandedCardView: React.FC<ExpandedCardViewProps> = ({
           </TabsList>
 
           <div className="flex-1 overflow-y-auto">
-            <TabsContent value="prompt" className="m-0 p-4 h-full flex flex-col">
-              <div className="flex-1 flex flex-col space-y-3 min-h-0">
+            <TabsContent value="prompt" className="m-0 py-2 px-4 h-full flex flex-col">
+              <div className="flex-1 flex flex-col space-y-2 min-h-0">
                 <div className="shrink-0">
-                  <h3 className="text-sm font-bold text-primary/70 mb-1">TASK TITLE</h3>
+                  <h3 className="text-sm font-bold text-primary/70 mb-0.5">TASK TITLE</h3>
                   <p className="font-bold text-lg">{formatTaskTitle(task)}</p>
                 </div>
                 <div className="flex-1 flex flex-col min-h-0">
-                  <h3 className="text-sm font-bold text-primary/70 mb-1 shrink-0">FULL PROMPT</h3>
-                  <pre className="whitespace-pre-wrap text-sm bg-black/30 p-4 border border-primary/20 flex-1 overflow-y-auto">{task.prompt}</pre>
+                  <h3 className="text-sm font-bold text-primary/70 mb-0.5 shrink-0">FULL PROMPT</h3>
+                  <pre className="whitespace-pre-wrap text-sm bg-black/30 p-3 border border-primary/20 flex-1 overflow-y-auto">{task.prompt}</pre>
                 </div>
               </div>
             </TabsContent>
 
-            <TabsContent value="timeline" className="m-0 p-4 h-full">
+            <TabsContent value="timeline" className="m-0 py-2 px-4 h-full">
               <TimelineTab task={task} />
             </TabsContent>
 
-            <TabsContent value="review" className="m-0 p-4 h-full overflow-y-auto">
-              <div className="space-y-4">
+            <TabsContent value="review" className="m-0 py-2 px-4 h-full overflow-y-auto">
+              <div className="space-y-3">
                 <div>
-                  <h3 className="text-sm font-bold text-primary/70 mb-2">REVIEW STATUS</h3>
-                  <div className="flex items-center gap-2 mb-4">
+                  <h3 className="text-sm font-bold text-primary/70 mb-1">REVIEW STATUS</h3>
+                  <div className="flex items-center gap-2 mb-2">
                     <Badge className={getStatusBadgeClass(task.status)}>{task.status}</Badge>
                     {task.assignedTo && <span className="text-xs text-primary/60">Assigned to: <span className="font-mono">{task.assignedTo}</span></span>}
                   </div>
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-primary/70 mb-2">CODE CHANGES</h3>
+                  <h3 className="text-sm font-bold text-primary/70 mb-1">CODE CHANGES</h3>
                   <DiffViewer
                     taskId={task.id}
                     onAddComment={(filePath, lineNumber, content) => onAddReviewComment(task.id, filePath, lineNumber, content)}
@@ -185,7 +185,7 @@ export const ExpandedCardView: React.FC<ExpandedCardViewProps> = ({
               </div>
             </TabsContent>
 
-            <TabsContent value="context" className="m-0 p-4 h-full flex flex-col">
+            <TabsContent value="context" className="m-0 py-2 px-4 h-full flex flex-col">
               <ContextTab task={task} onUpdateTask={onUpdateTask} />
             </TabsContent>
           </div>
