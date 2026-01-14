@@ -5,7 +5,7 @@
 import React from 'react';
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { X, Clock, User, CheckCircle, RefreshCw, XCircle, ChevronDown, RotateCcw } from "lucide-react";
+import { X, Clock, User, CheckCircle, RefreshCw, Trash2, ChevronDown, RotateCcw, AlertTriangle } from "lucide-react";
 import type { Task } from './types';
 import { getStatusBadgeClass, getTaskDuration } from './utils';
 import type { FileStats } from '@/utils/diffParser';
@@ -18,12 +18,12 @@ interface TaskActionButtonsProps {
   canApprove: boolean;
   canUnblock: boolean;
   canRetry: boolean;
-  canCancel: boolean;
+  canDelete: boolean;
   onApprove: (e: React.MouseEvent) => void;
   onReject: () => void;
   onUnblock: () => void;
   onRetry: (e: React.MouseEvent) => void;
-  onCancel: (e: React.MouseEvent) => void;
+  onDelete: () => void;
   onClose: () => void;
   hasUnblockHandler: boolean;
 }
@@ -32,12 +32,12 @@ export const TaskActionButtons: React.FC<TaskActionButtonsProps> = ({
   canApprove,
   canUnblock,
   canRetry,
-  canCancel,
+  canDelete,
   onApprove,
   onReject,
   onUnblock,
   onRetry,
-  onCancel,
+  onDelete,
   onClose,
   hasUnblockHandler,
 }) => (
@@ -66,10 +66,10 @@ export const TaskActionButtons: React.FC<TaskActionButtonsProps> = ({
         <RefreshCw className="h-3 w-3" /> RETRY
       </Button>
     )}
-    {canCancel && (
+    {canDelete && (
       <Button variant="destructive" size="sm" className="h-8 gap-1 text-xs bg-red-600 hover:bg-red-700 uppercase"
-        onClick={onCancel}>
-        <XCircle className="h-3 w-3" /> CANCEL
+        onClick={onDelete}>
+        <Trash2 className="h-3 w-3" /> DELETE
       </Button>
     )}
     <Button
@@ -303,6 +303,58 @@ export const RejectModal: React.FC<RejectModalProps> = ({
             className="px-4 py-2 text-sm bg-purple-600 text-white hover:bg-purple-700 uppercase"
           >
             REQUEST CHANGES
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ============================================
+// DeleteConfirmModal - Modal for permanently deleting tasks
+// ============================================
+interface DeleteConfirmModalProps {
+  show: boolean;
+  isProcessing: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}
+
+export const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
+  show,
+  isProcessing,
+  onConfirm,
+  onCancel,
+}) => {
+  if (!show) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+      <div className="bg-card border-2 border-red-500 p-6 rounded-lg shadow-lg max-w-md w-full">
+        <h3 className="text-lg font-bold text-red-500 mb-4 flex items-center gap-2">
+          <Trash2 className="h-5 w-5" /> DELETE TASK
+        </h3>
+        <p className="text-sm text-primary/70 mb-4">
+          Delete permanently? This cannot be undone.
+        </p>
+        {isProcessing && (
+          <div className="flex items-center gap-2 p-3 mb-4 bg-yellow-500/10 border border-yellow-500/50 rounded text-yellow-500 text-sm">
+            <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+            <span>Task is currently processing</span>
+          </div>
+        )}
+        <div className="flex gap-3 mt-4 justify-end">
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 text-sm border border-primary/30 text-primary/70 hover:bg-primary/10 uppercase"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className="px-4 py-2 text-sm bg-red-600 text-white hover:bg-red-700 uppercase"
+          >
+            Delete Permanently
           </button>
         </div>
       </div>

@@ -57,16 +57,15 @@ export function Dashboard() {
   }, [refetchTasks, refetchAgents]);
 
   // Task Actions - wrapped with useCallback for stable references
-  const handleCancelTask = useCallback(async (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
+  const handleDeleteTask = useCallback(async (id: string) => {
     try {
-      await apiFetch(`/admin/tasks/${id}/cancel`, { method: 'POST' });
+      await apiFetch(`/admin/tasks/${id}`, { method: 'DELETE' });
       fetchData(); // Refresh immediately
     } catch (error) {
-      console.error("Failed to cancel task", error);
-      addToast("Failed to cancel task", 'error');
+      console.error("Failed to delete task", error);
+      addToast("Failed to delete task", 'error');
     }
-  }, []);
+  }, [fetchData, addToast]);
 
   const handleRetryTask = useCallback(async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
@@ -325,7 +324,7 @@ export function Dashboard() {
               tasks={activeTasks}
               completedTasks={recentCompleted}
               cancelledTasks={recentCancelled}
-              onCancelTask={handleCancelTask}
+              onDeleteTask={handleDeleteTask}
               onRetryTask={handleRetryTask}
               onApproveTask={handleApproveTask}
               onRejectTask={handleRejectTask}

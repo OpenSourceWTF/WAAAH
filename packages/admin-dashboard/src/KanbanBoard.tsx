@@ -9,7 +9,7 @@ interface KanbanBoardProps {
   tasks: Task[];
   completedTasks: Task[];
   cancelledTasks: Task[];
-  onCancelTask: (e: React.MouseEvent, id: string) => void;
+  onDeleteTask: (id: string) => void;
   onRetryTask: (e: React.MouseEvent, id: string) => void;
   onApproveTask: (e: React.MouseEvent, id: string) => void;
   onRejectTask: (id: string, feedback: string) => void;
@@ -50,7 +50,7 @@ export const KanbanBoard = React.memo(function KanbanBoard({
   tasks,
   completedTasks,
   cancelledTasks,
-  onCancelTask,
+  onDeleteTask,
   onRetryTask,
   onApproveTask,
   onRejectTask,
@@ -116,7 +116,7 @@ export const KanbanBoard = React.memo(function KanbanBoard({
           onApproveTask={onApproveTask}
           onRejectTask={onRejectTask}
           onRetryTask={onRetryTask}
-          onCancelTask={onCancelTask}
+          onDeleteTask={onDeleteTask}
           onAddReviewComment={onAddReviewComment}
           onUnblockTask={onUnblockTask}
           onUpdateTask={onUpdateTask}

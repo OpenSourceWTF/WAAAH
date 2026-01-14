@@ -16,6 +16,7 @@ import {
   FileNavigator,
   UnblockModal,
   RejectModal,
+  DeleteConfirmModal,
 } from './ExpandedCardComponents';
 import { useResizableWidth, useDropdownState, useModalWithField } from './hooks';
 import type { FileStats } from '@/utils/diffParser';
@@ -28,13 +29,14 @@ interface ExpandedCardViewProps {
   onRejectTask: (id: string, feedback: string) => void;
   onUnblockTask?: (taskId: string, reason: string) => void;
   onRetryTask: (e: React.MouseEvent, id: string) => void;
-  onCancelTask: (e: React.MouseEvent, id: string) => void;
+  onDeleteTask: (id: string) => void;
   onAddReviewComment: (taskId: string, filePath: string, lineNumber: number | null, content: string) => void;
   onUpdateTask?: (taskId: string, updates: Record<string, any>) => Promise<void>;
 }
 
 // Status check arrays
-const canCancelStatuses = ['QUEUED', 'ASSIGNED', 'PENDING_ACK', 'PROCESSING', 'IN_PROGRESS'];
+const canDeleteStatuses = ['QUEUED', 'ASSIGNED', 'PENDING_ACK', 'PROCESSING', 'IN_PROGRESS'];
+const processingStatuses = ['PROCESSING', 'IN_PROGRESS'];
 const canRetryStatuses = ['FAILED', 'CANCELLED', 'ASSIGNED', 'QUEUED', 'PENDING_ACK'];
 const canApproveStatuses = ['REVIEW', 'IN_REVIEW', 'PENDING_RES'];
 const reviewDefaultStatuses = ['REVIEW', 'IN_REVIEW', 'PENDING_RES', 'BLOCKED'];
@@ -51,14 +53,15 @@ export const ExpandedCardView: React.FC<ExpandedCardViewProps> = ({
   onSendComment,
   onApproveTask,
   onRetryTask,
-  onCancelTask,
+  onDeleteTask,
   onAddReviewComment,
   onRejectTask,
   onUnblockTask,
   onUpdateTask
 }) => {
   // Computed permissions
-  const canCancel = canCancelStatuses.includes(task.status);
+  const canDelete = canDeleteStatuses.includes(task.status);
+  const isProcessing = processingStatuses.includes(task.status);
   const canRetry = canRetryStatuses.includes(task.status);
   const canApprove = canApproveStatuses.includes(task.status);
   const canUnblock = task.status === 'BLOCKED';
@@ -70,6 +73,9 @@ export const ExpandedCardView: React.FC<ExpandedCardViewProps> = ({
   const navigator = useDropdownState();
   const unblockModal = useModalWithField('');
   const rejectModal = useModalWithField('');
+
+  // Delete confirmation state
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Preview and file state
   const [previewImage, setPreviewImage] = useState<string | null>(null);
@@ -96,6 +102,12 @@ export const ExpandedCardView: React.FC<ExpandedCardViewProps> = ({
     navigator.close();
   }, [jumpToFile, navigator]);
 
+  const handleDeleteConfirm = useCallback(() => {
+    onDeleteTask(task.id);
+    setShowDeleteConfirm(false);
+    onClose();
+  }, [onDeleteTask, task.id, onClose]);
+
   return (
     <div
       key={task.id}
@@ -108,12 +120,12 @@ export const ExpandedCardView: React.FC<ExpandedCardViewProps> = ({
           canApprove={canApprove}
           canUnblock={canUnblock}
           canRetry={canRetry}
-          canCancel={canCancel}
+          canDelete={canDelete}
           onApprove={(e) => { onApproveTask(e, task.id); onClose(); }}
           onReject={rejectModal.open}
           onUnblock={unblockModal.open}
           onRetry={(e) => { onRetryTask(e, task.id); onClose(); }}
-          onCancel={(e) => { onCancelTask(e, task.id); onClose(); }}
+          onDelete={() => setShowDeleteConfirm(true)}
           onClose={onClose}
           hasUnblockHandler={!!onUnblockTask}
         />
@@ -215,6 +227,13 @@ export const ExpandedCardView: React.FC<ExpandedCardViewProps> = ({
         onFeedbackChange={rejectModal.setValue}
         onConfirm={handleRejectConfirm}
         onCancel={rejectModal.close}
+      />
+
+      <DeleteConfirmModal
+        show={showDeleteConfirm}
+        isProcessing={isProcessing}
+        onConfirm={handleDeleteConfirm}
+        onCancel={() => setShowDeleteConfirm(false)}
       />
     </div>
   );
