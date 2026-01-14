@@ -103,7 +103,8 @@ export interface KanbanBoardProps {
 export const COLUMNS = [
   { id: 'TODO', label: 'TODO', statuses: ['QUEUED', 'PENDING_ACK'] },
   { id: 'IN_PROGRESS', label: 'IN PROGRESS', statuses: ['ASSIGNED', 'IN_PROGRESS', 'PROCESSING', 'APPROVED_QUEUED', 'APPROVED_PENDING_ACK'] },
-  { id: 'REVIEW', label: 'IN REVIEW', statuses: ['BLOCKED', 'PENDING_RES', 'REVIEW', 'IN_REVIEW', 'PENDING'] },
+  { id: 'BLOCKED', label: 'BLOCKED', statuses: ['BLOCKED'] },
+  { id: 'REVIEW', label: 'IN REVIEW', statuses: ['PENDING_RES', 'REVIEW', 'IN_REVIEW', 'PENDING'] },
   { id: 'DONE', label: 'DONE', statuses: ['COMPLETED'] },
   { id: 'CANCELLED', label: 'CANCELLED', statuses: ['CANCELLED', 'FAILED', 'REJECTED'] }
 ];

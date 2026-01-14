@@ -32,6 +32,7 @@ export function useFilteredTasks({
     const cols: Record<string, Task[]> = {
       TODO: [],
       IN_PROGRESS: [],
+      BLOCKED: [],
       REVIEW: [],
       APPROVED: [],
       DONE: completedTasks.filter(matchesSearch),
