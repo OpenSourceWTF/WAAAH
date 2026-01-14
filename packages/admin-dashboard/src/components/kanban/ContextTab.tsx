@@ -1,9 +1,32 @@
 import React, { useState, useEffect } from 'react';
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { X, Edit, Plus, Save } from "lucide-react";
+import { ChipInput } from "@/components/ui/ChipInput";
+import { X, Edit, Save } from "lucide-react";
 import type { Task } from './types';
 import { formatDate } from './utils';
+
+// Hook to fetch capability suggestions from the API
+function useCapabilitySuggestions() {
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+
+  useEffect(() => {
+    const fetchCapabilities = async () => {
+      try {
+        const response = await fetch('/admin/capabilities');
+        if (response.ok) {
+          const data = await response.json();
+          setSuggestions(data.capabilities || []);
+        }
+      } catch (error) {
+        console.error('Failed to fetch capabilities:', error);
+      }
+    };
+    fetchCapabilities();
+  }, []);
+
+  return suggestions;
+}
 
 interface ContextTabProps {
   task: Task;
@@ -25,7 +48,7 @@ export const ContextTab: React.FC<ContextTabProps> = ({ task, onUpdateTask }) =>
   const [editedCapabilities, setEditedCapabilities] = useState<string[]>(
     task.to?.requiredCapabilities || []
   );
-  const [newCapability, setNewCapability] = useState('');
+  const capabilitySuggestions = useCapabilitySuggestions();
 
   // Update local state when task changes (unless currently editing)
   useEffect(() => {
@@ -164,45 +187,12 @@ export const ContextTab: React.FC<ContextTabProps> = ({ task, onUpdateTask }) =>
       <div className="shrink-0 mt-2">
         <h3 className="text-sm font-bold text-primary/70 mb-1">REQUIRED CAPABILITIES</h3>
         {isEditingContext ? (
-          <div className="bg-black/30 p-3 border border-primary/30">
-            <div className="flex flex-wrap gap-2 mb-2">
-              {editedCapabilities.map(cap => (
-                <Badge key={cap} variant="outline" className="text-xs border-primary/40 gap-1 pr-1">
-                  {cap}
-                  <button onClick={() => setEditedCapabilities(editedCapabilities.filter(c => c !== cap))} className="hover:text-red-500">
-                    <X className="h-3 w-3" />
-                  </button>
-                </Badge>
-              ))}
-            </div>
-            <div className="flex gap-2">
-              <input
-                className="flex-1 bg-black border border-primary/30 p-1 text-xs"
-                value={newCapability}
-                onChange={e => setNewCapability(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter' && newCapability.trim()) {
-                    setEditedCapabilities([...editedCapabilities, newCapability.trim()]);
-                    setNewCapability('');
-                  }
-                }}
-                placeholder="Add capability..."
-              />
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-7 w-7 p-0"
-                onClick={() => {
-                  if (newCapability.trim()) {
-                    setEditedCapabilities([...editedCapabilities, newCapability.trim()]);
-                    setNewCapability('');
-                  }
-                }}
-              >
-                <Plus className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
+          <ChipInput
+            value={editedCapabilities}
+            onChange={setEditedCapabilities}
+            suggestions={capabilitySuggestions}
+            placeholder="Add capability..."
+          />
         ) : (
           <div className="bg-black/30 p-2 border border-primary/20 min-h-[40px]">
             {task.to?.requiredCapabilities && task.to.requiredCapabilities.length > 0 ? (
