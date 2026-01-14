@@ -12,8 +12,26 @@ interface AgentRoutesConfig {
   queue: TaskQueue;
 }
 
+/** Default capabilities for ChipInput suggestions */
+const DEFAULT_CAPABILITIES = [
+  'code-writing',
+  'test-writing',
+  'doc-writing',
+  'spec-writing',
+  'code-doctor'
+];
+
 export function createAgentRoutes({ registry, queue }: AgentRoutesConfig): Router {
   const router = Router();
+
+  /**
+   * GET /capabilities
+   * Get list of capability suggestions for ChipInput
+   * Returns hardcoded defaults (can be extended to fetch from DB in future)
+   */
+  router.get('/capabilities', (_req, res) => {
+    res.json({ capabilities: DEFAULT_CAPABILITIES });
+  });
 
   /**
    * GET /agents/status
