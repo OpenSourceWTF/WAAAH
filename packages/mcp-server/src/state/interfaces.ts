@@ -146,3 +146,37 @@ export interface ISecurityLog {
   /** Get recent security events */
   getRecent(limit: number): SecurityEvent[];
 }
+
+// ===== Scheduler Queue Interface =====
+
+/**
+ * Interface for the task queue operations needed by the scheduler.
+ */
+export interface ISchedulerQueue {
+  /** Get pending ACKs map */
+  getPendingAcks(): Map<string, { taskId: string; agentId: string; sentAt: number }>;
+  /** Get waiting agents map (agentId -> capabilities) */
+  getWaitingAgents(): Map<string, { capabilities: StandardCapability[]; workspaceContext?: WorkspaceContext }>;
+  /** Force retry a task (reset to QUEUED) */
+  forceRetry(taskId: string): { success: boolean; error?: string };
+  /** Update task status */
+  updateStatus(taskId: string, status: TaskStatus): void;
+  /** Find and reserve a matching agent for a task */
+  findAndReserveAgent(task: Task): string | null;
+  /** Get task by ID (from memory or DB) */
+  getTask(taskId: string): Task | undefined;
+  getTaskFromDB(taskId: string): Task | undefined;
+  /** Get tasks by status */
+  getByStatus(status: TaskStatus): Task[];
+  getByStatuses(statuses: TaskStatus[]): Task[];
+  /** Get busy agent IDs */
+  getBusyAgentIds(): string[];
+  /** Get tasks assigned to an agent */
+  getAssignedTasksForAgent(agentId: string): Task[];
+  /** Database access for agent staleness check */
+  getAgentLastSeen(agentId: string): number | undefined;
+  /** Get task's last progress timestamp */
+  getTaskLastProgress(taskId: string): number | undefined;
+  /** Update task's last progress timestamp */
+  touchTask(taskId: string): void;
+}

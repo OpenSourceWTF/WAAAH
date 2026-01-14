@@ -1,50 +1,23 @@
 /**
  * Hybrid Task Scheduler
- * 
+ *
  * Manages the periodic task assignment and cleanup cycle:
  * - Requeues tasks stuck in PENDING_ACK (ACK timeout)
  * - Unblocks tasks with satisfied dependencies
  * - Assigns QUEUED tasks to waiting agents
  * - Rebalances tasks from offline agents
- * 
+ *
  * @module state/scheduler
  */
 
-import type { Task, TaskStatus, WorkspaceContext, StandardCapability } from '@opensourcewtf/waaah-types';
+import type { Task } from '@opensourcewtf/waaah-types';
 import { ACK_TIMEOUT_MS, SCHEDULER_INTERVAL_MS, STALE_TASK_TIMEOUT_MS } from './constants.js';
 import { areDependenciesMet } from './services/task-lifecycle-service.js';
+import { sortTasksByPriority } from './agent-matcher.js';
+import type { ISchedulerQueue } from './interfaces.js';
 
-/**
- * Interface for the task queue operations needed by the scheduler.
- */
-export interface ISchedulerQueue {
-  /** Get pending ACKs map */
-  getPendingAcks(): Map<string, { taskId: string; agentId: string; sentAt: number }>;
-  /** Get waiting agents map (agentId -> capabilities) */
-  getWaitingAgents(): Map<string, { capabilities: StandardCapability[]; workspaceContext?: WorkspaceContext }>;
-  /** Force retry a task (reset to QUEUED) */
-  forceRetry(taskId: string): { success: boolean; error?: string };
-  /** Update task status */
-  updateStatus(taskId: string, status: TaskStatus): void;
-  /** Find and reserve a matching agent for a task */
-  findAndReserveAgent(task: Task): string | null;
-  /** Get task by ID (from memory or DB) */
-  getTask(taskId: string): Task | undefined;
-  getTaskFromDB(taskId: string): Task | undefined;
-  /** Get tasks by status */
-  getByStatus(status: TaskStatus): Task[];
-  getByStatuses(statuses: TaskStatus[]): Task[];
-  /** Get busy agent IDs */
-  getBusyAgentIds(): string[];
-  /** Get tasks assigned to an agent */
-  getAssignedTasksForAgent(agentId: string): Task[];
-  /** Database access for agent staleness check */
-  getAgentLastSeen(agentId: string): number | undefined;
-  /** Get task's last progress timestamp */
-  getTaskLastProgress(taskId: string): number | undefined;
-  /** Update task's last progress timestamp */
-  touchTask(taskId: string): void;
-}
+// Re-export interface for backwards compatibility
+export type { ISchedulerQueue } from './interfaces.js';
 
 /**
  * HybridScheduler manages periodic task assignment and queue maintenance.
@@ -116,19 +89,20 @@ export class HybridScheduler {
    */
   private checkBlockedTasks(): void {
     const blockedTasks = this.queue.getByStatus('BLOCKED');
-
     for (const task of blockedTasks) {
-      // Only check tasks that have dependencies - others are blocked for non-dependency reasons
-      if (!task.dependencies || task.dependencies.length === 0) {
-        // Task is blocked for clarification/decision - leave it alone
-        continue;
-      }
+      this.tryUnblockTask(task);
+    }
+  }
 
-      const getTaskFn = (id: string) => this.queue.getTask(id) || this.queue.getTaskFromDB(id);
-      if (areDependenciesMet(task, getTaskFn)) {
-        console.log(`[Queue] Task ${task.id} dependencies met. Unblocking -> QUEUED`);
-        this.queue.updateStatus(task.id, 'QUEUED');
-      }
+  /** Check if a blocked task can be unblocked due to dependency completion */
+  private tryUnblockTask(task: Task): void {
+    // Only check tasks with dependencies - others need explicit unblock
+    if (!task.dependencies?.length) return;
+
+    const getTaskFn = (id: string) => this.queue.getTask(id) || this.queue.getTaskFromDB(id);
+    if (areDependenciesMet(task, getTaskFn)) {
+      console.log(`[Queue] Task ${task.id} dependencies met. Unblocking -> QUEUED`);
+      this.queue.updateStatus(task.id, 'QUEUED');
     }
   }
 
@@ -136,44 +110,40 @@ export class HybridScheduler {
    * Step 2: Proactively assign ALL QUEUED tasks to waiting agents
    */
   private assignPendingTasks(): void {
-    const queuedTasks = this.queue.getByStatuses(['QUEUED', 'APPROVED_QUEUED'])
-      .sort((a: Task, b: Task) => {
-        const pScores: Record<string, number> = { critical: 3, high: 2, normal: 1 };
-        const scoreA = pScores[a.priority] || 1;
-        const scoreB = pScores[b.priority] || 1;
-        if (scoreA !== scoreB) return scoreB - scoreA; // Higher priority first
-        return a.createdAt - b.createdAt; // Older first
-      });
-
+    const queuedTasks = this.queue.getByStatuses(['QUEUED', 'APPROVED_QUEUED']);
     if (queuedTasks.length === 0) return;
 
-    // Filter out tasks with unmet dependencies
+    // Sort by priority and filter by dependencies using shared utilities
+    const sortedTasks = sortTasksByPriority(queuedTasks);
     const getTaskFn = (id: string) => this.queue.getTask(id) || this.queue.getTaskFromDB(id);
-    const assignableTasks = queuedTasks.filter(task => areDependenciesMet(task, getTaskFn));
-
+    const assignableTasks = sortedTasks.filter(task => areDependenciesMet(task, getTaskFn));
     if (assignableTasks.length === 0) return;
 
     const waitingAgents = this.queue.getWaitingAgents();
-    console.log(`[Scheduler] assignPendingTasks: ${assignableTasks.length} assignable (${queuedTasks.length} total queued), ${waitingAgents.size} waiting`);
-
-    if (waitingAgents.size > 0) {
-      const agents = Array.from(waitingAgents.entries()).map(([id, details]) => `${id}(${details.capabilities.join(',')})`).join(', ');
-      console.log(`[Scheduler] Waiting agents: ${agents}`);
-    }
+    this.logAssignmentStatus(assignableTasks.length, queuedTasks.length, waitingAgents);
 
     for (const task of assignableTasks) {
-      if (waitingAgents.size === 0) {
-        console.log(`[Scheduler] No waiting agents remaining. Stopping.`);
-        break;
-      }
+      if (waitingAgents.size === 0) break;
+      this.tryAssignTask(task);
+    }
+  }
 
-      const reservedAgentId = this.queue.findAndReserveAgent(task);
+  /** Log assignment status for debugging */
+  private logAssignmentStatus(assignable: number, total: number, agents: Map<string, any>): void {
+    console.log(`[Scheduler] assignPendingTasks: ${assignable} assignable (${total} total queued), ${agents.size} waiting`);
+    if (agents.size > 0) {
+      const agentList = Array.from(agents.entries()).map(([id, d]) => `${id}(${d.capabilities.join(',')})`).join(', ');
+      console.log(`[Scheduler] Waiting agents: ${agentList}`);
+    }
+  }
 
-      if (reservedAgentId) {
-        console.log(`[Scheduler] ✓ Assigned task ${task.id} to agent ${reservedAgentId}`);
-      } else {
-        console.log(`[Scheduler] ✗ No matching agent for task ${task.id} (to=${JSON.stringify(task.to)})`);
-      }
+  /** Attempt to assign a single task to an agent */
+  private tryAssignTask(task: Task): void {
+    const reservedAgentId = this.queue.findAndReserveAgent(task);
+    if (reservedAgentId) {
+      console.log(`[Scheduler] ✓ Assigned task ${task.id} to agent ${reservedAgentId}`);
+    } else {
+      console.log(`[Scheduler] ✗ No matching agent for task ${task.id} (to=${JSON.stringify(task.to)})`);
     }
   }
 
@@ -182,21 +152,22 @@ export class HybridScheduler {
    * Uses task-level activity tracking instead of agent online status.
    */
   private rebalanceStaleTasks(): void {
-    // Check tasks that are actively being worked on
     const activeTasks = this.queue.getByStatuses(['IN_PROGRESS', 'ASSIGNED']);
     if (activeTasks.length === 0) return;
 
     const now = Date.now();
-
     for (const task of activeTasks) {
-      const lastProgress = this.queue.getTaskLastProgress(task.id);
-      // Use createdAt as fallback if no progress recorded yet
-      const lastActivity = lastProgress ?? task.createdAt ?? now;
+      this.checkTaskStaleness(task, now);
+    }
+  }
 
-      if (now - lastActivity > STALE_TASK_TIMEOUT_MS) {
-        console.log(`[Scheduler] Task ${task.id} stale (no activity for 30+ min). Requeuing...`);
-        this.queue.forceRetry(task.id);
-      }
+  /** Check if task is stale and requeue if necessary */
+  private checkTaskStaleness(task: Task, now: number): void {
+    const lastProgress = this.queue.getTaskLastProgress(task.id);
+    const lastActivity = lastProgress ?? task.createdAt ?? now;
+    if (now - lastActivity > STALE_TASK_TIMEOUT_MS) {
+      console.log(`[Scheduler] Task ${task.id} stale (no activity for 30+ min). Requeuing...`);
+      this.queue.forceRetry(task.id);
     }
   }
 }
