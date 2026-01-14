@@ -3,6 +3,20 @@ import { AgentRepository } from './persistence/agent-repository.js';
 import { TaskQueue } from './queue.js';
 import { emitSyncFull } from './eventbus.js';
 import { determineAgentStatus } from './agent-status.js';
+import type { AgentConnectionStatus } from '@opensourcewtf/waaah-types';
+
+/**
+ * Maps AgentConnectionStatus (UPPERCASE) to AgentIdentity.status (lowercase).
+ * AgentConnectionStatus: 'OFFLINE' | 'WAITING' | 'PROCESSING'
+ * AgentIdentity.status: 'idle' | 'busy' | 'offline'
+ */
+function mapToIdentityStatus(status: AgentConnectionStatus): 'idle' | 'busy' | 'offline' {
+  switch (status) {
+    case 'PROCESSING': return 'busy';
+    case 'WAITING': return 'idle';
+    case 'OFFLINE': return 'offline';
+  }
+}
 
 export class SocketService {
   constructor(
@@ -30,7 +44,8 @@ export class SocketService {
         const assignedTasks = this.queue.getAssignedTasksForAgent(agent.id);
         const lastSeen = this.registry.getLastSeen(agent.id);
         const isWaiting = waitingAgents.has(agent.id);
-        const status = determineAgentStatus(assignedTasks, isWaiting, lastSeen);
+        const connectionStatus = determineAgentStatus(assignedTasks, isWaiting, lastSeen);
+        const status = mapToIdentityStatus(connectionStatus);
 
         return {
           id: agent.id,
@@ -63,10 +78,11 @@ export class SocketService {
         const agentsData = this.registry.getAll().map(a => {
           const assigned = this.queue.getAssignedTasksForAgent(a.id);
           const seen = this.registry.getLastSeen(a.id);
+          const connectionStatus = determineAgentStatus(assigned, waiting.has(a.id), seen);
           return {
             ...a,
             role: a.role || '',
-            status: determineAgentStatus(assigned, waiting.has(a.id), seen),
+            status: mapToIdentityStatus(connectionStatus),
             lastSeen: seen,
             currentTasks: assigned.map(t => t.id)
           };

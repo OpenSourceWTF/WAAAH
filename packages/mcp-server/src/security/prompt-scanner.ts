@@ -153,7 +153,7 @@ export function getSecurityContext(workspaceRoot: string) {
  * @param action - The action taken(BLOCKED, ALLOWED, WARNED).
  */
 export function logSecurityEvent(
-  db: any,
+  db: import('better-sqlite3').Database,
   source: 'cli' | 'discord' | 'agent',
   fromId: string,
   prompt: string,

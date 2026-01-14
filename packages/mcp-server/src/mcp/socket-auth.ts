@@ -4,7 +4,7 @@
  * Validates API key from socket handshake auth object.
  * Rejects unauthenticated connections with an error.
  */
-import type { Socket } from 'socket.io';
+import type { Socket, Server as SocketIOServer } from 'socket.io';
 import type { ExtendedError } from 'socket.io/dist/namespace';
 import { getOrCreateApiKey } from '../utils/auth.js';
 
@@ -46,6 +46,6 @@ export function createSocketAuthMiddleware(): SocketMiddleware {
 /**
  * Apply auth middleware to Socket.io server
  */
-export function applySocketAuth(io: any): void {
+export function applySocketAuth(io: SocketIOServer): void {
   io.use(createSocketAuthMiddleware());
 }

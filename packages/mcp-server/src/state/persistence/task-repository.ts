@@ -59,11 +59,11 @@ export interface ITaskRepository {
   /** Get queue statistics */
   getStats(): { total: number; byStatus: Record<string, number> };
   /** Add a message to a task */
-  addMessage(taskId: string, role: string, content: string, metadata?: Record<string, any>, isRead?: boolean, replyTo?: string): void;
+  addMessage(taskId: string, role: string, content: string, metadata?: Record<string, unknown>, isRead?: boolean, replyTo?: string): void;
   /** Get messages for a task */
-  getMessages(taskId: string): Array<{ role: string; content: string; timestamp: number; isRead?: boolean; metadata?: Record<string, any> }>;
+  getMessages(taskId: string): Array<{ role: string; content: string; timestamp: number; isRead?: boolean; metadata?: Record<string, unknown> }>;
   /** Get unread user comments for a task */
-  getUnreadComments(taskId: string): Array<{ id: string; content: string; timestamp: number; metadata?: Record<string, any> }>;
+  getUnreadComments(taskId: string): Array<{ id: string; content: string; timestamp: number; metadata?: Record<string, unknown> }>;
   /** Mark all unread comments as read */
   markCommentsAsRead(taskId: string): number;
   /** Clear all tasks (for testing) */
@@ -202,7 +202,7 @@ export class TaskRepository implements ITaskRepository {
 
   getHistory(options: { status?: TaskStatus | 'ACTIVE'; limit?: number; offset?: number; agentId?: string; search?: string }): Task[] {
     let query = 'SELECT * FROM tasks WHERE 1=1';
-    const params: any[] = [];
+    const params: (string | number)[] = [];
 
     if (options.status === 'ACTIVE') {
       // ACTIVE = exclude terminal states
@@ -255,7 +255,7 @@ export class TaskRepository implements ITaskRepository {
     return { total, byStatus };
   }
 
-  addMessage(taskId: string, role: string, content: string, metadata?: Record<string, any>, isRead: boolean = true, replyTo?: string): void {
+  addMessage(taskId: string, role: string, content: string, metadata?: Record<string, unknown>, isRead: boolean = true, replyTo?: string): void {
     const task = this.getById(taskId);
     if (!task) return;
 
@@ -275,7 +275,7 @@ export class TaskRepository implements ITaskRepository {
       .run(JSON.stringify(messages), taskId);
   }
 
-  getUnreadComments(taskId: string): Array<{ id: string; content: string; timestamp: number; metadata?: Record<string, any> }> {
+  getUnreadComments(taskId: string): Array<{ id: string; content: string; timestamp: number; metadata?: Record<string, unknown> }> {
     const task = this.getById(taskId);
     if (!task || !task.messages) return [];
 
@@ -306,7 +306,7 @@ export class TaskRepository implements ITaskRepository {
     return count;
   }
 
-  getMessages(taskId: string): Array<{ role: string; content: string; timestamp: number; isRead?: boolean; metadata?: Record<string, any> }> {
+  getMessages(taskId: string): Array<{ role: string; content: string; timestamp: number; isRead?: boolean; metadata?: Record<string, unknown> }> {
     const task = this.getById(taskId);
     return task?.messages || [];
   }

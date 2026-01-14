@@ -1,5 +1,6 @@
 import { EventEmitter } from 'events';
 import type { Database } from 'better-sqlite3';
+import type { Task } from '@opensourcewtf/waaah-types';
 
 /**
  * Event bus for real-time notifications (delegation, task completion, etc.)
@@ -33,7 +34,7 @@ export interface ActivityEvent {
   category: 'AGENT' | 'TASK' | 'SYSTEM';
   message: string;
   timestamp: number;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 /**
@@ -45,7 +46,7 @@ export const emitDelegation = (event: DelegationEvent) => {
   eventBus.emit('delegation', event);
 };
 
-export const emitActivity = (category: ActivityEvent['category'], message: string, metadata?: Record<string, any>) => {
+export const emitActivity = (category: ActivityEvent['category'], message: string, metadata?: Record<string, unknown>) => {
   const timestamp = Date.now();
 
   // Persist to DB only if initialized
@@ -76,6 +77,6 @@ export const emitActivity = (category: ActivityEvent['category'], message: strin
  * 
  * @param task - The task object.
  */
-export const emitTaskCreatedEvent = (task: any) => {
+export const emitTaskCreatedEvent = (task: Task) => {
   eventBus.emit('task:created', task);
 };

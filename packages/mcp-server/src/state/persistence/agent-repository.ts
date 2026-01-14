@@ -142,7 +142,7 @@ export class AgentRepository implements IAgentRepository {
 
   update(agentId: string, updates: { displayName?: string; color?: string }): boolean {
     const parts: string[] = [];
-    const values: any[] = [];
+    const values: string[] = [];
 
     if (updates.displayName !== undefined) {
       parts.push('displayName = ?');

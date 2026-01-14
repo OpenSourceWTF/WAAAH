@@ -1,10 +1,11 @@
 import { Router } from 'express';
 import { TaskQueue } from '../state/queue.js';
 import { eventBus as appEventBus } from '../state/events.js'; // The EventEmitter one
+import type { Task, AgentIdentity } from '@opensourcewtf/waaah-types';
 
 // Minimal interface for agent registry - only what we need for SSE
 interface IAgentRegistry {
-  getAll(): unknown[];
+  getAll(): AgentIdentity[];
 }
 
 interface SSERoutesConfig {
@@ -28,15 +29,15 @@ export function createSSERoutes({ queue, registry }: SSERoutesConfig): Router {
     res.setHeader('Connection', 'keep-alive');
     res.flushHeaders();
 
-    const onDelegation = (task: any) => {
+    const onDelegation = (task: Task) => {
       res.write(`data: ${JSON.stringify({ type: 'delegation', payload: task })}\n\n`);
     };
 
-    const onCompletion = (task: any) => {
+    const onCompletion = (task: Task) => {
       res.write(`data: ${JSON.stringify({ type: 'completion', payload: task })}\n\n`);
     };
 
-    const onActivity = (activity: any) => {
+    const onActivity = (activity: Record<string, unknown>) => {
       res.write(`data: ${JSON.stringify(activity)}\n\n`);
     };
 
@@ -86,7 +87,7 @@ export function createSSERoutes({ queue, registry }: SSERoutesConfig): Router {
       res.write(`data: ${JSON.stringify(agents)}\n\n`);
     }
 
-    const onTaskCreated = (task: any) => {
+    const onTaskCreated = (task: Task) => {
       res.write(`event: task:created\n`);
       res.write(`data: ${JSON.stringify(task)}\n\n`);
     };
